@@ -1,7 +1,7 @@
-# Lab 1 — Peer Review Record  (fill this in)
+# Lab 1 — Peer Review Record
 
-**Author:** <your Phirada Lekpaeng> — <student 67070503491> — GitHub: @<lephirada >
-**Peer reviewer:** <partner Phenwatsa Saengyenpan> — <student 67070503431> — GitHub: @<Phenwatsa>
+**Author:** Phirada Lekpaeng — 67070503491 — GitHub: @lephirada
+**Peer reviewer:** Phenwatsa Saengyenpan — 67070503431 — GitHub: @Phenwatsa
 
 ## Pull Requests I authored (reviewed by my partner)
 | PR | Branch | Reviewer verdict |
