@@ -10,7 +10,7 @@
 | #5  | feature/1-project-foundation | Approved                    |
 | #6  | feature/2-health-check       | Request Changes -> Approved |
 | #8  | feature/3-category-seed      | Approved                    |
-| #9  | feature/4-category-list      |                             |
+| #9  | feature/4-category-list      | Approved                    |
 
 ### PR #5 — Issue 1 (Project Foundation)
 
@@ -26,6 +26,11 @@
 
 - **Reviewer comment I received:** "Checked the PR against the acceptance criteria, and everything looks good. Everything looks good. Approve!!"
 - **How I responded:** Thank you for your review and I have updated issue 3 of docs/lab-01/reviewer.md ,you can merging this PR into lab1-staging
+
+### PR #9 — Issue 4 (Display Category List)
+
+- **Reviewer comment I received:** "Checked the PR against the acceptance criteria and everything looks good. The API retrieves categories through Prisma with a predictable order, and the Supertest covers the response correctly. The React page now displays the categories from the API instead of hard-coded values, with loading/error states and Vitest coverage for the category list. All acceptance criteria are covered."
+- **How I responded:** Thank you for the review and approval, I have updated reviewer.md , ai_use.md, testes.md of docs/lab-01 . You can merging this PR into lab1-staging now.
 
 ## Pull Requests I reviewed for my partner
 
@@ -43,3 +48,8 @@
 
 - **My comment:** "Reviewed against the Issue 3 acceptance criteria. The Category model, migration, and seed script are implemented correctly. The seed includes all four required categories and uses upsert to prevent duplicates when run multiple times. Database credentials are also excluded from Git through .gitignore. CI is passing. All acceptance criteria are met. Approved."
 - **Partner's response:** Thank you for the review and approval! I have updated docs/lab-01/reviewer.md with your review record and you can merging this PR into lab1-staging now.
+
+### PR #9 — Issue 4 (Display Category List)
+
+- **My comment:** "The /api/categories endpoint and Supertest coverage are implemented correctly, and the React UI uses categories returned from the API with success/error states covered by Vitest. However, I don't see a test verifying that the loading state is displayed while waiting for the API response. Please add a Vitest test for the loading state before approval."
+- **Partner's response:** Thank you for the review! I have added a Vitest test to verify the loading state (asserting that the button displays "Loading…" and is disabled while waiting for the API response). All 4 Vitest UI tests are passing now.
