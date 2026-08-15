@@ -40,6 +40,24 @@ jobs:
       run:
         working-directory: server
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: toktickit
+          POSTGRES_PASSWORD: toktickit
+          POSTGRES_DB: toktickit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://toktickit:toktickit@localhost:5432/toktickit?schema=public"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +71,21 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify Prisma Client generation
+        run: npx prisma generate
+
+      - name: Run Prisma migrations
+        run: npx prisma migrate deploy
+
+      - name: Run seed (1st run)
+        run: npm run prisma:seed
+
+      - name: Verify seed idempotency (2nd run)
+        run: npm run prisma:seed
+
+      - name: Verify seeded categories count
+        run: npx tsx -e 'import { getPrisma } from "./src/prisma.ts"; getPrisma().category.count().then(count => { if (count !== 4) { console.error("Expected 4 categories, found " + count); process.exit(1); } console.log("Verified exactly 4 categories in DB."); process.exit(0); });'
 
       - name: Run backend tests
         run: npm test
