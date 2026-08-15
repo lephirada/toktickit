@@ -1,19 +1,25 @@
 import { useState } from "react";
 import { checkSystem, Category } from "./api.js";
 
-// UI states you must handle for Issue 4: idle, loading, success, error.
 type UiState = "idle" | "loading" | "success" | "error";
 
 export default function App() {
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
-  void categories;
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
   async function handleCheck() {
-    // TODO(Issue 4): set loading, call checkSystem(), then either
-    //   - success: store categories and show Online + the list, or
-    //   - error: show Offline + a useful message.
     setState("loading");
+    try {
+      const result = await checkSystem();
+      setCategories(result.categories);
+      setState("success");
+    } catch (err: unknown) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Unable to connect to TokTickIT API"
+      );
+      setState("error");
+    }
   }
 
   return (
@@ -26,7 +32,28 @@ export default function App() {
         {state === "loading" ? "Loading…" : "Check System"}
       </button>
 
-      {/* TODO(Issue 4): render loading / success (Online + categories) / error (Offline) states. */}
+      {state === "loading" && <p className="mt-4">Loading…</p>}
+
+      {state === "success" && (
+        <div className="mt-4">
+          <p className="fw-bold">System Status: Online</p>
+          <h2 className="h5 mt-3 mb-2">Supported Request Categories</h2>
+          <ul className="list-group">
+            {categories.map((cat) => (
+              <li key={cat.id} className="list-group-item">
+                {cat.name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {state === "error" && (
+        <div className="mt-4 text-danger">
+          <p className="fw-bold">System Status: Offline</p>
+          <p>{errorMessage || "Unable to connect to TokTickIT API"}</p>
+        </div>
+      )}
     </div>
   );
 }
