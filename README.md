@@ -1,25 +1,121 @@
-# TokTickIT — IT Service Desk Starter
+# TokTickIT — IT Service Desk Application (Lab 1 Starter)
 
-Full-Stack IT Service Desk starter application built with React, Express, Prisma, and PostgreSQL.
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Bootstrap](https://img.shields.io/badge/Bootstrap-7952B3?style=for-the-badge&logo=bootstrap&logoColor=white)
+![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest-6E9F18?style=for-the-badge&logo=vitest&logoColor=white)
 
-## Project Structure
+> **TokTickIT** is a full-stack IT Service Desk web application for Account & Access, Hardware, Software, and Network requests.
+> **Lab 1 Goal:** Build a complete vertical slice proving integration across **React + Bootstrap UI -> Express REST API -> Prisma ORM -> PostgreSQL Database**.
 
-- `client/`: React + TypeScript + Vite + Bootstrap frontend
-- `server/`: Node.js + Express + TypeScript + Prisma backend
-- `docs/lab-01/`: Lab documentation & evidence
+---
+
+## Tech Stack Architecture
+
+| Layer | Technology | Description |
+| --- | --- | --- |
+| **Frontend** | React 18 + TypeScript + Vite | Responsive Single Page Application |
+| **UI Framework** | Bootstrap 5 | Modern, accessible styling and layout components |
+| **Backend** | Node.js + Express + TypeScript | RESTful API architecture |
+| **Database & ORM** | PostgreSQL + Prisma ORM | Relational database schema with type-safe client |
+| **Testing** | Vitest + Supertest + React Testing Library | Unit, Integration API, and UI component testing |
+| **CI/CD** | GitHub Actions | Automated build, test execution, and database migration checks |
+
+---
+
+## Repository Structure
+
+```text
+toktickit/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+│
+├── client/
+│   ├── src/
+│   │   ├── api.ts
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── tests/
+│   │   └── lab-01/
+│   │       ├── App.test.tsx
+│   │       └── setup.ts
+│   ├── .env.example
+│   ├── index.html
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
+│
+├── server/
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   ├── schema.prisma
+│   │   └── seed.ts
+│   ├── src/
+│   │   ├── app.ts
+│   │   ├── index.ts
+│   │   └── prisma.ts
+│   ├── tests/
+│   │   └── lab-01/
+│   │       ├── categories.test.ts
+│   │       └── health.test.ts
+│   ├── .env.example
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vitest.config.ts
+│
+├── docs/
+│   └── lab-01/
+│       ├── ai_use.md
+│       ├── reviewer.md
+│       └── tests.md
+│
+├── .gitignore
+└── README.md
+```
+
+---
+
+## API Endpoints (Lab 1)
+
+### 1. Health Check
+* **Endpoint:** `GET /api/health`
+* **Response (200 OK):**
+  ```json
+  {
+    "status": "ok",
+    "service": "TokTickIT API"
+  }
+  ```
+
+### 2. Category List
+* **Endpoint:** `GET /api/categories`
+* **Response (200 OK):**
+  ```json
+  [
+    { "id": 1, "name": "Account and Access" },
+    { "id": 2, "name": "Hardware" },
+    { "id": 3, "name": "Software" },
+    { "id": 4, "name": "Network" }
+  ]
+  ```
+
+---
 
 ## Setup & Running Locally
 
 ### Prerequisites
-
-- Node.js (v18+ recommended)
-- PostgreSQL database (v14+ recommended)
+* **Node.js**: `v18.0.0` or higher
+* **PostgreSQL**: `v14.0` or higher
 
 ---
 
-### 1. PostgreSQL Database Setup & Verification
+### 1. Database Setup & Migration
 
-Before starting the server, ensure PostgreSQL is running and create the local database:
+Ensure PostgreSQL service is running on your machine, then create the database and user:
 
 ```sql
 CREATE DATABASE toktickit;
@@ -27,37 +123,31 @@ CREATE USER toktickit WITH PASSWORD 'toktickit';
 GRANT ALL PRIVILEGES ON DATABASE toktickit TO toktickit;
 ```
 
-Or configure your existing PostgreSQL connection in `server/.env` (copy from `server/.env.example`):
-
-```env
-DATABASE_URL="postgresql://toktickit:toktickit@localhost:5432/toktickit?schema=public"
-```
-
-To verify database reachability and Prisma connectivity:
+Navigate to `server/`, create environment configuration, and run migrations/seeds:
 
 ```bash
 cd server
-npx prisma db pull
-```
+cp .env.example .env
 
-> Note: Prisma datasource and generator client are initialized in `server/prisma/schema.prisma`. Database models (Category) will be migrated in Issue 3 (`feature/3-category-seed`).
+# Run Prisma migrations & seed default categories
+npx prisma migrate dev --name init
+npm run prisma:seed
+```
 
 ---
 
-### 2. Backend Setup
+### 2. Backend Server Setup
 
 ```bash
 cd server
 npm install
-cp .env.example .env
 npm run dev
 ```
-
-The Express API backend will run at `http://localhost:3000`.
+* Express API Server will run at: **`http://localhost:3000`**
 
 ---
 
-### 3. Frontend Setup
+### 3. Frontend Client Setup
 
 ```bash
 cd client
@@ -65,31 +155,43 @@ npm install
 cp .env.example .env
 npm run dev
 ```
-
-The React + Vite + Bootstrap frontend will run at `http://localhost:5173`.
+* React Web Application will run at: **`http://localhost:5173`**
 
 ---
 
-### 4. Running Tests
+## Running Automated Tests
 
-Automated testing is configured using **Vitest** as the test runner, with **Supertest** for testing Express REST API endpoints:
+Testing is powered by **Vitest**, utilizing **Supertest** for Express API integration testing and **React Testing Library** for frontend component verification.
 
 ```bash
-# Run Client UI Tests (Vitest + React Testing Library)
-cd client && npm test
+# Run Frontend UI Tests (Vitest)
+cd client
+npm test
 
-# Run Server API Tests (Vitest + Supertest)
-cd server && npm test
+# Run Backend API Tests (Vitest + Supertest)
+cd server
+npm test
 ```
 
 ---
 
-## Verification & Acceptance Criteria (Issue 1 Checklist)
+## Git Branch Discipline & Workflow
 
-- [x] **Frontend:** React + TypeScript + Vite starts and builds clean.
-- [x] **UI Styling:** Bootstrap installed (`bootstrap@5.3.3`) and imported in `main.tsx`.
-- [x] **Backend:** Node.js + Express + TypeScript starts successfully on port 3000.
-- [x] **Database:** PostgreSQL URL configured in `.env.example` & Prisma client singleton initialized in `server/src/prisma.ts`.
-- [x] **Testing:** Vitest and Supertest test suites configured and runnable via `npm test`.
-- [x] **Security & Environment:** `.gitignore` excludes `node_modules/`, `.env`, and build outputs; `.env.example` files present.
-- [x] **Documentation:** Setup instructions and verification steps documented in `README.md`.
+This project enforces a structured **Git Flow** strategy to maintain code quality and integration stability:
+
+```text
+main (Production / Stable Release)
+ ^
+ |-- lab1-staging (Integration Branch)
+      ^
+      |-- feature/1-project-foundation  (Issue 1)
+      |-- feature/2-health-check        (Issue 2)
+      |-- feature/3-category-seed       (Issue 3)
+      `-- feature/4-category-list       (Issue 4)
+```
+
+### Branching Strategy Guidelines
+- `main`: Protected release branch containing production-ready code.
+- `lab1-staging`: Integration branch where tested features are combined.
+- `feature/*`: Short-lived isolation branches created per GitHub Issue.
+- **Pull Request (PR) Policy:** Direct pushes to `main` and `lab1-staging` are forbidden. All code must pass automated GitHub Actions CI and receive peer reviewer approval before merging.
