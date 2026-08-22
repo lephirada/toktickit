@@ -407,6 +407,16 @@ Streams the binary content of an active attachment file.
   }
 }
 ```
+* **Error Response `404 Not Found`:**
+```json
+{
+  "error": {
+    "code": "ATTACHMENT_NOT_FOUND",
+    "message": "The requested attachment does not exist.",
+    "correlationId": "req_a91b2c3d4e"
+  }
+}
+```
 
 ---
 

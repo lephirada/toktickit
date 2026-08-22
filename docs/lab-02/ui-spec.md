@@ -1,13 +1,16 @@
 # TokTickIT — UI & Design System Specification (Sprint 2 / Issue 5)
 **Design System:** Zen Green Palette  
 **Typography:** Inter / System Font Stack  
-**Target Viewports:** Desktop ($\ge 992$px), Tablet ($768$px-$991$px), Mobile ($< 768$px)
+**Target Viewports & Breakpoints:**  
+- **Desktop ($\ge 992$px):** Full multi-column table layout and 2-column form grids.  
+- **Tablet ($768$px - $991$px):** Consolidated table layout with horizontal scroll if required.  
+- **Mobile ($< 768$px):** Single-column stacked ticket cards (strictly no horizontal scroll).
 
 ---
 
 ## 1. Design Tokens & Color Palette (Zen Green)
 
-TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity, calm focus, and modern accessibility standards (WCAG AA compliant contrast ratios).
+TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity, calm focus, and modern accessibility standards (WCAG AA compliant contrast ratios $\ge 4.5:1$ for normal text and $\ge 3:1$ for large text/UI components).
 
 ```css
 :root {
@@ -30,7 +33,7 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
 
   /* Borders & Dividers */
   --zg-border: #D0D5DD;           /* Default border for inputs, cards, tables */
-  --zg-border-focus: #006B3C;     /* Border on input focus */
+  --zg-border-focus: #0B7A46;     /* Border and outline on input focus */
   --zg-border-subtle: #EAECF0;    /* Divider lines between list items */
 
   /* Status & Severity Colors */
@@ -60,24 +63,30 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
 
 ## 2. Badges & Indicators
 
-### 2.1 Priority Badges
+### 2.1 Color-Independence Rule
+In strict adherence to WCAG AA guideline 1.4.1 (Use of Color), priority and status indicators must **never rely on color alone** to convey meaning. Every badge must combine:
+1. Distinct visual container colors.
+2. Explicit readable text labels.
+3. Unique iconography / glyphs (e.g., 🔴/⚡ Urgent, ▲ High, ● Medium, ▼ Low).
 
-| Priority Code | Label | Background Color | Text Color | Border Color | Icon / Visual Indicator |
+### 2.2 Priority Badges
+
+| Priority Code | Label | Icon / Glyph | Background Color | Text Color | Border Color | Visual Presentation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `P0_URGENT` | Urgent | 🔴 / ⚡ (Bolt) | `#FEF3F2` | `#B42318` | `#FECDCA` | Bolt icon + Bold "Urgent" |
+| `P1_HIGH` | High | ▲ (Up Triangle) | `#FFFAEB` | `#B54708` | `#FEDF89` | Up triangle icon + "High" |
+| `P2_MEDIUM` | Medium | ● (Filled Circle) | `#FEF6EE` | `#B76E00` | `#F9DBAF` | Circle icon + "Medium" |
+| `P3_LOW` | Low | ▼ (Down Triangle)| `#F2F4F7` | `#344054` | `#D0D5DD` | Down triangle icon + "Low" |
+
+### 2.3 Ticket Status Badges
+
+| Status Code | Label | Icon / Glyph | Background Color | Text Color | Border Color |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `P0_URGENT` | Urgent | `#FEF3F2` | `#B42318` | `#FECDCA` | 🔴 Solid red dot + Bold text |
-| `P1_HIGH` | High | `#FFFAEB` | `#B54708` | `#FEDF89` | 🟠 Solid orange dot |
-| `P2_MEDIUM` | Medium | `#FEF6EE` | `#B76E00` | `#F9DBAF` | 🟡 Solid yellow/amber dot |
-| `P3_LOW` | Low | `#F2F4F7` | `#344054` | `#D0D5DD` | ⚪ Neutral gray dot |
-
-### 2.2 Ticket Status Badges
-
-| Status Code | Label | Background Color | Text Color | Border Color |
-| :--- | :--- | :--- | :--- | :--- |
-| `NEW` | New | `#EAF6EF` (`--zg-pale`) | `#006B3C` (`--zg-primary`) | `#A6F4C5` |
-| `IN_PROGRESS` | In Progress | `#EFF8FF` | `#175CD3` | `#B2DDFF` |
-| `RESOLVED` | Resolved | `#ECFDF3` | `#027A48` | `#A6F4C5` |
-| `CLOSED` | Closed | `#F8F9FA` | `#475467` | `#E4E7EC` |
-| `REJECTED` | Rejected | `#FEF3F2` | `#B42318` | `#FECDCA` |
+| `NEW` | New | 🟢 (Sparkle/Dot) | `#EAF6EF` (`--zg-pale`) | `#006B3C` (`--zg-primary`) | `#A6F4C5` |
+| `IN_PROGRESS` | In Progress | 🔵 (Clock) | `#EFF8FF` | `#175CD3` | `#B2DDFF` |
+| `RESOLVED` | Resolved | ✅ (Checkmark) | `#ECFDF3` | `#027A48` | `#A6F4C5` |
+| `CLOSED` | Closed | ⚪ (Lock) | `#F8F9FA` | `#475467` | `#E4E7EC` |
+| `REJECTED` | Rejected | ❌ (Cross) | `#FEF3F2` | `#B42318` | `#FECDCA` |
 
 ---
 
@@ -90,12 +99,12 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
 | Main Container (max-width: 1200px; centered; padding: 24px)                  |
 |                                                                               |
 | [Desktop >= 992px]                                                            |
-|  - Full width navigation bar                                                  |
+|  - Full width navigation bar with active state underlines                     |
 |  - Create Ticket Form: 2-column grid for taxonomy (Category + Related System) |
-|  - My Tickets: Full multi-column table with column sorting headers             |
+|  - My Tickets: Full multi-column table with sortable column headers           |
 |                                                                               |
 | [Tablet 768px - 991px]                                                        |
-|  - Responsive table with horizontal card consolidation                        |
+|  - Responsive multi-column table layout with horizontal scrolling if needed   |
 |  - Forms maintain fluid 1-column layout for small fields                      |
 |                                                                               |
 | [Mobile < 768px]                                                              |
@@ -125,6 +134,7 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
   - Actions:
     - `[Cancel / Stay]` (Secondary Button: Neutral outline)
     - `[Discard Changes]` (Destructive Button: Solid Red `#B42318`)
+  - Focus Management: Keyboard focus is trapped within the dialog while open; returns to previous element on close.
 
 ### 4.3 Ticket Creation Form
 - **Fields:**
@@ -148,21 +158,21 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
   - File icon according to MIME type.
   - File name and formatted size (e.g., `screenshot.png (1.2 MB)`).
   - Status Indicators:
-    - **Uploading:** Subtle animated progress bar.
+    - **Uploading:** Subtle animated progress bar with `aria-live="polite"`.
     - **Ready (Staged):** Green checkmark icon ✅ + "Ready".
     - **Error:** Red exclamation mark icon ❌ + Error reason ("File exceeds 5MB limit" or "Invalid format") + `[Retry]` button.
-  - **Remove Action:** Trash icon button to unstage/remove file.
+  - **Remove Action:** Trash icon button with accessible `aria-label="Remove [filename]"` to unstage/remove file.
 
 ### 4.5 My Tickets Dashboard
 - **Controls Toolbar:**
   - Search Input: Real-time search filter by ticket number or summary.
   - Status Filter: Dropdown (`All Statuses`, `New`, `In Progress`, `Resolved`, `Closed`, `Rejected`).
   - Page Size Selector: `10`, `20`, `50` items per page.
-- **Desktop Table View ($\ge 768$px):**
-  - Columns: `Ticket No`, `Summary`, `Category`, `Priority`, `Status`, `Attachments`, `Created At`, `Actions`.
-  - Hover row highlights in pale mint (`--zg-pale`).
+- **Desktop & Tablet View ($\ge 768$px):**
+  - **Desktop ($\ge 992$px):** Full multi-column table (`Ticket No`, `Summary`, `Category`, `Priority`, `Status`, `Attachments`, `Created At`, `Actions`) with hover row highlights in pale mint (`--zg-pale`).
+  - **Tablet ($768$px - $991$px):** Consolidated table layout supporting horizontal scrolling if viewport constraints require.
 - **Mobile Card View ($< 768$px):**
-  - Rendered as discrete cards with border `--zg-border` and radius `--zg-radius-md`.
+  - Rendered as discrete cards with border `--zg-border` and radius `--zg-radius-md` with **strictly no horizontal scroll**.
   - Header: `Ticket No` (bold monospace) + `Status Badge`.
   - Body: Summary text (truncated to 2 lines) + Category pill.
   - Footer: Priority badge + Created date + Right arrow icon `>` linking to detail.
@@ -173,7 +183,7 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
 ### 4.6 Ticket Detail Read-Only View
 - **Header:** Ticket Number headline (`TKT-2026-00042`), status badge, priority badge, and creation timestamp.
 - **Metadata Card:**
-  - Requester Name & Department.
+  - Requester Display Name & Department.
   - Category & Related System.
 - **Content Card:**
   - Summary and formatted full Description text container.
@@ -191,17 +201,51 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
   - Reason Input: Textarea (mandatory, 5-255 characters) with placeholder "Please enter the reason for removing this attachment (e.g. uploaded wrong file / sensitive data)".
   - Inline error if submitted empty or $< 5$ chars.
   - Action Buttons: `[Cancel]` and `[Confirm Removal]` (Red primary button).
+  - Focus Management: Focus trapped within modal while visible; returns to the trigger button when closed.
 
 ---
 
-## 5. Visual Inspection Checklist
+## 5. Accessibility Specifications (WCAG AA Compliance)
 
-| Check ID | Verification Item | Expected Visual Result |
+TokTickIT is engineered to achieve strict **WCAG 2.1 AA** accessibility compliance across all requester-facing pages and components:
+
+1. **Keyboard Navigation:**
+   - All interactive controls (buttons, links, form inputs, dropdowns, priority pills, attachment action buttons) must be reachable in logical reading order via `Tab` / `Shift+Tab`.
+   - All buttons, custom radios, and dialog actions must be activatable via `Enter` or `Space`.
+   - Modals and dropdown menus must close when the user presses `Esc`.
+
+2. **Visible Focus State:**
+   - All interactive elements must render a visible, high-contrast focus ring: `2px solid var(--zg-secondary)` (`#0B7A46`) with a `2px` offset (`outline-offset: 2px`).
+   - Default browser focus rings must never be removed with `outline: none` without providing this custom focus indicator.
+
+3. **Semantic Form Associations & Error Feedback:**
+   - Every input and textarea must be explicitly associated with a visible `<label>` using matching `htmlFor` and `id` attributes.
+   - When a field validation error occurs, the input must be marked with `aria-invalid="true"` and linked to the error text container via `aria-describedby="[field]-error"`.
+
+4. **Modal Focus Management & Trapping:**
+   - When the Dirty State Warning Modal or Attachment Soft-Removal Modal opens:
+     - Keyboard focus is immediately transferred to the first interactive element inside the modal.
+     - Tabbing is trapped within the dialog container (cycling through modal elements only).
+     - Upon dismissal or confirmation, focus is returned to the element that originally triggered the modal.
+
+5. **Screen Reader Announcements (Live Regions):**
+   - Dynamic validation error banners and field errors must use `role="alert"` or `aria-live="assertive"`.
+   - Asynchronous pre-upload status changes (e.g., "Uploading...", "Ready", "Upload failed") must be wrapped in containers with `aria-live="polite"` to notify assistive technologies without interrupting user flow.
+
+6. **Color-Independence Rule:**
+   - No status, priority, or form state may rely solely on color. All badges and alerts must include explicit text and distinctive icon glyphs (🔴/⚡ Urgent, ▲ High, ● Medium, ▼ Low).
+
+---
+
+## 6. Visual & Accessibility Inspection Checklist
+
+| Check ID | Verification Item | Expected Visual & Accessibility Result |
 | :--- | :--- | :--- |
 | **VI-01** | Zen Green Theme Palette | Primary headers, active links, and buttons match `--zg-primary: #006B3C` and `--zg-secondary: #0B7A46`. |
-| **VI-02** | Priority Badge Badging | P0 displays Red, P1 displays Orange, P2 displays Yellow/Amber, P3 displays Neutral Gray. |
+| **VI-02** | Priority Badge Badging & Glyph | P0 displays Red + Bolt ⚡, P1 displays Orange + Triangle ▲, P2 displays Amber + Circle ●, P3 displays Gray + Down Triangle ▼. |
 | **VI-03** | Mobile Viewport Layout | On $< 768$px viewport, table seamlessly switches to stacked cards with zero horizontal scrolling. |
-| **VI-04** | Inline Form Validation | Submitting empty form highlights invalid fields with red borders (`#B42318`) and shows descriptive helper text below the field. |
-| **VI-05** | Pre-upload Feedback | Dragging a 6MB file triggers immediate error state with red border and explicit size warning; valid file shows green staged badge. |
-| **VI-06** | Dirty State Interception | Navigating away from partially filled form displays standard Zen Green styled confirmation modal. |
-| **VI-07** | Soft-removal State | Soft-deleted attachment shows "Removed" badge and displays audit reason without download link. |
+| **VI-04** | Inline Form Validation & ARIA | Submitting empty form highlights invalid fields with red borders (`#B42318`), sets `aria-invalid="true"`, and references error text with `aria-describedby`. |
+| **VI-05** | Pre-upload Feedback & Live Region | Dragging a 6MB file triggers immediate error state with red border and explicit size warning; valid file shows green staged badge; screen reader receives polite status announcement. |
+| **VI-06** | Dirty State Interception & Focus Trap | Navigating away from partially filled form displays confirmation modal; keyboard focus is trapped inside dialog until cancelled or confirmed. |
+| **VI-07** | Soft-removal State & Guard | Soft-deleted attachment shows "Removed" badge and displays audit reason without download link; modal manages keyboard focus correctly. |
+| **VI-08** | Keyboard Navigation & Focus Ring | Full workflow operable via keyboard alone; active elements show prominent `2px solid #0B7A46` focus ring. |
