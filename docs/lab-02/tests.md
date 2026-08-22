@@ -26,6 +26,9 @@ TokTickIT adopts a multi-tiered automated testing pyramid ensuring strict contra
 3. **End-to-End (E2E) Browser Tests (`e2e/tests/lab-02/`):**  
    Uses **Playwright** to execute end-to-end browser journeys covering requester context switching, ticket submission with file attachment, listing pagination, and soft-removal modal flows.
 
+> [!NOTE]
+> **Note on Implementation Scope:** The test file paths, suites, and execution commands documented below represent the planned test targets specified for Sprint 2 (Issues 6–9). These files and configurations will be implemented incrementally on their respective feature branches following Test-Driven Development (TDD).
+
 ---
 
 ## 2. Planned Test Suite Table

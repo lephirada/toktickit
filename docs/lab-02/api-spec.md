@@ -407,7 +407,7 @@ Streams the binary content of an active attachment file.
   }
 }
 ```
-* **Error Response `404 Not Found`:**
+* **Error Response `404 Not Found` (File or Attachment not found):**
 ```json
 {
   "error": {
