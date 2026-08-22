@@ -57,7 +57,7 @@ When any endpoint encounters an error, it responds with the following standard e
 
 | Code | Name | Usage in TokTickIT |
 | :--- | :--- | :--- |
-| **`200 OK`** | Success | Successful GET, PUT, DELETE operations. |
+| **`200 OK`** | Success | Successful GET, DELETE operations. |
 | **`201 Created`** | Created | Resource successfully created (Ticket, Pre-upload attachment). |
 | **`400 Bad Request`** | Bad Request | Malformed JSON, missing required headers (`X-Requester-Id`), or invalid query params. |
 | **`403 Forbidden`** | Forbidden | The requester in `X-Requester-Id` is not authorized to access or modify the specified resource. |
@@ -402,7 +402,7 @@ Streams the binary content of an active attachment file.
 {
   "error": {
     "code": "ATTACHMENT_SOFT_DELETED",
-    "message": "This attachment was removed and is no longer available for download.",
+    "message": "Attachment has been removed by requester.",
     "correlationId": "req_b298412810"
   }
 }
