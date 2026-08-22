@@ -371,6 +371,16 @@ Retrieves complete read-only details of a single ticket.
   }
 }
 ```
+* **Error Response `404 Not Found`:**
+```json
+{
+  "error": {
+    "code": "TICKET_NOT_FOUND",
+    "message": "Ticket with the specified ID does not exist.",
+    "correlationId": "req_9921b3a8c1"
+  }
+}
+```
 
 ---
 

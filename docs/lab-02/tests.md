@@ -101,10 +101,9 @@ npm test
 cd server
 npm test
 
-# 3. Run specific Sprint 2 Backend Test Suite
-cd server
-npx vitest run tests/lab-02/
+# 3. Run specific Sprint 2 Backend Test Suite (planned for Issue 6 implementation)
+# cd server && npx vitest run tests/lab-02/
 
-# 4. Run Playwright End-to-End Test Suite
-npx playwright test tests/lab-02/
+# 4. Run Playwright End-to-End Test Suite (planned for Issue 9 implementation)
+# npx playwright test tests/lab-02/
 ```

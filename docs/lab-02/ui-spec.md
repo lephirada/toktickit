@@ -27,7 +27,7 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
 
   /* Typography & Text */
   --zg-text-primary: #1D2939;     /* Main headers and primary text */
-  --zg-text-secondary: #475467;   /* Descriptive text, subheaders */
+  --zg-text-secondary: #667085;   /* Descriptive text, subheaders */
   --zg-text-muted: #98A2B3;       /* Disabled text, placeholder text */
   --zg-text-inverse: #FFFFFF;     /* White text on dark elements */
 
@@ -168,7 +168,7 @@ In strict adherence to WCAG AA guideline 1.4.1 (Use of Color), priority and stat
   - Search Input: Real-time search filter by ticket number or summary.
   - Status Filter: Dropdown (`All Statuses`, `New`, `In Progress`, `Resolved`, `Closed`, `Rejected`).
   - Page Size Selector: `10`, `20`, `50` items per page.
-- **Desktop & Tablet View ($\ge 768$px):**
+- **Desktop/Tablet Table View ($\ge 768$px):**
   - **Desktop ($\ge 992$px):** Full multi-column table (`Ticket No`, `Summary`, `Category`, `Priority`, `Status`, `Attachments`, `Created At`, `Actions`) with hover row highlights in pale mint (`--zg-pale`).
   - **Tablet ($768$px - $991$px):** Consolidated table layout supporting horizontal scrolling if viewport constraints require.
 - **Mobile Card View ($< 768$px):**
