@@ -190,7 +190,7 @@ model Attachment {
   mimeType       String
   sizeBytes      Int
   ticketId       Int?
-  ticket         Ticket?   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket         Ticket?   @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   uploadedById   Int
   isSoftDeleted  Boolean   @default(false)
   deletedAt      DateTime?

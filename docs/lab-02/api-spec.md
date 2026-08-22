@@ -35,7 +35,7 @@ For paginated list queries:
 
 ### 1.2 Standardized Error Envelope
 
-When any endpoint encounters an error, it responds with the following standard envelope:
+When an endpoint encounters an error, it responds with the standard error envelope. The fields `code`, `message`, and `correlationId` are always present. The `fieldErrors` array is optional and included only for validation-style errors (such as 422 Unprocessable Entity or 400 Bad Request).
 
 ```json
 {
