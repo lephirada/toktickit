@@ -1,0 +1,193 @@
+:root {
+  /* Brand & Theme Colors */
+  --zg-primary: #006B3C;          /* Deep Zen Green - Primary CTA, Active Navigation, Main Header */
+  --zg-secondary: #0B7A46;        /* Medium Zen Green - Hover state for primary buttons, focus rings */
+  --zg-pale: #EAF6EF;             /* Light Mint Pale - Active card highlight, badge background, table zebra */
+  --zg-accent: #12B76A;           /* Vibrant Green - Success checkmarks and positive badges */
+
+  /* Neutral Backgrounds & Canvas */
+  --zg-bg: #F5F7F6;               /* Page background canvas */
+  --zg-surface: #FFFFFF;          /* Cards, modals, dropdown surfaces */
+  --zg-surface-subtle: #FAFCFB;   /* Input background, subtle wells */
+
+  /* Typography & Text */
+  --zg-text-primary: #1D2939;     /* Main headers and primary text */
+  --zg-text-secondary: #667085;   /* Descriptive text, subheaders */
+  --zg-text-muted: #98A2B3;       /* Disabled text, placeholder text */
+  --zg-text-inverse: #FFFFFF;     /* White text on dark elements */
+
+  /* Borders & Dividers */
+  --zg-border: #D0D5DD;           /* Default border for inputs, cards, tables */
+  --zg-border-focus: #0B7A46;     /* Border and outline on input focus */
+  --zg-border-subtle: #EAECF0;    /* Divider lines between list items */
+
+  /* Status & Severity Colors */
+  --zg-error: #B42318;            /* Error message, P0 badge background */
+  --zg-error-bg: #FEF3F2;         /* Error container fill */
+  --zg-warning: #B54708;          /* P1 High Priority text */
+  --zg-warning-bg: #FFFAEB;       /* P1 High Priority container */
+  --zg-notice: #B76E00;           /* P2 Medium Priority text */
+  --zg-notice-bg: #FEF6EE;        /* P2 Medium Priority container */
+  --zg-neutral: #344054;          /* P3 Low Priority / Closed text */
+  --zg-neutral-bg: #F2F4F7;       /* P3 Low Priority container */
+
+  /* Shadows & Elevation */
+  --zg-shadow-sm: 0px 1px 2px rgba(16, 24, 40, 0.05);
+  --zg-shadow-md: 0px 4px 8px -2px rgba(16, 24, 40, 0.1), 0px 2px 4px -2px rgba(16, 24, 40, 0.06);
+  --zg-shadow-lg: 0px 12px 16px -4px rgba(16, 24, 40, 0.08), 0px 4px 6px -2px rgba(16, 24, 40, 0.03);
+
+  /* Radii */
+  --zg-radius-sm: 4px;
+  --zg-radius-md: 8px;
+  --zg-radius-lg: 12px;
+  --zg-radius-full: 9999px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--zg-bg);
+  color: var(--zg-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Zen Green Header Styles */
+.zg-header {
+  background-color: var(--zg-primary);
+  color: var(--zg-text-inverse);
+  box-shadow: var(--zg-shadow-sm);
+}
+
+.zg-header .navbar-brand {
+  color: var(--zg-text-inverse);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.zg-header .nav-link {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--zg-radius-sm);
+  transition: all 0.15s ease-in-out;
+  text-decoration: none;
+}
+
+.zg-header .nav-link:hover {
+  color: #FFFFFF;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.zg-header .nav-link.active {
+  color: #FFFFFF;
+  background-color: rgba(255, 255, 255, 0.2);
+  font-weight: 600;
+}
+
+.zg-requester-select {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--zg-radius-md);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.zg-requester-select:focus,
+.zg-requester-select:focus-visible {
+  outline: 2px solid var(--zg-pale) !important;
+  outline-offset: 2px;
+  border-color: #FFFFFF;
+}
+
+.zg-requester-select option {
+  background-color: var(--zg-surface);
+  color: var(--zg-text-primary);
+}
+
+/* Accessibility Focus Ring Standard */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--zg-secondary) !important;
+  outline-offset: 2px;
+}
+
+/* Modal Overlay & Card */
+.zg-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(16, 24, 40, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+}
+
+.zg-modal-card {
+  background: var(--zg-surface);
+  border-radius: var(--zg-radius-lg);
+  box-shadow: var(--zg-shadow-lg);
+  max-width: 480px;
+  width: 90%;
+  padding: 1.5rem;
+  border: 1px solid var(--zg-border-subtle);
+}
+
+/* Buttons */
+.zg-btn-primary {
+  background-color: var(--zg-primary);
+  color: var(--zg-text-inverse);
+  border: 1px solid var(--zg-primary);
+  border-radius: var(--zg-radius-md);
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  transition: background-color 0.15s ease;
+}
+
+.zg-btn-primary:hover {
+  background-color: var(--zg-secondary);
+  border-color: var(--zg-secondary);
+  color: #FFFFFF;
+}
+
+.zg-btn-danger {
+  background-color: var(--zg-error);
+  color: #FFFFFF;
+  border: 1px solid var(--zg-error);
+  border-radius: var(--zg-radius-md);
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+}
+
+.zg-btn-danger:hover {
+  background-color: #912018;
+  border-color: #912018;
+  color: #FFFFFF;
+}
+
+.zg-btn-secondary {
+  background-color: var(--zg-surface);
+  color: var(--zg-text-primary);
+  border: 1px solid var(--zg-border);
+  border-radius: var(--zg-radius-md);
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+}
+
+.zg-btn-secondary:hover {
+  background-color: var(--zg-bg);
+  color: var(--zg-text-primary);
+}
