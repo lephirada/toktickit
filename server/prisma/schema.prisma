@@ -10,9 +10,94 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Category {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  createdAt DateTime @default(now())
+enum Priority {
+  P0_URGENT
+  P1_HIGH
+  P2_MEDIUM
+  P3_LOW
 }
 
+enum TicketStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REJECTED
+}
+
+model RequesterUser {
+  id                  Int          @id @default(autoincrement())
+  email               String       @unique
+  fullName            String
+  department          String
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  tickets             Ticket[]     @relation("RequesterTickets")
+  uploadedAttachments Attachment[] @relation("UploadedAttachments")
+
+  @@index([isActive])
+}
+
+model Category {
+  id        Int             @id @default(autoincrement())
+  name      String          @unique
+  createdAt DateTime        @default(now())
+  tickets   Ticket[]
+  systems   RelatedSystem[]
+}
+
+model RelatedSystem {
+  id         Int       @id @default(autoincrement())
+  name       String
+  categoryId Int
+  category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  tickets    Ticket[]
+
+  @@unique([name, categoryId])
+  @@index([categoryId])
+}
+
+model Ticket {
+  id              Int            @id @default(autoincrement())
+  ticketNo        String         @unique
+  summary         String         @db.VarChar(100)
+  description     String         @db.VarChar(2000)
+  priority        Priority       @default(P2_MEDIUM)
+  status          TicketStatus   @default(NEW)
+  requesterId     Int
+  requester       RequesterUser  @relation("RequesterTickets", fields: [requesterId], references: [id])
+  categoryId      Int
+  category        Category       @relation(fields: [categoryId], references: [id])
+  relatedSystemId Int?
+  relatedSystem   RelatedSystem? @relation(fields: [relatedSystemId], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  attachments     Attachment[]
+
+  @@index([requesterId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Attachment {
+  id             Int           @id @default(autoincrement())
+  originalName   String
+  storageKey     String        @unique
+  mimeType       String
+  sizeBytes      Int
+  ticketId       Int?
+  ticket         Ticket?       @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  uploadedById   Int
+  uploadedBy     RequesterUser @relation("UploadedAttachments", fields: [uploadedById], references: [id])
+  isSoftDeleted  Boolean       @default(false)
+  deletedAt      DateTime?
+  deletedBy      Int?
+  deletionReason String?       @db.VarChar(255)
+  createdAt      DateTime      @default(now())
+
+  @@index([ticketId])
+  @@index([uploadedById])
+  @@index([isSoftDeleted])
+}

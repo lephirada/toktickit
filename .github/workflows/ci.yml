@@ -5,10 +5,12 @@ on:
   push:
     branches:
       - main
+      - lab1-staging
+      - lab2-staging
 
 jobs:
   client-build:
-    name: Client Build
+    name: Client Build & Test
     runs-on: ubuntu-latest
 
     defaults:
@@ -36,7 +38,7 @@ jobs:
         run: npm run build
 
   server-build:
-    name: Server Build
+    name: Server Build & Test
     runs-on: ubuntu-latest
 
     defaults:
@@ -75,10 +77,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify Prisma Client generation
+      - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Run Prisma migrations
+      - name: Deploy Prisma migrations
         run: npx prisma migrate deploy
 
       - name: Run seed (1st run)
@@ -87,8 +89,27 @@ jobs:
       - name: Verify seed idempotency (2nd run)
         run: npm run prisma:seed
 
-      - name: Verify seeded categories count
-        run: npx tsx -e 'import { getPrisma } from "./src/prisma.ts"; getPrisma().category.count().then(count => { if (count !== 4) { console.error("Expected 4 categories, found " + count); process.exit(1); } console.log("Verified exactly 4 categories in DB."); process.exit(0); });'
+      - name: Verify seeded records
+        run: |
+          npx tsx -e '
+            import { getPrisma } from "./src/prisma.ts";
+            const prisma = getPrisma();
+            async function verify() {
+              const catCount = await prisma.category.count();
+              const sysCount = await prisma.relatedSystem.count();
+              const totalReqCount = await prisma.requesterUser.count();
+              const activeReqCount = await prisma.requesterUser.count({ where: { isActive: true } });
+              const inactiveReqCount = await prisma.requesterUser.count({ where: { isActive: false } });
+              if (catCount !== 4) throw new Error("Expected 4 categories, found " + catCount);
+              if (sysCount !== 6) throw new Error("Expected 6 related systems, found " + sysCount);
+              if (totalReqCount !== 5) throw new Error("Expected 5 total requesters, found " + totalReqCount);
+              if (activeReqCount !== 4) throw new Error("Expected 4 active requesters, found " + activeReqCount);
+              if (inactiveReqCount !== 1) throw new Error("Expected 1 inactive requester, found " + inactiveReqCount);
+              console.log("Verified: 4 categories, 6 related systems, 5 requesters (4 active, 1 inactive) in DB.");
+              process.exit(0);
+            }
+            verify().catch(e => { console.error(e); process.exit(1); });
+          '
 
       - name: Run backend tests
         run: npm test
