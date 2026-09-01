@@ -18,13 +18,12 @@ interface CreateTicketFormProps {
 
 type PriorityType = "P0_URGENT" | "P1_HIGH" | "P2_MEDIUM" | "P3_LOW";
 
-const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".pdf", ".txt"];
+const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".pdf"];
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
   "application/pdf",
-  "text/plain",
   "image/jpg",
 ];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -209,7 +208,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
       const isValidMime = ALLOWED_MIME_TYPES.includes(file.type);
 
       if (!isValidExt && !isValidMime) {
-        setUploadError("Allowed file types: JPEG, PNG, PDF, TXT.");
+        setUploadError("Allowed file types: JPEG, PNG, WEBP, PDF.");
         return;
       }
     }
@@ -540,7 +539,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
       {/* Pre-upload Attachment Dropzone */}
       <div className="mb-4">
         <label className="form-label fw-semibold d-block mb-1">
-          Attachments <span className="text-muted fw-normal small">(Max 5 files, 5MB each: JPG, PNG, WEBP, PDF, TXT)</span>
+          Attachments <span className="text-muted fw-normal small">Allowed formats: JPEG, PNG, WEBP, PDF (Max 5MB per file)</span>
         </label>
 
         {/* Dropzone Container */}
@@ -559,7 +558,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
             id="file-upload-input"
             className="visually-hidden"
             multiple
-            accept=".jpg,.jpeg,.png,.webp,.pdf,.txt"
+            accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
             onChange={handleFileInputChange}
             disabled={isUploading || attachments.length >= 5}
           />

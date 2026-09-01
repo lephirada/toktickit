@@ -20,7 +20,6 @@ export const ALLOWED_MIME_TYPES = [
   "image/png",
   "image/webp",
   "application/pdf",
-  "text/plain",
   "image/jpg",
 ];
 
@@ -35,7 +34,7 @@ const multerUpload = multer({
     if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      const err = new Error("Allowed file types: JPEG, PNG, WEBP, PDF, TXT.");
+      const err = new Error("Allowed file types: JPEG, PNG, WEBP, PDF.");
       (err as unknown as { code: string }).code = "UNSUPPORTED_MEDIA_TYPE";
       cb(err);
     }
@@ -66,7 +65,7 @@ export function handlePreUploadMiddleware(
           .json(
             createErrorEnvelope(
               "UNSUPPORTED_MEDIA_TYPE",
-              "Allowed file types: JPEG, PNG, WEBP, PDF, TXT."
+              "Allowed file types: JPEG, PNG, WEBP, PDF."
             )
           );
         return;

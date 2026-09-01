@@ -63,6 +63,8 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
           in: [
             "test_screenshot.png",
             "document.pdf",
+            "image.webp",
+            "notes.txt",
             "log.txt",
             "large_file.png",
             "malicious.exe",
@@ -146,7 +148,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
 
       expect(exeRes.status).toBe(415);
       expect(exeRes.body.error.code).toBe("UNSUPPORTED_MEDIA_TYPE");
-      expect(exeRes.body.error.message).toBe("Allowed file types: JPEG, PNG, WEBP, PDF, TXT.");
+      expect(exeRes.body.error.message).toBe("Allowed file types: JPEG, PNG, WEBP, PDF.");
 
       const zipRes = await request(app)
         .post("/api/attachments/pre-upload")
@@ -158,6 +160,20 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
 
       expect(zipRes.status).toBe(415);
       expect(zipRes.body.error.code).toBe("UNSUPPORTED_MEDIA_TYPE");
+    });
+
+    it("returns 415 Unsupported Media Type when uploading a .txt file", async () => {
+      const txtRes = await request(app)
+        .post("/api/attachments/pre-upload")
+        .set("X-Requester-Id", String(activeRequesterId))
+        .attach("files", Buffer.from("plain text content"), {
+          filename: "notes.txt",
+          contentType: "text/plain",
+        });
+
+      expect(txtRes.status).toBe(415);
+      expect(txtRes.body.error.code).toBe("UNSUPPORTED_MEDIA_TYPE");
+      expect(txtRes.body.error.message).toBe("Allowed file types: JPEG, PNG, WEBP, PDF.");
     });
 
     it("returns 413 Payload Too Large when a file exceeds 5MB", async () => {
@@ -407,9 +423,9 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       const uploadRes = await request(app)
         .post("/api/attachments/pre-upload")
         .set("X-Requester-Id", String(activeRequesterId))
-        .attach("files", Buffer.from("log content"), {
-          filename: "log.txt",
-          contentType: "text/plain",
+        .attach("files", Buffer.from("pdf binary content"), {
+          filename: "document.pdf",
+          contentType: "application/pdf",
         });
 
       expect(uploadRes.status).toBe(201);
@@ -457,7 +473,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       expect(Array.isArray(ticket.attachments)).toBe(true);
       expect(ticket.attachments.length).toBe(1);
       expect(ticket.attachments[0].id).toBe(attachmentId);
-      expect(ticket.attachments[0].originalName).toBe("log.txt");
+      expect(ticket.attachments[0].originalName).toBe("document.pdf");
 
       // Verify DB linking
       const dbAttachment = await prisma.attachment.findUnique({

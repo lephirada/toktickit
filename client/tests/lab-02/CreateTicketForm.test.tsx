@@ -208,8 +208,8 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
       data: [
         {
           id: 881,
-          originalName: "log.txt",
-          mimeType: "text/plain",
+          originalName: "document.pdf",
+          mimeType: "application/pdf",
           sizeBytes: 1024,
           createdAt: new Date().toISOString(),
         },
@@ -251,11 +251,11 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     );
 
     // Upload attachment
-    const file = new File(["log text"], "log.txt", { type: "text/plain" });
+    const file = new File(["pdf binary"], "document.pdf", { type: "application/pdf" });
     const fileInput = document.getElementById("file-upload-input") as HTMLInputElement;
     await userEvent.upload(fileInput, file);
 
-    await screen.findByText("log.txt");
+    await screen.findByText("document.pdf");
 
     // Form must be dirty
     expect(screen.getByTestId("is-dirty-flag")).toHaveTextContent("dirty");
