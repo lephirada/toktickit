@@ -26,14 +26,15 @@ enum TicketStatus {
 }
 
 model RequesterUser {
-  id         Int      @id @default(autoincrement())
-  email      String   @unique
-  fullName   String
-  department String
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  tickets    Ticket[]
+  id                  Int          @id @default(autoincrement())
+  email               String       @unique
+  fullName            String
+  department          String
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  tickets             Ticket[]     @relation("RequesterTickets")
+  uploadedAttachments Attachment[] @relation("UploadedAttachments")
 
   @@index([isActive])
 }
@@ -66,7 +67,7 @@ model Ticket {
   priority        Priority       @default(P2_MEDIUM)
   status          TicketStatus   @default(NEW)
   requesterId     Int
-  requester       RequesterUser  @relation(fields: [requesterId], references: [id])
+  requester       RequesterUser  @relation("RequesterTickets", fields: [requesterId], references: [id])
   categoryId      Int
   category        Category       @relation(fields: [categoryId], references: [id])
   relatedSystemId Int?
@@ -81,19 +82,20 @@ model Ticket {
 }
 
 model Attachment {
-  id             Int       @id @default(autoincrement())
+  id             Int           @id @default(autoincrement())
   originalName   String
-  storageKey     String    @unique
+  storageKey     String        @unique
   mimeType       String
   sizeBytes      Int
   ticketId       Int?
-  ticket         Ticket?   @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  ticket         Ticket?       @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   uploadedById   Int
-  isSoftDeleted  Boolean   @default(false)
+  uploadedBy     RequesterUser @relation("UploadedAttachments", fields: [uploadedById], references: [id])
+  isSoftDeleted  Boolean       @default(false)
   deletedAt      DateTime?
   deletedBy      Int?
-  deletionReason String?   @db.VarChar(255)
-  createdAt      DateTime  @default(now())
+  deletionReason String?       @db.VarChar(255)
+  createdAt      DateTime      @default(now())
 
   @@index([ticketId])
   @@index([uploadedById])

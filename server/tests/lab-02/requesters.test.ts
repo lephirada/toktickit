@@ -1,8 +1,27 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
+import { getPrisma } from "../../src/prisma.js";
 
 describe("Issue 6 — Backend API Tests (Requester Context & Taxonomy)", () => {
+  describe("Database Seeding Verification", () => {
+    it("verifies the seed created exactly 5 total requesters (4 active, 1 inactive), 4 categories, and 6 related systems", async () => {
+      const prisma = getPrisma();
+
+      const totalRequesters = await prisma.requesterUser.count();
+      const activeRequesters = await prisma.requesterUser.count({ where: { isActive: true } });
+      const inactiveRequesters = await prisma.requesterUser.count({ where: { isActive: false } });
+      const categoriesCount = await prisma.category.count();
+      const systemsCount = await prisma.relatedSystem.count();
+
+      expect(totalRequesters).toBe(5);
+      expect(activeRequesters).toBe(4);
+      expect(inactiveRequesters).toBe(1);
+      expect(categoriesCount).toBe(4);
+      expect(systemsCount).toBe(6);
+    });
+  });
+
   describe("GET /api/requesters", () => {
     it("returns 200 OK with only active requesters wrapped in standard data envelope", async () => {
       const res = await request(app).get("/api/requesters");
@@ -10,7 +29,7 @@ describe("Issue 6 — Backend API Tests (Requester Context & Taxonomy)", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("data");
       expect(Array.isArray(res.body.data)).toBe(true);
-      expect(res.body.data.length).toBeGreaterThanOrEqual(4);
+      expect(res.body.data.length).toBe(4);
 
       // Verify each requester is active and has required fields
       for (const requester of res.body.data) {
@@ -25,7 +44,7 @@ describe("Issue 6 — Backend API Tests (Requester Context & Taxonomy)", () => {
       const emails = res.body.data.map((r: { email: string }) => r.email);
       expect(emails).not.toContain("kyle.reese@toktickit.com");
 
-      // Verify active requesters are present
+      // Verify exact 4 active requesters are present
       expect(emails).toContain("sarah.connor@toktickit.com");
       expect(emails).toContain("john.doe@toktickit.com");
       expect(emails).toContain("jennifer.anderson@toktickit.com");

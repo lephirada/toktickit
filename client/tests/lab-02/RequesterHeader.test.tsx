@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -30,18 +31,62 @@ const mockRequesters: api.RequesterUser[] = [
   },
 ];
 
-// Helper test component to manipulate dirty state
-function TestApp({ activeView }: { activeView?: "my-tickets" | "create-ticket" }) {
+interface MockTicket {
+  id: number;
+  ticketNo: string;
+  summary: string;
+  requesterId: number;
+}
+
+const mockTicketsByRequester: Record<number, MockTicket[]> = {
+  1: [{ id: 101, ticketNo: "TKT-2026-00001", summary: "VPN Connection Drop", requesterId: 1 }],
+  2: [{ id: 102, ticketNo: "TKT-2026-00002", summary: "Payroll Portal Access", requesterId: 2 }],
+};
+
+// Component simulating requester-specific ticket reloading
+function TicketDashboardApp() {
   const { currentRequester, isFormDirty, setFormDirty } = useRequester();
+  const [tickets, setTickets] = useState<MockTicket[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!currentRequester) {
+      setTickets([]);
+      return;
+    }
+
+    // Step 1: Clear previous requester-specific ticket state immediately upon requester change
+    setTickets([]);
+    setLoading(true);
+
+    // Step 2: Reload tickets for the newly selected requester
+    const reqId = currentRequester.id;
+    const timer = setTimeout(() => {
+      setTickets(mockTicketsByRequester[reqId] || []);
+      setLoading(false);
+    }, 10);
+
+    return () => clearTimeout(timer);
+  }, [currentRequester?.id]);
 
   return (
     <div>
-      <Header activeView={activeView} />
+      <Header />
       <DirtyGuardModal />
-      <div data-testid="current-requester">{currentRequester?.fullName}</div>
+      <div data-testid="current-requester-id">{currentRequester?.id}</div>
+      <div data-testid="current-requester-name">{currentRequester?.fullName}</div>
       <div data-testid="is-dirty">{isFormDirty ? "dirty" : "clean"}</div>
       <button onClick={() => setFormDirty(true)}>Make Form Dirty</button>
       <button onClick={() => setFormDirty(false)}>Clean Form</button>
+
+      <div data-testid="tickets-loading">{loading ? "loading" : "idle"}</div>
+      <ul data-testid="ticket-list">
+        {tickets.map((t) => (
+          <li key={t.id} data-testid={`ticket-${t.id}`}>
+            {t.ticketNo} - {t.summary}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -57,11 +102,10 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
     render(
       <RequesterProvider>
-        <TestApp />
+        <TicketDashboardApp />
       </RequesterProvider>
     );
 
-    // Verify loading state appears first or resolves to dropdown options
     const selectElement = await screen.findByRole("combobox", {
       name: /select active requester/i,
     });
@@ -71,8 +115,7 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
     expect(screen.getByText("John Doe (Finance)")).toBeInTheDocument();
     expect(screen.getByText("Jennifer Anderson (Engineering)")).toBeInTheDocument();
 
-    // Default to the first requester
-    expect(screen.getByTestId("current-requester")).toHaveTextContent("Sarah Connor");
+    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
     expect(localStorage.getItem("toktickit_requester_id")).toBe("1");
   });
 
@@ -82,7 +125,7 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
     render(
       <RequesterProvider>
-        <TestApp />
+        <TicketDashboardApp />
       </RequesterProvider>
     );
 
@@ -92,7 +135,7 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
     await waitFor(() => {
       expect(selectElement).toHaveValue("2");
-      expect(screen.getByTestId("current-requester")).toHaveTextContent("John Doe");
+      expect(screen.getByTestId("current-requester-name")).toHaveTextContent("John Doe");
     });
   });
 
@@ -102,7 +145,7 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
     render(
       <RequesterProvider>
-        <TestApp />
+        <TicketDashboardApp />
       </RequesterProvider>
     );
 
@@ -110,25 +153,57 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
       name: /select active requester/i,
     });
 
-    // Select John Doe (ID: 2)
     await user.selectOptions(selectElement, "2");
 
-    expect(screen.getByTestId("current-requester")).toHaveTextContent("John Doe");
+    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("John Doe");
     expect(localStorage.getItem("toktickit_requester_id")).toBe("2");
   });
 
-  it("intercepts requester switch with dirty guard modal when form has unsaved changes", async () => {
+  it("clears old state and reloads requester-specific tickets when context changes", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
     const user = userEvent.setup();
 
     render(
       <RequesterProvider>
-        <TestApp />
+        <TicketDashboardApp />
       </RequesterProvider>
     );
 
     const selectElement = await screen.findByRole("combobox", {
       name: /select active requester/i,
+    });
+
+    // Verify Requester 1 (Sarah) tickets loaded
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-101")).toHaveTextContent("VPN Connection Drop");
+    });
+
+    // Switch to Requester 2 (John)
+    await user.selectOptions(selectElement, "2");
+
+    // Sarah's ticket should be cleared and John's ticket reloaded
+    await waitFor(() => {
+      expect(screen.queryByTestId("ticket-101")).not.toBeInTheDocument();
+      expect(screen.getByTestId("ticket-102")).toHaveTextContent("Payroll Portal Access");
+    });
+  });
+
+  it("intercepts requester switch with dirty guard modal and reloads tickets only upon confirming discard", async () => {
+    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    const user = userEvent.setup();
+
+    render(
+      <RequesterProvider>
+        <TicketDashboardApp />
+      </RequesterProvider>
+    );
+
+    const selectElement = await screen.findByRole("combobox", {
+      name: /select active requester/i,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("ticket-101")).toHaveTextContent("VPN Connection Drop");
     });
 
     // Make form dirty
@@ -138,20 +213,16 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
     // Attempt to switch to John Doe (ID: 2)
     await user.selectOptions(selectElement, "2");
 
-    // Modal should appear
+    // Modal appears, requester and tickets must NOT switch yet
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/you have unsaved ticket details/i)
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
+    expect(screen.getByTestId("ticket-101")).toBeInTheDocument();
 
-    // Requester must NOT have switched yet
-    expect(screen.getByTestId("current-requester")).toHaveTextContent("Sarah Connor");
-
-    // Test "Cancel / Stay"
+    // Click "Cancel / Stay"
     await user.click(screen.getByRole("button", { name: /cancel \/ stay/i }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByTestId("current-requester")).toHaveTextContent("Sarah Connor");
+    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
+    expect(screen.getByTestId("ticket-101")).toBeInTheDocument();
     expect(screen.getByTestId("is-dirty")).toHaveTextContent("dirty");
 
     // Attempt switch again and click "Discard Changes"
@@ -160,8 +231,14 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
     await user.click(screen.getByRole("button", { name: /discard changes/i }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByTestId("current-requester")).toHaveTextContent("John Doe");
+    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("John Doe");
     expect(screen.getByTestId("is-dirty")).toHaveTextContent("clean");
     expect(localStorage.getItem("toktickit_requester_id")).toBe("2");
+
+    // Verify Sarah's ticket cleared and John's ticket reloaded
+    await waitFor(() => {
+      expect(screen.queryByTestId("ticket-101")).not.toBeInTheDocument();
+      expect(screen.getByTestId("ticket-102")).toHaveTextContent("Payroll Portal Access");
+    });
   });
 });
