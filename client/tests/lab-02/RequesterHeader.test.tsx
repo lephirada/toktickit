@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -31,43 +31,37 @@ const mockRequesters: api.RequesterUser[] = [
   },
 ];
 
-interface MockTicket {
-  id: number;
-  ticketNo: string;
-  summary: string;
-  requesterId: number;
-}
-
-const mockTicketsByRequester: Record<number, MockTicket[]> = {
-  1: [{ id: 101, ticketNo: "TKT-2026-00001", summary: "VPN Connection Drop", requesterId: 1 }],
-  2: [{ id: 102, ticketNo: "TKT-2026-00002", summary: "Payroll Portal Access", requesterId: 2 }],
+const mockTicketsByRequester: Record<number, api.TicketItem[]> = {
+  1: [
+    {
+      id: 101,
+      ticketNo: "TKT-2026-00001",
+      summary: "VPN Connection Drop",
+      priority: "P1_HIGH",
+      status: "NEW",
+      categoryId: 4,
+      requesterId: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ],
+  2: [
+    {
+      id: 102,
+      ticketNo: "TKT-2026-00002",
+      summary: "Payroll Portal Access",
+      priority: "P2_MEDIUM",
+      status: "NEW",
+      categoryId: 1,
+      requesterId: 2,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ],
 };
 
-// Component simulating requester-specific ticket reloading
-function TicketDashboardApp() {
-  const { currentRequester, isFormDirty, setFormDirty } = useRequester();
-  const [tickets, setTickets] = useState<MockTicket[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!currentRequester) {
-      setTickets([]);
-      return;
-    }
-
-    // Step 1: Clear previous requester-specific ticket state immediately upon requester change
-    setTickets([]);
-    setLoading(true);
-
-    // Step 2: Reload tickets for the newly selected requester
-    const reqId = currentRequester.id;
-    const timer = setTimeout(() => {
-      setTickets(mockTicketsByRequester[reqId] || []);
-      setLoading(false);
-    }, 10);
-
-    return () => clearTimeout(timer);
-  }, [currentRequester?.id]);
+function TestApp() {
+  const { currentRequester, isFormDirty, setFormDirty, tickets, ticketsLoading } = useRequester();
 
   return (
     <div>
@@ -79,7 +73,7 @@ function TicketDashboardApp() {
       <button onClick={() => setFormDirty(true)}>Make Form Dirty</button>
       <button onClick={() => setFormDirty(false)}>Clean Form</button>
 
-      <div data-testid="tickets-loading">{loading ? "loading" : "idle"}</div>
+      <div data-testid="tickets-loading">{ticketsLoading ? "loading" : "idle"}</div>
       <ul data-testid="ticket-list">
         {tickets.map((t) => (
           <li key={t.id} data-testid={`ticket-${t.id}`}>
@@ -99,14 +93,18 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
   it("fetches active requesters and displays them in the header dropdown", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
 
     render(
       <RequesterProvider>
-        <TicketDashboardApp />
+        <TestApp />
       </RequesterProvider>
     );
 
-    const selectElement = await screen.findByRole("combobox", {
+    // Wait for dropdown options to be populated
+    await screen.findByRole("option", { name: /Sarah Connor/i });
+
+    const selectElement = screen.getByRole("combobox", {
       name: /select active requester/i,
     });
 
@@ -122,14 +120,18 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
   it("restores previously selected requester from localStorage", async () => {
     localStorage.setItem("toktickit_requester_id", "2");
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
 
     render(
       <RequesterProvider>
-        <TicketDashboardApp />
+        <TestApp />
       </RequesterProvider>
     );
 
-    const selectElement = await screen.findByRole("combobox", {
+    // Wait for option 2 to be rendered
+    await screen.findByRole("option", { name: /John Doe/i });
+
+    const selectElement = screen.getByRole("combobox", {
       name: /select active requester/i,
     });
 
@@ -141,15 +143,19 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
   it("updates localStorage and active context when a new requester is selected", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
     const user = userEvent.setup();
 
     render(
       <RequesterProvider>
-        <TicketDashboardApp />
+        <TestApp />
       </RequesterProvider>
     );
 
-    const selectElement = await screen.findByRole("combobox", {
+    // Wait for options to load before attempting selection
+    await screen.findByRole("option", { name: /John Doe/i });
+
+    const selectElement = screen.getByRole("combobox", {
       name: /select active requester/i,
     });
 
@@ -159,49 +165,57 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
     expect(localStorage.getItem("toktickit_requester_id")).toBe("2");
   });
 
-  it("clears old state and reloads requester-specific tickets when context changes", async () => {
+  it("clears old state and reloads requester-specific tickets via api.fetchTickets when context changes", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
+      return mockTicketsByRequester[reqId || 1] || [];
+    });
     const user = userEvent.setup();
 
     render(
       <RequesterProvider>
-        <TicketDashboardApp />
+        <TestApp />
       </RequesterProvider>
     );
 
-    const selectElement = await screen.findByRole("combobox", {
-      name: /select active requester/i,
-    });
-
-    // Verify Requester 1 (Sarah) tickets loaded
+    // Verify Requester 1 (Sarah) tickets loaded initially
+    await screen.findByRole("option", { name: /Sarah Connor/i });
     await waitFor(() => {
       expect(screen.getByTestId("ticket-101")).toHaveTextContent("VPN Connection Drop");
+    });
+    expect(fetchTicketsSpy).toHaveBeenCalledWith(1);
+
+    // Wait for option 2 to be present
+    await screen.findByRole("option", { name: /John Doe/i });
+    const selectElement = screen.getByRole("combobox", {
+      name: /select active requester/i,
     });
 
     // Switch to Requester 2 (John)
     await user.selectOptions(selectElement, "2");
 
-    // Sarah's ticket should be cleared and John's ticket reloaded
+    // Verify Sarah's ticket cleared and John's ticket loaded
     await waitFor(() => {
       expect(screen.queryByTestId("ticket-101")).not.toBeInTheDocument();
       expect(screen.getByTestId("ticket-102")).toHaveTextContent("Payroll Portal Access");
     });
+    expect(fetchTicketsSpy).toHaveBeenCalledWith(2);
   });
 
   it("intercepts requester switch with dirty guard modal and reloads tickets only upon confirming discard", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
+      return mockTicketsByRequester[reqId || 1] || [];
+    });
     const user = userEvent.setup();
 
     render(
       <RequesterProvider>
-        <TicketDashboardApp />
+        <TestApp />
       </RequesterProvider>
     );
 
-    const selectElement = await screen.findByRole("combobox", {
-      name: /select active requester/i,
-    });
-
+    await screen.findByRole("option", { name: /Sarah Connor/i });
     await waitFor(() => {
       expect(screen.getByTestId("ticket-101")).toHaveTextContent("VPN Connection Drop");
     });
@@ -209,6 +223,12 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
     // Make form dirty
     await user.click(screen.getByRole("button", { name: /make form dirty/i }));
     expect(screen.getByTestId("is-dirty")).toHaveTextContent("dirty");
+
+    // Wait for dropdown option 2
+    await screen.findByRole("option", { name: /John Doe/i });
+    const selectElement = screen.getByRole("combobox", {
+      name: /select active requester/i,
+    });
 
     // Attempt to switch to John Doe (ID: 2)
     await user.selectOptions(selectElement, "2");
@@ -240,5 +260,6 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
       expect(screen.queryByTestId("ticket-101")).not.toBeInTheDocument();
       expect(screen.getByTestId("ticket-102")).toHaveTextContent("Payroll Portal Access");
     });
+    expect(fetchTicketsSpy).toHaveBeenCalledWith(2);
   });
 });
