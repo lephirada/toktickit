@@ -17,9 +17,7 @@
 
 ---
 
-### PR #18 — Issue 5 (Define sprint specifications and test plan
-
-)
+### PR #18 — Issue 5 (Define sprint specifications and test plan)
 
 - **Reviewer comment I received:**
 
@@ -31,13 +29,28 @@
 - **How I responded:**
   > Thank you for merging.
 
+### PR #19 — Issue 6 (Implement development requester context and seed data)
+
+- **Reviewer comment I received:**
+
+  > I checked the PR against the acceptance criteria, and everything looks good.
+
+  > Prisma models and relationships are set up correctly.
+  > Seed data is complete and idempotent, with CI verifying 4 active requesters, 1 inactive requester, 4 categories, and 6 related systems.
+  > GET /api/requesters retrieves active requesters from PostgreSQL.
+  > The requester selection, localStorage persistence, header display, and requester switching flow are implemented.
+  > Dirty form changes are handled with a confirmation dialog, and tickets are reloaded for the selected requester.
+  > Both frontend and backend tests are run in CI.
+  > All acceptance criteria are covered. Approve
+
+- **How I responded:**
+  > Thank you for the review and approval, I have updated reviewer.md , ai_use.md of docs/lab-02 . You can merging this PR into lab2-staging now.
+
 ---
 
 ## Pull Requests I reviewed for my partner
 
-### PR #26 — Issue 5 (Sprint Specification and Test Plan (Spec DD)
-
-)
+### PR #26 — Issue 5 (Sprint Specification and Test Plan (Spec DD))
 
 - **My comment:**
 
@@ -59,3 +72,12 @@
 
 - **Partner's response:**
   > Thank you for the review and approval! I have updated docs/lab-02/tests.md and docs/lab-02/reviewer.md with the peer review record. You can merge this PR into lab2-staging now.
+
+### PR #28 — Issue 7 (Ticket Creation & Zen Green Form Foundation)
+
+- **My comment:**
+
+  > Reviewed against all acceptance criteria. The API, Create Ticket UI, validation, attachment constraints, loading/error handling, and requester context are all implemented as expected. The required Supertest and Vitest tests are included and passing.
+
+- **Partner's response:**
+  > Thank you for the review and approval! I have updated the peer review record in reviewer.md. PR #28 is ready to be merged into lab2-staging now ka
