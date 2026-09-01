@@ -97,11 +97,15 @@ jobs:
             async function verify() {
               const catCount = await prisma.category.count();
               const sysCount = await prisma.relatedSystem.count();
-              const reqCount = await prisma.requesterUser.count();
+              const totalReqCount = await prisma.requesterUser.count();
+              const activeReqCount = await prisma.requesterUser.count({ where: { isActive: true } });
+              const inactiveReqCount = await prisma.requesterUser.count({ where: { isActive: false } });
               if (catCount !== 4) throw new Error("Expected 4 categories, found " + catCount);
               if (sysCount !== 6) throw new Error("Expected 6 related systems, found " + sysCount);
-              if (reqCount !== 5) throw new Error("Expected 5 requester users, found " + reqCount);
-              console.log("Verified: 4 categories, 6 related systems, 5 requester users in DB.");
+              if (totalReqCount !== 5) throw new Error("Expected 5 total requesters, found " + totalReqCount);
+              if (activeReqCount !== 4) throw new Error("Expected 4 active requesters, found " + activeReqCount);
+              if (inactiveReqCount !== 1) throw new Error("Expected 1 inactive requester, found " + inactiveReqCount);
+              console.log("Verified: 4 categories, 6 related systems, 5 requesters (4 active, 1 inactive) in DB.");
               process.exit(0);
             }
             verify().catch(e => { console.error(e); process.exit(1); });

@@ -79,4 +79,38 @@ app.get("/api/related-systems", async (req: Request, res: Response) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Issue 6 — Tickets list scoped to requester
+// GET /api/tickets
+// ---------------------------------------------------------------------------
+app.get("/api/tickets", async (req: Request, res: Response) => {
+  try {
+    const requesterIdHeader = req.headers["x-requester-id"];
+    const requesterId = requesterIdHeader ? Number(requesterIdHeader) : undefined;
+
+    const tickets = await getPrisma().ticket.findMany({
+      where: requesterId !== undefined && !isNaN(requesterId) ? { requesterId } : undefined,
+      select: {
+        id: true,
+        ticketNo: true,
+        summary: true,
+        description: true,
+        priority: true,
+        status: true,
+        categoryId: true,
+        relatedSystemId: true,
+        requesterId: true,
+        createdAt: true,
+        updatedAt: true,
+        category: { select: { id: true, name: true } },
+        relatedSystem: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    res.status(200).json({ data: tickets });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch tickets" });
+  }
+});
+
 export default app;

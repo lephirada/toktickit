@@ -19,6 +19,22 @@ export interface RequesterUser {
   isActive: boolean;
 }
 
+export interface TicketItem {
+  id: number;
+  ticketNo: string;
+  summary: string;
+  description?: string;
+  priority: string;
+  status: string;
+  categoryId: number;
+  relatedSystemId?: number | null;
+  requesterId: number;
+  createdAt: string;
+  updatedAt: string;
+  category?: { id: number; name: string };
+  relatedSystem?: { id: number; name: string } | null;
+}
+
 export interface SystemStatus {
   online: boolean;
   categories: Category[];
@@ -64,6 +80,19 @@ export async function fetchRelatedSystems(categoryId?: number): Promise<RelatedS
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error("Unable to fetch related systems");
+  }
+  const body = await res.json();
+  return body.data ?? body;
+}
+
+export async function fetchTickets(requesterId?: number): Promise<TicketItem[]> {
+  const headers: Record<string, string> = {};
+  if (requesterId) {
+    headers["X-Requester-Id"] = String(requesterId);
+  }
+  const res = await fetch(`${API_URL}/api/tickets`, { headers });
+  if (!res.ok) {
+    throw new Error("Unable to fetch tickets");
   }
   const body = await res.json();
   return body.data ?? body;

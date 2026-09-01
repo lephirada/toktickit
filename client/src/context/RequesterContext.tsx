@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { RequesterUser, fetchRequesters } from "../api.js";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { RequesterUser, TicketItem, fetchRequesters, fetchTickets } from "../api.js";
 
 const STORAGE_KEY = "toktickit_requester_id";
 
@@ -14,6 +14,10 @@ export interface RequesterContextType {
   pendingRequesterId: number | null;
   confirmDiscard: () => void;
   cancelDiscard: () => void;
+  // Requester-specific tickets state
+  tickets: TicketItem[];
+  ticketsLoading: boolean;
+  reloadTickets: () => Promise<void>;
 }
 
 const RequesterContext = createContext<RequesterContextType | undefined>(undefined);
@@ -25,6 +29,23 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
   const [isFormDirty, setIsFormDirty] = useState<boolean>(false);
   const [isDirtyModalOpen, setIsDirtyModalOpen] = useState<boolean>(false);
   const [pendingRequesterId, setPendingRequesterId] = useState<number | null>(null);
+
+  const [tickets, setTickets] = useState<TicketItem[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState<boolean>(false);
+
+  const loadTicketsForRequester = useCallback(async (requesterId: number) => {
+    // Clear previous requester tickets immediately
+    setTickets([]);
+    setTicketsLoading(true);
+    try {
+      const data = await fetchTickets(requesterId);
+      setTickets(Array.isArray(data) ? data : []);
+    } catch {
+      setTickets([]);
+    } finally {
+      setTicketsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -45,6 +66,7 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
           const selected = found || users[0];
           setCurrentRequester(selected);
           localStorage.setItem(STORAGE_KEY, String(selected.id));
+          loadTicketsForRequester(selected.id);
         }
       } catch (err) {
         console.error("Failed to load active requesters:", err);
@@ -60,7 +82,7 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loadTicketsForRequester]);
 
   function switchRequester(id: number) {
     if (currentRequester && currentRequester.id === id) {
@@ -77,6 +99,7 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
     if (target) {
       setCurrentRequester(target);
       localStorage.setItem(STORAGE_KEY, String(target.id));
+      loadTicketsForRequester(target.id);
     }
   }
 
@@ -86,6 +109,7 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
       if (target) {
         setCurrentRequester(target);
         localStorage.setItem(STORAGE_KEY, String(target.id));
+        loadTicketsForRequester(target.id);
       }
       setPendingRequesterId(null);
     }
@@ -97,6 +121,12 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
     setPendingRequesterId(null);
     setIsDirtyModalOpen(false);
   }
+
+  const reloadTickets = useCallback(async () => {
+    if (currentRequester) {
+      await loadTicketsForRequester(currentRequester.id);
+    }
+  }, [currentRequester, loadTicketsForRequester]);
 
   return (
     <RequesterContext.Provider
@@ -111,6 +141,9 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
         pendingRequesterId,
         confirmDiscard,
         cancelDiscard,
+        tickets,
+        ticketsLoading,
+        reloadTickets,
       }}
     >
       {children}
