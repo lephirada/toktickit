@@ -191,3 +191,88 @@ textarea:focus-visible {
   background-color: var(--zg-bg);
   color: var(--zg-text-primary);
 }
+
+/* Zen Green Dropzone */
+.zg-dropzone {
+  border: 2px dashed var(--zg-border);
+  background-color: var(--zg-surface-subtle);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.zg-dropzone.active {
+  border-color: var(--zg-primary);
+  background-color: var(--zg-pale);
+}
+
+/* Zen Green Priority Pills */
+.zg-priority-pill {
+  border-radius: var(--zg-radius-full);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.zg-priority-p0 {
+  background-color: var(--zg-error-bg);
+  color: var(--zg-error);
+  border: 1px solid #FECDCA;
+}
+
+.zg-priority-p0.selected,
+.zg-priority-p0:hover {
+  background-color: var(--zg-error);
+  color: #FFFFFF;
+  border-color: var(--zg-error);
+}
+
+.zg-priority-p1 {
+  background-color: var(--zg-warning-bg);
+  color: var(--zg-warning);
+  border: 1px solid #FEDF89;
+}
+
+.zg-priority-p1.selected,
+.zg-priority-p1:hover {
+  background-color: var(--zg-warning);
+  color: #FFFFFF;
+  border-color: var(--zg-warning);
+}
+
+.zg-priority-p2 {
+  background-color: var(--zg-notice-bg);
+  color: var(--zg-notice);
+  border: 1px solid #F9DBAF;
+}
+
+.zg-priority-p2.selected,
+.zg-priority-p2:hover {
+  background-color: var(--zg-notice);
+  color: #FFFFFF;
+  border-color: var(--zg-notice);
+}
+
+.zg-priority-p3 {
+  background-color: var(--zg-neutral-bg);
+  color: var(--zg-neutral);
+  border: 1px solid var(--zg-border);
+}
+
+.zg-priority-p3.selected,
+.zg-priority-p3:hover {
+  background-color: var(--zg-neutral);
+  color: #FFFFFF;
+  border-color: var(--zg-neutral);
+}
+
+/* Attachment Chips */
+.zg-attachment-chip {
+  background-color: var(--zg-surface);
+  border: 1px solid var(--zg-border);
+  box-shadow: var(--zg-shadow-sm);
+  transition: box-shadow 0.15s ease;
+}
+
+.zg-attachment-chip:hover {
+  box-shadow: var(--zg-shadow-md);
+}

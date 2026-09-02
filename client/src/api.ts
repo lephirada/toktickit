@@ -19,6 +19,24 @@ export interface RequesterUser {
   isActive: boolean;
 }
 
+export interface AttachmentItem {
+  id: number;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  isSoftDeleted?: boolean;
+}
+
+export interface CreateTicketDTO {
+  categoryId: number;
+  relatedSystemId?: number | null;
+  priority: "P0_URGENT" | "P1_HIGH" | "P2_MEDIUM" | "P3_LOW" | string;
+  summary: string;
+  description: string;
+  attachmentIds?: number[];
+}
+
 export interface TicketItem {
   id: number;
   ticketNo: string;
@@ -33,6 +51,27 @@ export interface TicketItem {
   updatedAt: string;
   category?: { id: number; name: string };
   relatedSystem?: { id: number; name: string } | null;
+  attachments?: AttachmentItem[];
+  requester?: RequesterUser;
+}
+
+export interface FieldError {
+  field: string;
+  message: string;
+}
+
+export class ApiError extends Error {
+  code?: string;
+  fieldErrors?: FieldError[];
+  status?: number;
+
+  constructor(message: string, code?: string, fieldErrors?: FieldError[], status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.fieldErrors = fieldErrors;
+    this.status = status;
+  }
 }
 
 export interface SystemStatus {
@@ -96,4 +135,64 @@ export async function fetchTickets(requesterId?: number): Promise<TicketItem[]> 
   }
   const body = await res.json();
   return body.data ?? body;
+}
+
+export async function uploadAttachments(
+  files: File[],
+  requesterId: number
+): Promise<{ data: AttachmentItem[] }> {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("files", file);
+  }
+
+  const res = await fetch(`${API_URL}/api/attachments/pre-upload`, {
+    method: "POST",
+    headers: {
+      "X-Requester-Id": String(requesterId),
+    },
+    body: formData,
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Upload failed with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function createTicket(
+  payload: CreateTicketDTO,
+  requesterId: number
+): Promise<{ data: TicketItem }> {
+  const res = await fetch(`${API_URL}/api/tickets`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requester-Id": String(requesterId),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to create ticket with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
 }

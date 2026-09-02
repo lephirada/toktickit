@@ -3,6 +3,7 @@ import { checkSystem, Category } from "./api.js";
 import { RequesterProvider, useRequester } from "./context/RequesterContext.js";
 import Header from "./components/Header.js";
 import DirtyGuardModal from "./components/DirtyGuardModal.js";
+import CreateTicketForm from "./components/CreateTicketForm.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
 
@@ -12,6 +13,7 @@ export function AppContent() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [activeView, setActiveView] = useState<"my-tickets" | "create-ticket" | "system-check">("my-tickets");
+  const [successBanner, setSuccessBanner] = useState<string>("");
 
   async function handleCheck() {
     setState("loading");
@@ -27,6 +29,15 @@ export function AppContent() {
     }
   }
 
+  const handleTicketCreateSuccess = (ticketNo: string) => {
+    setSuccessBanner(`Ticket ${ticketNo} created successfully!`);
+    setActiveView("my-tickets");
+  };
+
+  const handleTicketCreateCancel = () => {
+    setActiveView("my-tickets");
+  };
+
   return (
     <div className="min-vh-100 d-flex flex-column">
       <Header activeView={activeView} onNavigate={setActiveView} />
@@ -37,6 +48,36 @@ export function AppContent() {
           <span className="text-success">IT Service Desk</span>
         </h1>
 
+        {/* Success Banner */}
+        {successBanner && activeView === "my-tickets" && (
+          <div
+            className="alert alert-success d-flex align-items-center justify-content-between mb-4 shadow-sm"
+            role="alert"
+            data-testid="success-banner"
+          >
+            <div>
+              <span className="me-2" aria-hidden="true">✅</span>
+              <strong>{successBanner}</strong>
+            </div>
+            <button
+              type="button"
+              className="btn-close"
+              aria-label="Close"
+              onClick={() => setSuccessBanner("")}
+            ></button>
+          </div>
+        )}
+
+        {/* Create Ticket View */}
+        {activeView === "create-ticket" && (
+          <section data-testid="create-ticket-section">
+            <CreateTicketForm
+              onSuccess={handleTicketCreateSuccess}
+              onCancel={handleTicketCreateCancel}
+            />
+          </section>
+        )}
+
         {/* My Tickets Section */}
         {activeView === "my-tickets" && (
           <section className="card shadow-sm p-4 mb-4 border-0" data-testid="my-tickets-section">
@@ -46,6 +87,15 @@ export function AppContent() {
                 <p className="text-muted small mb-0">
                   Showing tickets for: <strong data-testid="active-requester-display">{currentRequester?.fullName || "Loading…"}</strong>
                 </p>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-success"
+                  onClick={() => setActiveView("create-ticket")}
+                >
+                  + Create Ticket
+                </button>
               </div>
             </div>
 

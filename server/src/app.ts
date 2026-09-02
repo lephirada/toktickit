@@ -1,6 +1,12 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import path from "node:path";
+import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import { getPrisma } from "./prisma.js";
+import { requireRequesterAuth, AuthenticatedRequest } from "./middleware/auth.js";
+import { handlePreUploadMiddleware, UPLOAD_DIR } from "./middleware/upload.js";
+import { createErrorEnvelope, FieldError } from "./utils/errors.js";
 
 export const app = express();
 
@@ -112,5 +118,304 @@ app.get("/api/tickets", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to fetch tickets" });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Issue 7 — Pre-upload Attachments
+// POST /api/attachments/pre-upload
+// ---------------------------------------------------------------------------
+app.post(
+  "/api/attachments/pre-upload",
+  requireRequesterAuth,
+  handlePreUploadMiddleware,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const requesterId = req.requesterId!;
+      const files = req.files as Express.Multer.File[];
+
+      const createdAttachments = [];
+
+      for (const file of files) {
+        const sanitizedFilename = path
+          .basename(file.originalname)
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+        const storageKey = `att_${Date.now()}_${randomUUID().replace(/-/g, "")}_${sanitizedFilename}`;
+        const filePath = path.join(UPLOAD_DIR, storageKey);
+
+        await fs.promises.writeFile(filePath, file.buffer);
+
+        const mimeType = file.mimetype === "image/jpg" ? "image/jpeg" : file.mimetype;
+
+        const attachment = await getPrisma().attachment.create({
+          data: {
+            originalName: file.originalname,
+            storageKey,
+            mimeType,
+            sizeBytes: file.size,
+            uploadedById: requesterId,
+            ticketId: null,
+            isSoftDeleted: false,
+          },
+          select: {
+            id: true,
+            originalName: true,
+            mimeType: true,
+            sizeBytes: true,
+            createdAt: true,
+          },
+        });
+
+        createdAttachments.push(attachment);
+      }
+
+      res.status(201).json({ data: createdAttachments });
+    } catch (error) {
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to stage attachment."));
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Issue 7 — Ticket Creation
+// POST /api/tickets
+// ---------------------------------------------------------------------------
+app.post(
+  "/api/tickets",
+  requireRequesterAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const requesterId = req.requesterId!;
+      const {
+        categoryId,
+        relatedSystemId,
+        priority,
+        summary,
+        description,
+        attachmentIds,
+      } = req.body || {};
+
+      const fieldErrors: FieldError[] = [];
+
+      // Validate summary
+      if (
+        typeof summary !== "string" ||
+        summary.trim().length < 5 ||
+        summary.trim().length > 100
+      ) {
+        fieldErrors.push({
+          field: "summary",
+          message: "Summary must be between 5 and 100 characters.",
+        });
+      }
+
+      // Validate description
+      if (
+        typeof description !== "string" ||
+        description.trim().length < 10 ||
+        description.trim().length > 2000
+      ) {
+        fieldErrors.push({
+          field: "description",
+          message: "Description must be between 10 and 2000 characters.",
+        });
+      }
+
+      // Validate categoryId
+      let validCategory = false;
+      if (
+        typeof categoryId !== "number" ||
+        isNaN(categoryId) ||
+        !Number.isInteger(categoryId)
+      ) {
+        fieldErrors.push({
+          field: "categoryId",
+          message: "Valid category is required.",
+        });
+      } else {
+        const category = await getPrisma().category.findUnique({
+          where: { id: categoryId },
+        });
+        if (!category) {
+          fieldErrors.push({
+            field: "categoryId",
+            message: "Valid category is required.",
+          });
+        } else {
+          validCategory = true;
+        }
+      }
+
+      // Validate relatedSystemId
+      if (relatedSystemId !== undefined && relatedSystemId !== null) {
+        if (
+          typeof relatedSystemId !== "number" ||
+          isNaN(relatedSystemId) ||
+          !Number.isInteger(relatedSystemId)
+        ) {
+          fieldErrors.push({
+            field: "relatedSystemId",
+            message: "Selected system does not belong to the chosen category.",
+          });
+        } else {
+          const system = await getPrisma().relatedSystem.findUnique({
+            where: { id: relatedSystemId },
+          });
+          if (
+            !system ||
+            !validCategory ||
+            system.categoryId !== categoryId
+          ) {
+            fieldErrors.push({
+              field: "relatedSystemId",
+              message: "Selected system does not belong to the chosen category.",
+            });
+          }
+        }
+      }
+
+      // Validate priority
+      const validPriorities = ["P0_URGENT", "P1_HIGH", "P2_MEDIUM", "P3_LOW"];
+      if (!priority || !validPriorities.includes(priority)) {
+        fieldErrors.push({
+          field: "priority",
+          message: "Priority must be one of P0_URGENT, P1_HIGH, P2_MEDIUM, P3_LOW.",
+        });
+      }
+
+      // Validate attachmentIds
+      if (attachmentIds !== undefined && attachmentIds !== null) {
+        if (
+          !Array.isArray(attachmentIds) ||
+          attachmentIds.length > 5 ||
+          attachmentIds.some(
+            (id: unknown) => typeof id !== "number" || !Number.isInteger(id)
+          )
+        ) {
+          fieldErrors.push({
+            field: "attachmentIds",
+            message: "Invalid or already linked attachment ID.",
+          });
+        } else if (attachmentIds.length > 0) {
+          const attachments = await getPrisma().attachment.findMany({
+            where: { id: { in: attachmentIds } },
+          });
+
+          if (attachments.length !== attachmentIds.length) {
+            fieldErrors.push({
+              field: "attachmentIds",
+              message: "Invalid or already linked attachment ID.",
+            });
+          } else {
+            const hasInvalid = attachments.some(
+              (att) =>
+                att.uploadedById !== requesterId ||
+                att.ticketId !== null ||
+                att.isSoftDeleted
+            );
+            if (hasInvalid) {
+              fieldErrors.push({
+                field: "attachmentIds",
+                message: "Invalid or already linked attachment ID.",
+              });
+            }
+          }
+        }
+      }
+
+      if (fieldErrors.length > 0) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_FAILED",
+              "Validation failed on ticket creation payload.",
+              fieldErrors
+            )
+          );
+        return;
+      }
+
+      // Atomic Execution & Ticket Numbering
+      const createdTicket = await getPrisma().$transaction(async (tx) => {
+        const year = new Date().getFullYear();
+        const latestTicket = await tx.ticket.findFirst({
+          where: {
+            ticketNo: {
+              startsWith: `TKT-${year}-`,
+            },
+          },
+          orderBy: {
+            id: "desc",
+          },
+        });
+
+        let nextSeq = 1;
+        if (latestTicket) {
+          const parts = latestTicket.ticketNo.split("-");
+          const num = parseInt(parts[2], 10);
+          if (!isNaN(num)) {
+            nextSeq = num + 1;
+          }
+        }
+
+        const ticketNo = `TKT-${year}-${String(nextSeq).padStart(5, "0")}`;
+
+        const newTicket = await tx.ticket.create({
+          data: {
+            ticketNo,
+            summary: summary.trim(),
+            description: description.trim(),
+            priority,
+            status: "NEW",
+            requesterId,
+            categoryId,
+            relatedSystemId: relatedSystemId || null,
+          },
+        });
+
+        if (Array.isArray(attachmentIds) && attachmentIds.length > 0) {
+          await tx.attachment.updateMany({
+            where: { id: { in: attachmentIds } },
+            data: { ticketId: newTicket.id },
+          });
+        }
+
+        return tx.ticket.findUnique({
+          where: { id: newTicket.id },
+          include: {
+            category: { select: { id: true, name: true } },
+            relatedSystem: { select: { id: true, name: true } },
+            requester: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                department: true,
+              },
+            },
+            attachments: {
+              select: {
+                id: true,
+                originalName: true,
+                mimeType: true,
+                sizeBytes: true,
+                isSoftDeleted: true,
+                createdAt: true,
+              },
+              orderBy: { id: "asc" },
+            },
+          },
+        });
+      });
+
+      res.status(201).json({ data: createdTicket });
+    } catch (error) {
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to create ticket."));
+    }
+  }
+);
 
 export default app;

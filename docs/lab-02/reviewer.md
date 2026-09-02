@@ -46,6 +46,19 @@
 - **How I responded:**
   > Thank you for the review and approval, I have updated reviewer.md , ai_use.md of docs/lab-02 . You can merging this PR into lab2-staging now.
 
+### PR #20 — Issue 7 (Create IT support tickets with pre-upload attachments)
+
+- **Reviewer comment I received:**
+
+  > Overall, the implementation looks good and most of the acceptance criteria are covered. The API, ticket creation flow, validation, UI states, and tests are all in place.
+
+  > One thing to fix is the client-side attachment MIME validation. Currently, a file can pass validation if its extension is allowed even when its MIME type is not. Since the requirement specifies allowed MIME types (JPG, PNG, WEBP, PDF), the client should validate the MIME type directly as well.
+
+  > Once this is fixed, I think the PR should be ready to approve
+
+- **How I responded:**
+  > Updated! Added direct file.type MIME validation alongside extension checks in CreateTicketForm.tsx, and added unit tests covering invalid MIME rejection on the client. All tests are passing green. You can merging this PR into lab2-staging now.
+
 ---
 
 ## Pull Requests I reviewed for my partner
@@ -81,3 +94,12 @@
 
 - **Partner's response:**
   > Thank you for the review and approval! I have updated the peer review record in reviewer.md. PR #28 is ready to be merged into lab2-staging now ka
+
+### PR #29 — Issue 8 (My Tickets Screen (Search, Filter, Sort, Pagination))
+
+- **My comment:**
+
+  > Reviewed the changes against the acceptance criteria. Everything looks good requester isolation, filtering, sorting, pagination, My Tickets UI, and the different UI states are all implemented correctly. The Supertest and Vitest tests are also included and passing, including the multi-user isolation and requester switching cases. So approved ka.
+
+- **Partner's response:**
+  > Thank you for the review and approval! I have updated the peer review record in reviewer.md. PR #29 is ready to be merged into lab2-staging
