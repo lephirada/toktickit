@@ -24,7 +24,6 @@ const ALLOWED_MIME_TYPES = [
   "image/png",
   "image/webp",
   "application/pdf",
-  "image/jpg",
 ];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -207,8 +206,8 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
       const isValidExt = ALLOWED_EXTENSIONS.includes(ext);
       const isValidMime = ALLOWED_MIME_TYPES.includes(file.type);
 
-      if (!isValidExt && !isValidMime) {
-        setUploadError("Allowed file types: JPEG, PNG, WEBP, PDF.");
+      if (!isValidExt || !isValidMime) {
+        setUploadError("Only JPG, PNG, WEBP, and PDF files are allowed.");
         return;
       }
     }

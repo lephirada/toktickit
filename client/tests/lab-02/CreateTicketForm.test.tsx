@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../src/api.js";
 import { RequesterProvider, useRequester } from "../../src/context/RequesterContext.js";
@@ -185,6 +185,42 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     await userEvent.click(removeBtn);
 
     expect(screen.queryByTestId("attachment-chip-881")).not.toBeInTheDocument();
+  });
+
+  it("3b. Client MIME & Extension Validation: Rejects files with disallowed MIME types or extensions without calling api.uploadAttachments", async () => {
+    const uploadSpy = vi.spyOn(api, "uploadAttachments");
+
+    render(
+      <RequesterProvider>
+        <TestWrapper />
+      </RequesterProvider>
+    );
+
+    await screen.findByRole("option", { name: "Hardware" });
+
+    const fileInput = document.getElementById("file-upload-input") as HTMLInputElement;
+
+    // 1. Invalid MIME type (text/plain)
+    const txtFile = new File(["notes"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(fileInput, { target: { files: [txtFile] } });
+
+    await screen.findByText("Only JPG, PNG, WEBP, and PDF files are allowed.");
+    expect(uploadSpy).not.toHaveBeenCalled();
+
+    // 2. Extension matches but invalid MIME type (e.g. application/zip named test.png)
+    const spoofedFile = new File(["fake zip"], "test.png", { type: "application/zip" });
+    fireEvent.change(fileInput, { target: { files: [spoofedFile] } });
+
+    await screen.findByText("Only JPG, PNG, WEBP, and PDF files are allowed.");
+    expect(uploadSpy).not.toHaveBeenCalled();
+
+    // 3. MIME matches but invalid extension (.exe with image/png) via drop
+    const dropzone = fileInput.closest(".zg-dropzone")!;
+    const badExtFile = new File(["exe bytes"], "malicious.exe", { type: "image/png" });
+    fireEvent.drop(dropzone, { dataTransfer: { files: [badExtFile] } });
+
+    await screen.findByText("Only JPG, PNG, WEBP, and PDF files are allowed.");
+    expect(uploadSpy).not.toHaveBeenCalled();
   });
 
   it("4. Successful Creation: Valid form submission calls api.createTicket with X-Requester-Id, clears dirty flag, and redirects", async () => {
