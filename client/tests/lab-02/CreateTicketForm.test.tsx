@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import * as api from "../../src/api.js";
 import { RequesterProvider, useRequester } from "../../src/context/RequesterContext.js";
 import CreateTicketForm from "../../src/components/CreateTicketForm.js";
+import App from "../../src/App.js";
 
 const mockRequesters: api.RequesterUser[] = [
   {
@@ -52,7 +53,17 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     localStorage.clear();
     vi.restoreAllMocks();
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: {
+        page: 1,
+        pageSize: 10,
+        totalItems: 0,
+        totalPages: 0,
+        hasNext: false,
+        hasPrev: false,
+      },
+    });
     vi.spyOn(api, "fetchCategories").mockResolvedValue(mockCategories);
     vi.spyOn(api, "fetchRelatedSystems").mockImplementation(async (catId) => {
       if (catId === 2) return mockHardwareSystems;
@@ -116,13 +127,9 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     const submitBtn = screen.getByTestId("submit-ticket-btn");
     await user.click(submitBtn);
 
-    // Verify error messages
-    expect(
-      screen.getByText("Summary must be between 5 and 100 characters.")
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Description must be between 10 and 2000 characters.")
-    ).toBeInTheDocument();
+    // Verify error messages for empty submission
+    expect(screen.getByText("Summary is required.")).toBeInTheDocument();
+    expect(screen.getByText("Description is required.")).toBeInTheDocument();
     expect(screen.getByText("Valid category is required.")).toBeInTheDocument();
     expect(createTicketSpy).not.toHaveBeenCalled();
 
@@ -135,10 +142,10 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     await user.click(submitBtn);
 
     expect(
-      screen.getByText("Summary must be between 5 and 100 characters.")
+      screen.getByText("Summary must be at least 5 characters.")
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Description must be between 10 and 2000 characters.")
+      screen.getByText("Description must be at least 10 characters.")
     ).toBeInTheDocument();
     expect(createTicketSpy).not.toHaveBeenCalled();
   });
@@ -357,5 +364,58 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     expect(
       screen.getByText("Summary must be between 5 and 100 characters.")
     ).toBeInTheDocument();
+  });
+
+  it("6. Centralized Dirty Guard: Intercepts navigation when form is dirty; Cancel retains inputs, Discard resets and navigates", async () => {
+    localStorage.setItem("toktickit_requester_id", "1");
+    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchCategories").mockResolvedValue(mockCategories);
+    vi.spyOn(api, "fetchRelatedSystems").mockResolvedValue(mockNetworkSystems);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 1, hasNext: false, hasPrev: false },
+    });
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    // Go to Create Ticket
+    const createNavBtn = await screen.findByRole("link", { name: /\+ Create Ticket/i });
+    await user.click(createNavBtn);
+
+    // Type in Summary
+    const summaryInput = await screen.findByLabelText(/Summary/i);
+    await user.type(summaryInput, "Unsaved Network Issue");
+
+    // Click My Tickets in navigation
+    const myTicketsLink = screen.getByRole("link", { name: /My Tickets/i });
+    await user.click(myTicketsLink);
+
+    // Unsaved Changes modal must appear
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText(/Unsaved Changes/i)).toBeInTheDocument();
+
+    // Click Cancel on modal
+    await user.click(screen.getByTestId("dirty-cancel-btn"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Form inputs must still be there
+    expect(screen.getByLabelText(/Summary/i)).toHaveValue("Unsaved Network Issue");
+
+    // Now click Switch Requester in profile
+    const profileBtn = screen.getByTestId("header-profile-button");
+    await user.click(profileBtn);
+    const switchBtn = await screen.findByTestId("menu-switch-requester-btn");
+    await user.click(switchBtn);
+
+    // Modal appears again
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // Click Discard Changes
+    await user.click(screen.getByTestId("dirty-discard-btn"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Screen must have navigated to Select Requester
+    expect(await screen.findByTestId("select-requester-screen")).toBeInTheDocument();
   });
 });

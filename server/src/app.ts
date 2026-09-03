@@ -4,6 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import { getPrisma } from "./prisma.js";
+import { Prisma, Priority, TicketStatus } from "@prisma/client";
 import { requireRequesterAuth, AuthenticatedRequest } from "./middleware/auth.js";
 import { handlePreUploadMiddleware, UPLOAD_DIR } from "./middleware/upload.js";
 import { createErrorEnvelope, FieldError } from "./utils/errors.js";
@@ -86,38 +87,168 @@ app.get("/api/related-systems", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// Issue 6 — Tickets list scoped to requester
+// Issue 8 — My Tickets Query API with Filtering & Pagination
 // GET /api/tickets
 // ---------------------------------------------------------------------------
-app.get("/api/tickets", async (req: Request, res: Response) => {
-  try {
-    const requesterIdHeader = req.headers["x-requester-id"];
-    const requesterId = requesterIdHeader ? Number(requesterIdHeader) : undefined;
+app.get(
+  "/api/tickets",
+  requireRequesterAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const requesterId = req.requesterId!;
+      const {
+        search,
+        categoryId,
+        priority,
+        status,
+        sortBy,
+        sortOrder,
+        page,
+        pageSize,
+        limit,
+      } = req.query;
 
-    const tickets = await getPrisma().ticket.findMany({
-      where: requesterId !== undefined && !isNaN(requesterId) ? { requesterId } : undefined,
-      select: {
-        id: true,
-        ticketNo: true,
-        summary: true,
-        description: true,
-        priority: true,
-        status: true,
-        categoryId: true,
-        relatedSystemId: true,
-        requesterId: true,
-        createdAt: true,
-        updatedAt: true,
-        category: { select: { id: true, name: true } },
-        relatedSystem: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    res.status(200).json({ data: tickets });
-  } catch {
-    res.status(500).json({ error: "Failed to fetch tickets" });
+      // 1. Pagination parameters
+      const parsedPage = parseInt(page as string, 10);
+      const pageNum = !isNaN(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+      const requestedLimit = parseInt((pageSize as string) || (limit as string), 10);
+      const limitNum = !isNaN(requestedLimit) && requestedLimit > 0 ? requestedLimit : 10;
+
+      const skip = (pageNum - 1) * limitNum;
+      const take = limitNum;
+
+      // 2. Filter conditions (Strictly scoped to requesterId)
+      const where: Prisma.TicketWhereInput = {
+        requesterId,
+      };
+
+      if (typeof search === "string" && search.trim().length > 0) {
+        const term = search.trim();
+        where.OR = [
+          { ticketNo: { contains: term, mode: "insensitive" } },
+          { summary: { contains: term, mode: "insensitive" } },
+        ];
+      }
+
+      if (categoryId !== undefined && categoryId !== "") {
+        const catId = parseInt(categoryId as string, 10);
+        if (!isNaN(catId)) {
+          where.categoryId = catId;
+        }
+      }
+
+      const validPriorities = ["P0_URGENT", "P1_HIGH", "P2_MEDIUM", "P3_LOW"];
+      if (typeof priority === "string" && validPriorities.includes(priority.toUpperCase())) {
+        where.priority = priority.toUpperCase() as Priority;
+      }
+
+      const validStatuses = ["NEW", "IN_PROGRESS", "RESOLVED", "CLOSED", "REJECTED"];
+      if (typeof status === "string" && validStatuses.includes(status.toUpperCase())) {
+        where.status = status.toUpperCase() as TicketStatus;
+      }
+
+      // 3. Sorting
+      const validSortFields: Record<string, string> = {
+        createdat: "createdAt",
+        updatedat: "updatedAt",
+        ticketno: "ticketNo",
+        priority: "priority",
+        status: "status",
+        summary: "summary",
+      };
+
+      const sortFieldKey = typeof sortBy === "string" ? sortBy.toLowerCase() : "createdat";
+      const sortFieldName = validSortFields[sortFieldKey] || "createdAt";
+      const sortDirection: "asc" | "desc" =
+        typeof sortOrder === "string" && sortOrder.toLowerCase() === "asc" ? "asc" : "desc";
+
+      const orderBy: Prisma.TicketOrderByWithRelationInput = {
+        [sortFieldName]: sortDirection,
+      };
+
+      // 4. Query DB in parallel (count & findMany)
+      const prisma = getPrisma();
+      const [totalCount, tickets] = await Promise.all([
+        prisma.ticket.count({ where }),
+        prisma.ticket.findMany({
+          where,
+          skip,
+          take,
+          orderBy,
+          select: {
+            id: true,
+            ticketNo: true,
+            summary: true,
+            description: true,
+            priority: true,
+            status: true,
+            categoryId: true,
+            relatedSystemId: true,
+            requesterId: true,
+            createdAt: true,
+            updatedAt: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            relatedSystem: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            requester: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                department: true,
+              },
+            },
+            attachments: {
+              where: { isSoftDeleted: false },
+              select: {
+                id: true,
+                originalName: true,
+                mimeType: true,
+                sizeBytes: true,
+                createdAt: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      const totalPages = Math.ceil(totalCount / limitNum);
+
+      const formattedTickets = tickets.map((t) => ({
+        ...t,
+        attachmentCount: t.attachments.length,
+      }));
+
+      res.status(200).json({
+        data: formattedTickets,
+        pagination: {
+          page: pageNum,
+          pageSize: limitNum,
+          limit: limitNum,
+          totalItems: totalCount,
+          totalCount,
+          totalPages,
+          hasNext: pageNum < totalPages,
+          hasPrev: pageNum > 1,
+        },
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to fetch tickets."));
+    }
   }
-});
+);
 
 // ---------------------------------------------------------------------------
 // Issue 7 — Pre-upload Attachments

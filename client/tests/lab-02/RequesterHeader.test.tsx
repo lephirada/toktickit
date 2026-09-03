@@ -93,7 +93,10 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
   it("fetches active requesters and displays them in the header dropdown", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+    });
 
     render(
       <RequesterProvider>
@@ -120,7 +123,10 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
   it("restores previously selected requester from localStorage", async () => {
     localStorage.setItem("toktickit_requester_id", "2");
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+    });
 
     render(
       <RequesterProvider>
@@ -143,7 +149,10 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
   it("updates localStorage and active context when a new requester is selected", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+    });
     const user = userEvent.setup();
 
     render(
@@ -168,7 +177,11 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
   it("clears old state and reloads requester-specific tickets via api.fetchTickets when context changes", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
     const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
-      return mockTicketsByRequester[reqId || 1] || [];
+      const items = mockTicketsByRequester[reqId || 1] || [];
+      return {
+        data: items,
+        pagination: { page: 1, pageSize: 10, totalItems: items.length, totalPages: 1, hasNext: false, hasPrev: false },
+      };
     });
     const user = userEvent.setup();
 
@@ -205,7 +218,11 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
   it("intercepts requester switch with dirty guard modal and reloads tickets only upon confirming discard", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
     const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
-      return mockTicketsByRequester[reqId || 1] || [];
+      const items = mockTicketsByRequester[reqId || 1] || [];
+      return {
+        data: items,
+        pagination: { page: 1, pageSize: 10, totalItems: items.length, totalPages: 1, hasNext: false, hasPrev: false },
+      };
     });
     const user = userEvent.setup();
 
@@ -238,8 +255,8 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
     expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
     expect(screen.getByTestId("ticket-101")).toBeInTheDocument();
 
-    // Click "Cancel / Stay"
-    await user.click(screen.getByRole("button", { name: /cancel \/ stay/i }));
+    // Click "Cancel" (or "Cancel / Stay" per ui-spec)
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
     expect(screen.getByTestId("ticket-101")).toBeInTheDocument();
