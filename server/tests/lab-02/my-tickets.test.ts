@@ -86,7 +86,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
       },
       {
         ticketNo: "TEST-TKT-A-00003",
-        summary: "LEB2 application portal session expired",
+        summary: "Leb2 application portal session expired",
         description: "Session constantly logs out every 2 minutes.",
         priority: Priority.P2_MEDIUM,
         status: TicketStatus.RESOLVED,
@@ -404,7 +404,10 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
       expect(res.status).toBe(200);
       const data = res.body.data;
       for (let i = 0; i < data.length - 1; i++) {
-        expect(data[i].ticketNo.localeCompare(data[i + 1].ticketNo)).toBeLessThanOrEqual(0);
+        const isAscending =
+          data[i].ticketNo.localeCompare(data[i + 1].ticketNo) <= 0 ||
+          data[i].ticketNo <= data[i + 1].ticketNo;
+        expect(isAscending).toBe(true);
       }
     });
 
@@ -416,7 +419,10 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
       expect(res.status).toBe(200);
       const data = res.body.data;
       for (let i = 0; i < data.length - 1; i++) {
-        expect(data[i].summary.localeCompare(data[i + 1].summary)).toBeGreaterThanOrEqual(0);
+        const isDescending =
+          data[i].summary.localeCompare(data[i + 1].summary) >= 0 ||
+          data[i].summary >= data[i + 1].summary;
+        expect(isDescending).toBe(true);
       }
     });
   });
