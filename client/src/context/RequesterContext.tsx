@@ -7,6 +7,8 @@ export interface RequesterContextType {
   currentRequester: RequesterUser | null;
   requesters: RequesterUser[];
   isLoading: boolean;
+  requesterError: string | null;
+  reloadRequesters: () => Promise<void>;
   isFormDirty: boolean;
   setFormDirty: (dirty: boolean) => void;
   switchRequester: (id: number) => void;
@@ -26,6 +28,7 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
   const [requesters, setRequesters] = useState<RequesterUser[]>([]);
   const [currentRequester, setCurrentRequester] = useState<RequesterUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [requesterError, setRequesterError] = useState<string | null>(null);
   const [isFormDirty, setIsFormDirty] = useState<boolean>(false);
   const [isDirtyModalOpen, setIsDirtyModalOpen] = useState<boolean>(false);
   const [pendingRequesterId, setPendingRequesterId] = useState<number | null>(null);
@@ -33,56 +36,74 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState<boolean>(false);
 
+  const mountedRef = React.useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const loadTicketsForRequester = useCallback(async (requesterId: number) => {
     // Clear previous requester tickets immediately
     setTickets([]);
     setTicketsLoading(true);
     try {
-      const data = await fetchTickets(requesterId);
-      setTickets(Array.isArray(data) ? data : []);
+      const res = await fetchTickets(requesterId);
+      if (!mountedRef.current) return;
+      const items = Array.isArray(res) ? res : res?.data || [];
+      setTickets(items);
     } catch {
+      if (!mountedRef.current) return;
       setTickets([]);
     } finally {
-      setTicketsLoading(false);
+      if (mountedRef.current) {
+        setTicketsLoading(false);
+      }
     }
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadRequesters = useCallback(async () => {
+    setIsLoading(true);
+    setRequesterError(null);
+    try {
+      const users = await fetchRequesters();
+      if (!mountedRef.current) return;
+      setRequesters(users);
 
-    async function loadRequesters() {
-      setIsLoading(true);
-      try {
-        const users = await fetchRequesters();
-        if (!isMounted) return;
+      if (users.length > 0) {
+        const storedIdStr = localStorage.getItem(STORAGE_KEY);
+        const storedId = storedIdStr ? parseInt(storedIdStr, 10) : null;
+        const found = storedId ? users.find((u) => u.id === storedId && u.isActive) : null;
 
-        setRequesters(users);
-
-        if (users.length > 0) {
-          const storedIdStr = localStorage.getItem(STORAGE_KEY);
-          const storedId = storedIdStr ? parseInt(storedIdStr, 10) : null;
-          const found = storedId ? users.find((u) => u.id === storedId && u.isActive) : null;
-
-          const selected = found || users[0];
-          setCurrentRequester(selected);
-          localStorage.setItem(STORAGE_KEY, String(selected.id));
-          loadTicketsForRequester(selected.id);
+        if (found) {
+          if (!mountedRef.current) return;
+          setCurrentRequester(found);
+          loadTicketsForRequester(found.id);
+        } else {
+          if (!mountedRef.current) return;
+          setCurrentRequester(null);
+          localStorage.removeItem(STORAGE_KEY);
         }
-      } catch (err) {
-        console.error("Failed to load active requesters:", err);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+      } else {
+        if (!mountedRef.current) return;
+        setCurrentRequester(null);
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch (err: unknown) {
+      if (!mountedRef.current) return;
+      console.error("Failed to load active requesters:", err);
+      setRequesterError(err instanceof Error ? err.message : "Failed to load active development requesters");
+    } finally {
+      if (mountedRef.current) {
+        setIsLoading(false);
       }
     }
-
-    loadRequesters();
-
-    return () => {
-      isMounted = false;
-    };
   }, [loadTicketsForRequester]);
+
+  useEffect(() => {
+    loadRequesters();
+  }, [loadRequesters]);
 
   function switchRequester(id: number) {
     if (currentRequester && currentRequester.id === id) {
@@ -134,6 +155,8 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
         currentRequester,
         requesters,
         isLoading,
+        requesterError,
+        reloadRequesters: loadRequesters,
         isFormDirty,
         setFormDirty: setIsFormDirty,
         switchRequester,

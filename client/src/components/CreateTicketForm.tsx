@@ -10,6 +10,13 @@ import {
   ApiError,
 } from "../api.js";
 import { useRequester } from "../context/RequesterContext.js";
+import {
+  BoltIcon,
+  AlertTriangleIcon,
+  FolderIcon,
+  XCircleIcon,
+  PaperclipIcon,
+} from "./icons";
 
 interface CreateTicketFormProps {
   onSuccess?: (ticketNo: string) => void;
@@ -279,13 +286,21 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
     const errors: Record<string, string> = {};
 
     const trimmedSummary = summary.trim();
-    if (trimmedSummary.length < 5 || trimmedSummary.length > 100) {
-      errors.summary = "Summary must be between 5 and 100 characters.";
+    if (trimmedSummary.length === 0) {
+      errors.summary = "Summary is required.";
+    } else if (trimmedSummary.length < 5) {
+      errors.summary = "Summary must be at least 5 characters.";
+    } else if (trimmedSummary.length > 100) {
+      errors.summary = "Summary must not exceed 100 characters.";
     }
 
     const trimmedDescription = description.trim();
-    if (trimmedDescription.length < 10 || trimmedDescription.length > 2000) {
-      errors.description = "Description must be between 10 and 2000 characters.";
+    if (trimmedDescription.length === 0) {
+      errors.description = "Description is required.";
+    } else if (trimmedDescription.length < 10) {
+      errors.description = "Description must be at least 10 characters.";
+    } else if (trimmedDescription.length > 2000) {
+      errors.description = "Description must not exceed 2000 characters.";
     }
 
     if (categoryId === "" || typeof categoryId !== "number") {
@@ -341,11 +356,11 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
     }
   };
 
-  const priorityOptions: { value: PriorityType; label: string; icon: string; badgeClass: string }[] = [
-    { value: "P0_URGENT", label: "P0 Urgent", icon: "⚡", badgeClass: "zg-priority-p0" },
-    { value: "P1_HIGH", label: "P1 High", icon: "▲", badgeClass: "zg-priority-p1" },
-    { value: "P2_MEDIUM", label: "P2 Medium", icon: "●", badgeClass: "zg-priority-p2" },
-    { value: "P3_LOW", label: "P3 Low", icon: "▼", badgeClass: "zg-priority-p3" },
+  const priorityOptions: { value: PriorityType; label: string; icon: React.ReactNode; badgeClass: string }[] = [
+    { value: "P0_URGENT", label: "P0 Urgent", icon: <BoltIcon size={12} />, badgeClass: "zg-priority-p0" },
+    { value: "P1_HIGH", label: "P1 High", icon: <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="12 4 22 20 2 20" /></svg>, badgeClass: "zg-priority-p1" },
+    { value: "P2_MEDIUM", label: "P2 Medium", icon: <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" /></svg>, badgeClass: "zg-priority-p2" },
+    { value: "P3_LOW", label: "P3 Low", icon: <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="12 20 2 4 22 4" /></svg>, badgeClass: "zg-priority-p3" },
   ];
 
   return (
@@ -364,7 +379,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
       {/* Global Error Banner */}
       {globalError && (
         <div className="alert alert-danger d-flex align-items-center mb-4" role="alert">
-          <span className="me-2">⚠️</span>
+          <AlertTriangleIcon size={18} className="me-2 text-danger flex-shrink-0" />
           <div>{globalError}</div>
         </div>
       )}
@@ -562,7 +577,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
             disabled={isUploading || attachments.length >= 5}
           />
           <div className="mb-2">
-            <span className="fs-3" aria-hidden="true">📁</span>
+            <FolderIcon size={32} color="#006B3C" />
           </div>
           <p className="mb-1 text-dark fw-medium">
             Drag &amp; drop files here or{" "}
@@ -588,7 +603,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
 
         {uploadError && (
           <div className="text-danger small mt-2 d-flex align-items-center gap-1" role="alert">
-            <span>❌</span>
+            <XCircleIcon size={16} className="flex-shrink-0" />
             <span>{uploadError}</span>
           </div>
         )}
@@ -608,18 +623,21 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
                 className="zg-attachment-chip d-flex align-items-center gap-2 px-3 py-2 rounded-3 border bg-white shadow-sm"
                 data-testid={`attachment-chip-${att.id}`}
               >
-                <span className="text-success" aria-hidden="true">📎</span>
+                <PaperclipIcon size={16} color="#006B3C" className="flex-shrink-0" />
                 <span className="small fw-medium text-dark text-truncate" style={{ maxWidth: 200 }}>
                   {att.originalName}
                 </span>
                 <span className="text-muted small">({formatFileSize(att.sizeBytes)})</span>
                 <button
                   type="button"
-                  className="btn btn-sm btn-link text-danger p-0 ms-1"
+                  className="btn btn-sm btn-link text-danger p-0 ms-1 d-inline-flex align-items-center"
                   onClick={() => handleRemoveAttachment(att.id)}
                   aria-label={`Remove ${att.originalName}`}
                 >
-                  ✕
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
                 </button>
               </div>
             ))}

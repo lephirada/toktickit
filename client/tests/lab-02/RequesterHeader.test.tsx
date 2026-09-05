@@ -93,7 +93,10 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
   it("fetches active requesters and displays them in the header dropdown", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+    });
 
     render(
       <RequesterProvider>
@@ -113,6 +116,9 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
     expect(screen.getByText("John Doe (Finance)")).toBeInTheDocument();
     expect(screen.getByText("Jennifer Anderson (Engineering)")).toBeInTheDocument();
 
+    const user = userEvent.setup();
+    await user.selectOptions(selectElement, "1");
+
     expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
     expect(localStorage.getItem("toktickit_requester_id")).toBe("1");
   });
@@ -120,7 +126,10 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
   it("restores previously selected requester from localStorage", async () => {
     localStorage.setItem("toktickit_requester_id", "2");
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+    });
 
     render(
       <RequesterProvider>
@@ -143,7 +152,10 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
 
   it("updates localStorage and active context when a new requester is selected", async () => {
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue([]);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+    });
     const user = userEvent.setup();
 
     render(
@@ -166,9 +178,14 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
   });
 
   it("clears old state and reloads requester-specific tickets via api.fetchTickets when context changes", async () => {
+    localStorage.setItem("toktickit_requester_id", "1");
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
     const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
-      return mockTicketsByRequester[reqId || 1] || [];
+      const items = mockTicketsByRequester[reqId || 1] || [];
+      return {
+        data: items,
+        pagination: { page: 1, pageSize: 10, totalItems: items.length, totalPages: 1, hasNext: false, hasPrev: false },
+      };
     });
     const user = userEvent.setup();
 
@@ -203,9 +220,14 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
   });
 
   it("intercepts requester switch with dirty guard modal and reloads tickets only upon confirming discard", async () => {
+    localStorage.setItem("toktickit_requester_id", "1");
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
     const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
-      return mockTicketsByRequester[reqId || 1] || [];
+      const items = mockTicketsByRequester[reqId || 1] || [];
+      return {
+        data: items,
+        pagination: { page: 1, pageSize: 10, totalItems: items.length, totalPages: 1, hasNext: false, hasPrev: false },
+      };
     });
     const user = userEvent.setup();
 
@@ -238,8 +260,8 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
     expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
     expect(screen.getByTestId("ticket-101")).toBeInTheDocument();
 
-    // Click "Cancel / Stay"
-    await user.click(screen.getByRole("button", { name: /cancel \/ stay/i }));
+    // Click "Cancel" (or "Cancel / Stay" per ui-spec)
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
     expect(screen.getByTestId("ticket-101")).toBeInTheDocument();
@@ -262,4 +284,52 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
     });
     expect(fetchTicketsSpy).toHaveBeenCalledWith(2);
   });
+
+  it("clicking the Profile button navigates directly to select-requester screen", async () => {
+    localStorage.setItem("toktickit_requester_id", "1");
+    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+    });
+    const onNavigateMock = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <RequesterProvider>
+        <Header onNavigate={onNavigateMock} />
+      </RequesterProvider>
+    );
+
+    await screen.findByRole("option", { name: /Sarah Connor/i });
+
+    const profileButton = screen.getByTestId("header-profile-button");
+    await user.click(profileButton);
+
+    expect(onNavigateMock).toHaveBeenCalledWith("select-requester");
+  });
+
+  it("hides navigation links and profile button when currentScreen is select-requester even if requester is active", async () => {
+    localStorage.setItem("toktickit_requester_id", "1");
+    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+    });
+
+    render(
+      <RequesterProvider>
+        <Header currentScreen="select-requester" />
+      </RequesterProvider>
+    );
+
+    await screen.findByRole("option", { name: /Sarah Connor/i });
+
+    // Only TokTickIT brand logo should be visible
+    expect(screen.getByRole("link", { name: /toktickit home/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /my tickets/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /\+ create ticket/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("header-profile-button")).not.toBeInTheDocument();
+  });
 });
+

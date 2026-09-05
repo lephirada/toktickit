@@ -87,28 +87,142 @@ body {
   font-weight: 600;
 }
 
-.zg-requester-select {
-  background-color: rgba(255, 255, 255, 0.15);
-  color: #FFFFFF;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--zg-radius-md);
-  padding: 0.4rem 0.75rem;
-  font-size: 0.9rem;
-  font-weight: 500;
+.zg-requester-select,
+.zg-profile-select {
+  background-color: transparent;
+  color: #FFFFFF !important;
+  border: none !important;
+  border-radius: var(--zg-radius-full);
+  padding: 0.35rem 1.6rem 0.35rem 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: none !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.4rem center !important;
+  background-size: 11px 9px !important;
+}
+
+.zg-profile-pill-wrapper {
+  background-color: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--zg-radius-full);
+  padding: 0.15rem 0.5rem 0.15rem 0.85rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  color: #FFFFFF;
+}
+
+.zg-profile-pill-wrapper:hover {
+  background-color: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.55);
 }
 
 .zg-requester-select:focus,
-.zg-requester-select:focus-visible {
-  outline: 2px solid var(--zg-pale) !important;
+.zg-requester-select:focus-visible,
+.zg-profile-select:focus,
+.zg-profile-select:focus-visible {
+  outline: 2px solid #FFFFFF !important;
   outline-offset: 2px;
   border-color: #FFFFFF;
 }
 
-.zg-requester-select option {
+.zg-requester-select option,
+.zg-profile-select option {
   background-color: var(--zg-surface);
   color: var(--zg-text-primary);
+}
+
+/* Profile Pill Button & Dropdown Menu */
+.zg-profile-pill-btn {
+  background-color: rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--zg-radius-full);
+  padding: 0.35rem 0.95rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.zg-profile-pill-btn:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.zg-profile-pill-btn:focus-visible {
+  outline: 2px solid #FFFFFF !important;
+  outline-offset: 2px;
+}
+
+.zg-profile-dropdown-menu {
+  background-color: var(--zg-surface);
+  border: 1px solid var(--zg-border);
+  box-shadow: var(--zg-shadow-lg);
+  z-index: 1060;
+  min-width: 260px;
+  color: #1A2E26;
+}
+
+/* Filter Toolbar Alignment & Fixed Width Sizing (Zero Shift) */
+.zg-filter-toolbar,
+.zg-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.zg-filter-search {
+  flex: 1 1 240px;
+  min-width: 200px;
+  height: 40px;
+}
+
+.zg-filter-select-wrapper {
+  flex: 0 0 160px;
+  width: 160px;
+}
+
+.zg-filter-select {
+  flex: 0 0 160px !important; /* Lock exact width */
+  width: 160px !important;
+  height: 40px !important;
+  box-sizing: border-box;
+  font-size: 0.875rem;
+  border-color: var(--zg-border);
+  border-radius: var(--zg-radius-md);
+  padding: 0.45rem 1.8rem 0.45rem 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zg-filter-toolbar .input-group,
+.zg-filter-toolbar .input-group > .form-control,
+.zg-filter-toolbar .input-group > .input-group-text,
+.zg-filter-bar .input-group,
+.zg-filter-bar .input-group > .form-control,
+.zg-filter-bar .input-group > .input-group-text {
+  height: 40px !important;
+  font-size: 0.875rem;
+}
+
+.zg-filter-select:focus,
+.zg-filter-toolbar .input-group > .form-control:focus,
+.zg-filter-bar .input-group > .form-control:focus {
+  border-color: var(--zg-secondary) !important;
+  box-shadow: 0 0 0 2px rgba(11, 122, 70, 0.2) !important;
+  outline: none;
+}
+
+/* Prevent Vertical Card Shrink (Zero Layout Shift) */
+.zg-ticket-content-area {
+  min-height: 380px;
 }
 
 /* Accessibility Focus Ring Standard */
@@ -274,5 +388,72 @@ textarea:focus-visible {
 }
 
 .zg-attachment-chip:hover {
+  box-shadow: var(--zg-shadow-md);
+}
+
+/* Status Badges */
+.zg-status-new {
+  background-color: #EFF8FF;
+  color: #175CD3;
+  border: 1px solid #B2DDFF;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.zg-status-in-progress {
+  background-color: #FFFAEB;
+  color: #B54708;
+  border: 1px solid #FEDF89;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.zg-status-resolved {
+  background-color: #ECFDF3;
+  color: #027A48;
+  border: 1px solid #A6F4C5;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.zg-status-closed {
+  background-color: #F2F4F7;
+  color: #344054;
+  border: 1px solid #D0D5DD;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.zg-status-rejected {
+  background-color: #FEF3F2;
+  color: #B42318;
+  border: 1px solid #FECDCA;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* Table Hover & Styles */
+.zg-table-row:hover td {
+  background-color: var(--zg-pale) !important;
+}
+
+.zg-table th {
+  background-color: var(--zg-surface-subtle);
+  color: var(--zg-text-secondary);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid var(--zg-border-subtle);
+}
+
+.zg-mobile-card {
+  background-color: var(--zg-surface);
+  border: 1px solid var(--zg-border);
+  border-radius: var(--zg-radius-md);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.zg-mobile-card:hover {
   box-shadow: var(--zg-shadow-md);
 }

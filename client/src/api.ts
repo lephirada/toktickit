@@ -52,6 +52,7 @@ export interface TicketItem {
   category?: { id: number; name: string };
   relatedSystem?: { id: number; name: string } | null;
   attachments?: AttachmentItem[];
+  attachmentCount?: number;
   requester?: RequesterUser;
 }
 
@@ -124,17 +125,80 @@ export async function fetchRelatedSystems(categoryId?: number): Promise<RelatedS
   return body.data ?? body;
 }
 
-export async function fetchTickets(requesterId?: number): Promise<TicketItem[]> {
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  limit?: number;
+  totalItems: number;
+  totalCount?: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface TicketQueryParams {
+  search?: string;
+  categoryId?: number;
+  priority?: string;
+  status?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+  limit?: number;
+}
+
+export interface FetchTicketsResponse {
+  data: TicketItem[];
+  pagination: PaginationMeta;
+}
+
+export async function fetchTickets(
+  requesterId?: number,
+  params?: TicketQueryParams
+): Promise<FetchTicketsResponse> {
   const headers: Record<string, string> = {};
   if (requesterId) {
     headers["X-Requester-Id"] = String(requesterId);
   }
-  const res = await fetch(`${API_URL}/api/tickets`, { headers });
+
+  const query = new URLSearchParams();
+  if (params) {
+    if (params.search && params.search.trim()) query.set("search", params.search.trim());
+    if (params.categoryId !== undefined && params.categoryId !== null && !isNaN(params.categoryId)) {
+      query.set("categoryId", String(params.categoryId));
+    }
+    if (params.priority && params.priority !== "ALL") query.set("priority", params.priority);
+    if (params.status && params.status !== "ALL") query.set("status", params.status);
+    if (params.sortBy) query.set("sortBy", params.sortBy);
+    if (params.sortOrder) query.set("sortOrder", params.sortOrder);
+    if (params.page !== undefined) query.set("page", String(params.page));
+    if (params.pageSize !== undefined) query.set("pageSize", String(params.pageSize));
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+  }
+
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  const res = await fetch(`${API_URL}/api/tickets${queryString}`, { headers });
   if (!res.ok) {
     throw new Error("Unable to fetch tickets");
   }
   const body = await res.json();
-  return body.data ?? body;
+  const rawList: TicketItem[] = Array.isArray(body) ? body : body.data || [];
+  const pagination: PaginationMeta = body.pagination || {
+    page: params?.page || 1,
+    pageSize: params?.pageSize || 10,
+    limit: params?.pageSize || 10,
+    totalItems: rawList.length,
+    totalCount: rawList.length,
+    totalPages: Math.ceil(rawList.length / (params?.pageSize || 10)) || 1,
+    hasNext: false,
+    hasPrev: false,
+  };
+
+  return {
+    data: rawList,
+    pagination,
+  };
 }
 
 export async function uploadAttachments(

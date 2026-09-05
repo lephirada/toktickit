@@ -59,7 +59,35 @@
 - **How I responded:**
   > Updated! Added direct file.type MIME validation alongside extension checks in CreateTicketForm.tsx, and added unit tests covering invalid MIME rejection on the client. All tests are passing green. You can merging this PR into lab2-staging now.
 
----
+### PR #21 — Issue 8 (Display, search, filter, and paginate requester tickets)
+
+- **Reviewer comment I received:**
+
+  > Overall, the PR looks good and most of the acceptance criteria are covered. CI is also passing for both frontend and backend.
+  > There are just a couple of things that still need to be fixed:
+  > Ticket navigation
+  > Currently, onViewTicket in App.tsx only logs the ticket ID. Clicking a ticket doesn't navigate to /tickets/:id yet. Please connect it to the Ticket Detail route and add a frontend test for the navigation.
+  > Requester selection
+  > The requirement says clicking “Profile” should display the Requester Selection screen. Currently, the flow seems to be Profile → Switch Requester → Selection. Could you please confirm if this is the intended behavior?
+  > Once these are fixed, I think the PR should be ready to approve.
+
+- **How I responded:**
+
+  > Thanks for the feedback! I’ve addressed both points
+  > Ticket navigation
+  > Updated the ticket click handler to navigate to /tickets/:id and connected it to the Ticket Detail view. I also added frontend tests to verify the navigation behavior.
+  > Requester selection
+  > Updated the Profile flow so clicking Profile now goes directly to the Requester Selection screen, matching the requirement.
+  > I also rechecked the related acceptance criteria and tests after these changes. Everything is now covered, so the PR should be ready for approval. Thank you!
+
+- **Reviewer comment I received:**
+
+  > Overall, the PR looks good and all acceptance criteria are covered. I also checked the latest changes and the CI is passing for both frontend and backend.
+  > Nice work on the requester selection flow, ticket isolation, filtering/pagination, and ticket navigation. The tests also cover the main flows pretty well.
+  > Everything looks good from my side. If ready to merge, Let me know
+
+- **How I responded:**
+  > Thanks! I’ve updated the peer review record in reviewer.md. PR #21 is ready to be merged into lab2-staging now.
 
 ## Pull Requests I reviewed for my partner
 
@@ -103,3 +131,29 @@
 
 - **Partner's response:**
   > Thank you for the review and approval! I have updated the peer review record in reviewer.md. PR #29 is ready to be merged into lab2-staging
+
+### PR #30 — Issue 9 (Ticket Detail & Attachment Lifecycle)
+
+- **My comment:**
+
+  > Reviewed the changes against all acceptance criteria. Everything looks good, ticket detail ownership, attachment upload/download, 5-file limit, and soft-removal are implemented as expected. The Requester Ticket Detail and Attachment UI also cover the required actions and states, and the Supertest/Vitest tests are included and passing. So approved ka.
+
+- **Partner's response:**
+  > Thank you for the thorough review and approval! I have recorded the peer review in reviewer.md. PR #30 is ready to be merged into lab2-staging now.
+
+### PR #31 — Issue 10 (E2E Testing, Responsive UI Verification & Screenshots)
+
+- **My comment:**
+
+  > The E2E flow and responsive checks look good, and the required screenshots are included.I only noticed one small documentation inconsistency: the visual checklist still lists the page background as #F5F7F6, while the current CSS uses #F8FAF9. Please update the checklist/spec to match the current implementation. Once this is fixed, I'm happy to approve.
+
+- **Partner's response:**
+
+  > Thank you for catching this! I have aligned --color-bg-page in client/src/styles/zen-green.css to #F5F7F6, establishing 100% consistency with the Zen Green specification table in docs/lab-02/ui-spec.md, tests.md, and the assignment engineering contract. All 32 server tests, 30 client tests, and 3 Playwright E2E suites are passing cleanly.
+
+- **My comment:**
+
+  > Reviewed the updates again. Everything looks good now the E2E flow, responsive behavior, overflow checks, screenshots, and visual checklist are all covered and consistent. The issue from my previous review has also been fixed.
+
+- **Partner's response to me:**
+  > Thank you for the re-review and approval! I have recorded the approved peer review in reviewer.md. PR #31 is ready to be merged into lab2-staging.

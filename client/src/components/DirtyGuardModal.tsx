@@ -1,26 +1,39 @@
 import React, { useEffect, useRef } from "react";
 import { useRequester } from "../context/RequesterContext.js";
 
-export default function DirtyGuardModal() {
-  const { isDirtyModalOpen, confirmDiscard, cancelDiscard } = useRequester();
+export interface DirtyGuardModalProps {
+  isOpen?: boolean;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+}
+
+export default function DirtyGuardModal({
+  isOpen,
+  onConfirm,
+  onCancel,
+}: DirtyGuardModalProps = {}) {
+  const context = useRequester();
+  const isModalOpen = isOpen !== undefined ? isOpen : context.isDirtyModalOpen;
+  const handleConfirm = onConfirm || context.confirmDiscard;
+  const handleCancel = onCancel || context.cancelDiscard;
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (isDirtyModalOpen) {
+    if (isModalOpen) {
       cancelBtnRef.current?.focus();
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === "Escape") {
-          cancelDiscard();
+          handleCancel();
         }
       };
 
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
     }
-  }, [isDirtyModalOpen, cancelDiscard]);
+  }, [isModalOpen, handleCancel]);
 
-  if (!isDirtyModalOpen) {
+  if (!isModalOpen) {
     return null;
   }
 
@@ -31,6 +44,7 @@ export default function DirtyGuardModal() {
       aria-modal="true"
       aria-labelledby="dirty-modal-title"
       aria-describedby="dirty-modal-desc"
+      data-testid="dirty-guard-modal"
     >
       <div className="zg-modal-card">
         <h2 id="dirty-modal-title" className="h5 fw-bold mb-3 text-dark">
@@ -45,14 +59,17 @@ export default function DirtyGuardModal() {
             ref={cancelBtnRef}
             type="button"
             className="btn btn-outline-secondary px-3"
-            onClick={cancelDiscard}
+            onClick={handleCancel}
+            aria-label="Cancel"
+            data-testid="dirty-cancel-btn"
           >
-            Cancel / Stay
+            Cancel
           </button>
           <button
             type="button"
             className="btn btn-danger px-3"
-            onClick={confirmDiscard}
+            onClick={handleConfirm}
+            data-testid="dirty-discard-btn"
           >
             Discard Changes
           </button>
