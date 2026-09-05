@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { BoltIcon, SearchIcon, TicketIcon, ArrowRightIcon, AlertTriangleIcon } from "./icons";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { BoltIcon, SearchIcon, TicketIcon, ArrowRightIcon, AlertTriangleIcon, CheckCircleIcon } from "./icons";
 import { useRequester } from "../context/RequesterContext.js";
 import {
   fetchTickets,
@@ -13,6 +13,10 @@ import {
 interface MyTicketsDashboardProps {
   onCreateTicket?: () => void;
   onViewTicket?: (ticketId: number) => void;
+  successBanner?: string | null;
+  successMessage?: string | null;
+  onClearBanner?: () => void;
+  onDismissSuccessBanner?: () => void;
 }
 
 export function formatTicketDate(isoString: string): string {
@@ -98,8 +102,39 @@ export function renderStatusBadge(status: string) {
 export default function MyTicketsDashboard({
   onCreateTicket,
   onViewTicket,
+  successBanner,
+  successMessage,
+  onClearBanner,
+  onDismissSuccessBanner,
 }: MyTicketsDashboardProps) {
   const { currentRequester } = useRequester();
+
+  const [banner, setBanner] = useState<string | null>(successBanner || successMessage || null);
+
+  useEffect(() => {
+    if (successBanner !== undefined) {
+      setBanner(successBanner);
+    } else if (successMessage !== undefined) {
+      setBanner(successMessage);
+    }
+  }, [successBanner, successMessage]);
+
+  const handleDismissBanner = useCallback(() => {
+    setBanner(null);
+    onClearBanner?.();
+    onDismissSuccessBanner?.();
+  }, [onClearBanner, onDismissSuccessBanner]);
+
+  // Auto-dismiss 5-second timer
+  useEffect(() => {
+    if (!banner) return;
+    const timer = setTimeout(() => {
+      handleDismissBanner();
+    }, 5000);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [banner, handleDismissBanner]);
 
   // Categories list
   const [categories, setCategories] = useState<Category[]>([]);
@@ -243,10 +278,42 @@ export default function MyTicketsDashboard({
   }, [loadTickets]);
 
   // Reset page to 1 and immediately clear previous tickets when requester changes
+  const prevRequesterIdRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    setTickets([]);
-    setPage(1);
-  }, [currentRequester?.id]);
+    if (prevRequesterIdRef.current !== undefined && prevRequesterIdRef.current !== currentRequester?.id) {
+      setTickets([]);
+      setPage(1);
+      handleDismissBanner();
+    }
+    prevRequesterIdRef.current = currentRequester?.id;
+  }, [currentRequester?.id, handleDismissBanner]);
+
+  // Clear banner on filter changes or search
+  const prevFiltersRef = useRef({
+    search: searchInput,
+    category: selectedCategory,
+    priority: selectedPriority,
+    status: selectedStatus,
+  });
+  useEffect(() => {
+    const prev = prevFiltersRef.current;
+    const changed =
+      prev.search !== searchInput ||
+      prev.category !== selectedCategory ||
+      prev.priority !== selectedPriority ||
+      prev.status !== selectedStatus;
+
+    prevFiltersRef.current = {
+      search: searchInput,
+      category: selectedCategory,
+      priority: selectedPriority,
+      status: selectedStatus,
+    };
+
+    if (changed) {
+      handleDismissBanner();
+    }
+  }, [searchInput, selectedCategory, selectedPriority, selectedStatus, handleDismissBanner]);
 
   // Clear filters handler
   const handleClearFilters = () => {
@@ -258,6 +325,7 @@ export default function MyTicketsDashboard({
     setSortBy("createdAt");
     setSortOrder("desc");
     setPage(1);
+    handleDismissBanner();
   };
 
   const hasActiveFilters = useMemo(() => {
@@ -285,11 +353,30 @@ export default function MyTicketsDashboard({
   const endItem = Math.min(pagination.page * pagination.pageSize, pagination.totalItems);
 
   return (
-    <div
-      className="card shadow-sm border-0 p-3 p-md-4 mb-4 rounded-3"
-      style={{ maxWidth: 1200, margin: "0 auto" }}
-      data-testid="my-tickets-dashboard"
-    >
+    <>
+      {banner && (
+        <div
+          className="alert alert-success d-flex align-items-center justify-content-between mb-4 shadow-sm"
+          role="alert"
+          data-testid="success-banner"
+        >
+          <div className="d-flex align-items-center">
+            <CheckCircleIcon size={18} className="me-2 text-success flex-shrink-0" />
+            <strong>{banner}</strong>
+          </div>
+          <button
+            type="button"
+            className="btn-close"
+            aria-label="Close"
+            onClick={handleDismissBanner}
+          ></button>
+        </div>
+      )}
+      <div
+        className="card shadow-sm border-0 p-3 p-md-4 mb-4 rounded-3"
+        style={{ maxWidth: 1200, margin: "0 auto" }}
+        data-testid="my-tickets-dashboard"
+      >
       {/* 1. Header & Action Bar */}
       <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4 pb-2 border-bottom">
         <div>
@@ -501,10 +588,10 @@ export default function MyTicketsDashboard({
             <table className="table table-hover align-middle zg-table mb-0">
               <thead className="table-light">
                 <tr>
-                  <th scope="col">
+                  <th scope="col" className="whitespace-nowrap text-nowrap">
                     <button
                       type="button"
-                      className="btn btn-link p-0 text-decoration-none text-muted fw-bold small d-inline-flex align-items-center gap-1"
+                      className="btn btn-link p-0 text-decoration-none text-muted fw-bold small d-inline-flex align-items-center gap-1 whitespace-nowrap text-nowrap"
                       onClick={() => handleSortToggle("ticketNo")}
                       data-testid="sort-ticket-no-btn"
                     >
@@ -520,10 +607,10 @@ export default function MyTicketsDashboard({
                       )}
                     </button>
                   </th>
-                  <th scope="col">
+                  <th scope="col" className="whitespace-nowrap text-nowrap">
                     <button
                       type="button"
-                      className="btn btn-link p-0 text-decoration-none text-muted fw-bold small d-inline-flex align-items-center gap-1"
+                      className="btn btn-link p-0 text-decoration-none text-muted fw-bold small d-inline-flex align-items-center gap-1 whitespace-nowrap text-nowrap"
                       onClick={() => handleSortToggle("createdAt")}
                       data-testid="sort-created-at-btn"
                     >
@@ -540,11 +627,11 @@ export default function MyTicketsDashboard({
                     </button>
                   </th>
                   <th scope="col">Summary</th>
-                  <th scope="col">Category</th>
-                  <th scope="col">Requested Priority</th>
-                  <th scope="col">IT Priority</th>
-                  <th scope="col">Current Status</th>
-                  <th scope="col">Last Updated</th>
+                  <th scope="col" className="whitespace-nowrap text-nowrap">Category</th>
+                  <th scope="col" className="whitespace-nowrap text-nowrap">Requested Priority</th>
+                  <th scope="col" className="whitespace-nowrap text-nowrap">IT Priority</th>
+                  <th scope="col" className="whitespace-nowrap text-nowrap">Current Status</th>
+                  <th scope="col" className="whitespace-nowrap text-nowrap">Last Updated</th>
                 </tr>
               </thead>
               <tbody>
@@ -556,10 +643,10 @@ export default function MyTicketsDashboard({
                     onClick={() => handleTicketClick(ticket.id)}
                     style={{ cursor: "pointer" }}
                   >
-                    <td>
+                    <td className="whitespace-nowrap text-nowrap">
                       <button
                         type="button"
-                        className="btn btn-link font-monospace fw-bold text-success p-0 text-decoration-none"
+                        className="btn btn-link font-monospace fw-bold text-success p-0 text-decoration-none whitespace-nowrap text-nowrap"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleTicketClick(ticket.id);
@@ -569,19 +656,24 @@ export default function MyTicketsDashboard({
                         {ticket.ticketNo}
                       </button>
                     </td>
-                    <td className="small text-muted text-nowrap">
+                    <td className="small text-muted whitespace-nowrap text-nowrap">
                       {formatTicketDate(ticket.createdAt)}
                     </td>
-                    <td>
+                    <td title={ticket.summary}>
                       <div
-                        className="fw-semibold text-dark text-truncate"
-                        style={{ maxWidth: 220 }}
+                        className="truncate max-w-[200px] lg:max-w-xs font-medium fw-semibold text-dark text-truncate"
+                        style={{
+                          maxWidth: 220,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
                         title={ticket.summary}
                       >
                         {ticket.summary}
                       </div>
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap text-nowrap">
                       {ticket.category ? (
                         <span className="badge bg-light text-dark border">
                           {ticket.category.name}
@@ -590,10 +682,10 @@ export default function MyTicketsDashboard({
                         <span className="text-muted small">—</span>
                       )}
                     </td>
-                    <td>{renderPriorityBadge(ticket.priority)}</td>
-                    <td className="small text-muted">—</td>
-                    <td>{renderStatusBadge(ticket.status)}</td>
-                    <td className="small text-muted text-nowrap">
+                    <td className="whitespace-nowrap text-nowrap">{renderPriorityBadge(ticket.priority)}</td>
+                    <td className="small text-muted whitespace-nowrap text-nowrap">—</td>
+                    <td className="whitespace-nowrap text-nowrap">{renderStatusBadge(ticket.status)}</td>
+                    <td className="small text-muted whitespace-nowrap text-nowrap">
                       {formatTicketDate(ticket.updatedAt)}
                     </td>
                   </tr>
@@ -627,7 +719,10 @@ export default function MyTicketsDashboard({
                     </button>
                     {renderStatusBadge(ticket.status)}
                   </div>
-                  <h3 className="h6 fw-semibold text-dark mb-2 text-truncate">
+                  <h3
+                    className="h6 fw-semibold text-dark mb-2 text-truncate truncate"
+                    title={ticket.summary}
+                  >
                     {ticket.summary}
                   </h3>
                   <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -744,5 +839,6 @@ export default function MyTicketsDashboard({
           </div>
         )}
     </div>
+    </>
   );
 }

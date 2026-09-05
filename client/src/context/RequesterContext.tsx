@@ -36,18 +36,30 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState<boolean>(false);
 
+  const mountedRef = React.useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const loadTicketsForRequester = useCallback(async (requesterId: number) => {
     // Clear previous requester tickets immediately
     setTickets([]);
     setTicketsLoading(true);
     try {
       const res = await fetchTickets(requesterId);
+      if (!mountedRef.current) return;
       const items = Array.isArray(res) ? res : res?.data || [];
       setTickets(items);
     } catch {
+      if (!mountedRef.current) return;
       setTickets([]);
     } finally {
-      setTicketsLoading(false);
+      if (mountedRef.current) {
+        setTicketsLoading(false);
+      }
     }
   }, []);
 
@@ -56,6 +68,7 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
     setRequesterError(null);
     try {
       const users = await fetchRequesters();
+      if (!mountedRef.current) return;
       setRequesters(users);
 
       if (users.length > 0) {
@@ -63,16 +76,28 @@ export function RequesterProvider({ children }: { children: ReactNode }) {
         const storedId = storedIdStr ? parseInt(storedIdStr, 10) : null;
         const found = storedId ? users.find((u) => u.id === storedId && u.isActive) : null;
 
-        const selected = found || users[0];
-        setCurrentRequester(selected);
-        localStorage.setItem(STORAGE_KEY, String(selected.id));
-        loadTicketsForRequester(selected.id);
+        if (found) {
+          if (!mountedRef.current) return;
+          setCurrentRequester(found);
+          loadTicketsForRequester(found.id);
+        } else {
+          if (!mountedRef.current) return;
+          setCurrentRequester(null);
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      } else {
+        if (!mountedRef.current) return;
+        setCurrentRequester(null);
+        localStorage.removeItem(STORAGE_KEY);
       }
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       console.error("Failed to load active requesters:", err);
       setRequesterError(err instanceof Error ? err.message : "Failed to load active development requesters");
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [loadTicketsForRequester]);
 

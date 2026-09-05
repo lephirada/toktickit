@@ -4,11 +4,20 @@ import { UserIcon } from "./icons";
 
 interface HeaderProps {
   activeView?: "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail";
+  currentScreen?: "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail";
   onNavigate?: (view: "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail") => void;
 }
 
-export default function Header({ activeView = "my-tickets", onNavigate }: HeaderProps) {
+export default function Header({
+  activeView = "my-tickets",
+  currentScreen,
+  onNavigate,
+}: HeaderProps) {
   const { currentRequester, requesters, isLoading, switchRequester } = useRequester();
+
+  const currentView = currentScreen || activeView;
+  const isSelectRequester = currentView === "select-requester";
+  const showNavAndProfile = !isSelectRequester && Boolean(currentRequester);
 
   const handleNavClick = (view: "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail") => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -45,42 +54,46 @@ export default function Header({ activeView = "my-tickets", onNavigate }: Header
             <span className="fw-bold">TokTickIT</span>
           </a>
 
-          {/* Navigation Links */}
-          <nav aria-label="Main Navigation" className="d-none d-md-flex gap-2">
-            <a
-              href="/my-tickets"
-              onClick={handleNavClick("my-tickets")}
-              className={`nav-link ${activeView === "my-tickets" ? "active" : ""}`}
-              aria-current={activeView === "my-tickets" ? "page" : undefined}
-            >
-              My Tickets
-            </a>
-            <a
-              href="/create-ticket"
-              onClick={handleNavClick("create-ticket")}
-              className={`nav-link ${activeView === "create-ticket" ? "active" : ""}`}
-              aria-current={activeView === "create-ticket" ? "page" : undefined}
-            >
-              + Create Ticket
-            </a>
-          </nav>
+          {/* Navigation Links - conditionally rendered when not on select-requester and requester is active */}
+          {showNavAndProfile && (
+            <nav aria-label="Main Navigation" className="d-none d-md-flex gap-2">
+              <a
+                href="/my-tickets"
+                onClick={handleNavClick("my-tickets")}
+                className={`nav-link ${currentView === "my-tickets" ? "active" : ""}`}
+                aria-current={currentView === "my-tickets" ? "page" : undefined}
+              >
+                My Tickets
+              </a>
+              <a
+                href="/create-ticket"
+                onClick={handleNavClick("create-ticket")}
+                className={`nav-link ${currentView === "create-ticket" ? "active" : ""}`}
+                aria-current={currentView === "create-ticket" ? "page" : undefined}
+              >
+                + Create Ticket
+              </a>
+            </nav>
+          )}
         </div>
 
-        {/* Profile Button - Direct navigation to /select-requester per AC 1 */}
+        {/* Profile Button - conditionally rendered when not on select-requester and requester is active */}
         <div className="position-relative d-flex align-items-center">
-          <button
-            type="button"
-            className="zg-profile-pill-btn d-flex align-items-center gap-2"
-            onClick={handleProfileClick}
-            aria-label="Profile"
-            title="Development Requester Selection"
-            data-testid="header-profile-button"
-          >
-            <UserIcon size={16} />
-            <span className="fw-semibold" data-testid="header-profile-name">
-              {currentRequester ? currentRequester.fullName : "Profile"}
-            </span>
-          </button>
+          {showNavAndProfile && currentRequester && (
+            <button
+              type="button"
+              className="zg-profile-pill-btn d-flex align-items-center gap-2"
+              onClick={handleProfileClick}
+              aria-label="Profile"
+              title="Development Requester Selection"
+              data-testid="header-profile-button"
+            >
+              <UserIcon size={16} />
+              <span className="fw-semibold" data-testid="header-profile-name">
+                {currentRequester.fullName}
+              </span>
+            </button>
+          )}
 
           {/* Accessible hidden select preserving test suite compatibility */}
           <label htmlFor="requester-dropdown-select" className="visually-hidden">
@@ -98,6 +111,9 @@ export default function Header({ activeView = "my-tickets", onNavigate }: Header
             {isLoading && <option value="">Loading requesters…</option>}
             {!isLoading && requesters.length === 0 && (
               <option value="">No active requesters</option>
+            )}
+            {!currentRequester && !isLoading && (
+              <option value="">Select Active Requester</option>
             )}
             {requesters.map((user) => (
               <option key={user.id} value={user.id}>

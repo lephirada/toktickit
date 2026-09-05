@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRequester } from "../context/RequesterContext";
 import {
   UserGearIcon,
@@ -6,6 +6,7 @@ import {
   ShieldIcon,
   ArrowRightIcon,
   AlertTriangleIcon,
+  HomeIcon,
 } from "./icons";
 
 interface SelectRequesterScreenProps {
@@ -29,9 +30,18 @@ export const SelectRequesterScreen: React.FC<SelectRequesterScreenProps> = ({
     currentRequester?.id || (requesters.length > 0 ? requesters[0].id : 1)
   );
 
+  useEffect(() => {
+    if (requesters.length > 0) {
+      if (!selectedId || !requesters.some((r) => r.id === selectedId)) {
+        setSelectedId(currentRequester?.id || requesters[0].id);
+      }
+    }
+  }, [requesters, currentRequester, selectedId]);
+
   const handleContinue = async () => {
-    if (selectedId) {
-      await switchRequester(selectedId);
+    const idToSelect = selectedId || (requesters.length > 0 ? requesters[0].id : null);
+    if (idToSelect) {
+      await switchRequester(idToSelect);
       if (onContinue) {
         onContinue();
       }
@@ -47,57 +57,66 @@ export const SelectRequesterScreen: React.FC<SelectRequesterScreenProps> = ({
   };
 
   return (
-    <div
+    <div 
       data-testid="select-requester-screen"
+      className="min-h-[calc(100vh-4rem)] bg-gray-50 py-8 px-4 sm:px-6 lg:px-8"
       style={{
+        minHeight: "calc(100vh - 4rem)",
         backgroundColor: "var(--zg-bg, #F5F7F6)",
-        minHeight: "calc(100vh - 70px)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
         padding: "2rem 1rem",
+        boxSizing: "border-box",
+        width: "100%",
       }}
     >
-      {/* Breadcrumb */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "580px",
-          marginBottom: "1.5rem",
-          fontSize: "0.875rem",
-          color: "var(--zg-text-muted, #5C7166)",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-        <span>&gt;</span>
-        <span style={{ color: "var(--zg-primary, #006B3C)", fontWeight: 500 }}>
-          Development Requester Selection
-        </span>
-      </div>
+      {/* Standard Page Container (Aligns breadcrumb naturally with balanced margins) */}
+      <div className="max-w-4xl mx-auto w-full" style={{ maxWidth: "56rem", margin: "0 auto", width: "100%" }}>
+        
+        {/* 1. Breadcrumb: Sits at the TOP-LEFT of the page content, right under the header */}
+        <nav 
+          aria-label="Breadcrumb" 
+          className="flex items-center gap-2 text-sm mb-6"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            fontSize: "0.9375rem",
+            marginBottom: "1.5rem",
+            textAlign: "left"
+          }}
+        >
+          <HomeIcon
+            size={18}
+            color="var(--zg-primary, #006B3C)"
+            className="w-4 h-4 text-emerald-700"
+            style={{ color: "var(--zg-primary, #006B3C)", flexShrink: 0 }}
+          />
+          <span className="text-gray-400" style={{ color: "var(--zg-text-muted, #98A2B3)", fontSize: "0.875rem", userSelect: "none" }}>&gt;</span>
+          <span
+            className="text-emerald-800 font-medium"
+            style={{
+              color: "var(--zg-primary, #006B3C)",
+              fontWeight: 600,
+            }}
+          >
+            Development Requester Selection
+          </span>
+        </nav>
 
-      {/* Main Centered Card */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "580px",
-          backgroundColor: "#FFFFFF",
-          borderRadius: "12px",
-          border: "1px solid var(--zg-border, #DDE7E1)",
-          boxShadow: "0 4px 16px rgba(0, 107, 60, 0.06)",
-          padding: "2.5rem 2rem",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          textAlign: "center",
-        }}
-      >
-        {/* User + Gear Badge SVG */}
+        {/* 2. Selection Card: Centered horizontally beneath the breadcrumb */}
+        <div className="flex justify-center" style={{ display: "flex", justifyContent: "center" }}>
+          <div 
+            className="w-full max-w-xl bg-white rounded-2xl shadow-sm border border-gray-100 p-8"
+            style={{
+              width: "100%",
+              maxWidth: "40rem",
+              backgroundColor: "#FFFFFF",
+              borderRadius: "1rem",
+              padding: "2rem",
+              border: "1px solid #E5E7EB",
+              boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.05)"
+            }}
+          >
+            {/* User + Gear Badge SVG */}
         <div
           style={{
             width: "72px",
@@ -114,28 +133,34 @@ export const SelectRequesterScreen: React.FC<SelectRequesterScreenProps> = ({
         </div>
 
         {/* Headings */}
-        <h2
-          style={{
-            fontSize: "1.5rem",
-            fontWeight: 700,
-            color: "#1A2E26",
-            margin: "0 0 0.5rem 0",
-          }}
-        >
-          Select Development Requester
-        </h2>
-        <p
-          style={{
-            fontSize: "0.785rem",
-            color: "#5C7166",
-            margin: "0 0 2rem 0",
-            lineHeight: 1.5,
-          }}
-        >
-          Choose a development requester to simulate the current requester context for Lab 2.
-          <br />
-          This is for testing only and is not a login screen.
-        </p>
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <h2
+            className="text-center"
+            style={{
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              color: "#1A2E26",
+              margin: "0 0 0.5rem 0",
+              textAlign: "center",
+            }}
+          >
+            Select Development Requester
+          </h2>
+          <p
+            className="text-center"
+            style={{
+              fontSize: "0.875rem",
+              color: "#5C7166",
+              margin: 0,
+              lineHeight: 1.5,
+              textAlign: "center",
+            }}
+          >
+            Choose a development requester to simulate the current requester context for Lab 2.
+            <br />
+            This is for testing only and is not a login screen.
+          </p>
+        </div>
 
         {/* Error Alert with Retry */}
         {requesterError && (
@@ -358,6 +383,8 @@ export const SelectRequesterScreen: React.FC<SelectRequesterScreenProps> = ({
         </div>
       </div>
     </div>
+  </div>
+</div>
   );
 };
 

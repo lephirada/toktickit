@@ -13,3 +13,4 @@ export * from "./XCircleIcon";
 export * from "./BoltIcon";
 export * from "./ChevronDownIcon";
 export * from "./SwitchIcon";
+export * from "./HomeIcon";

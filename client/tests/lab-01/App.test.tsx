@@ -9,6 +9,9 @@ describe("App", () => {
     window.history.pushState({}, "", "/my-tickets");
     vi.restoreAllMocks();
     vi.spyOn(api, "fetchCategories").mockResolvedValue([{ id: 1, name: "Hardware" }]);
+    vi.spyOn(api, "fetchRequesters").mockResolvedValue([
+      { id: 1, email: "sarah@test.com", fullName: "Sarah Connor", department: "Engineering", isActive: true },
+    ]);
   });
 
   it("renders the TokTickIT heading", () => {

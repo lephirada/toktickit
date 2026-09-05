@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { checkSystem, Category } from "./api.js";
 import { RequesterProvider, useRequester } from "./context/RequesterContext.js";
 import Header from "./components/Header.js";
@@ -13,6 +13,8 @@ type ActiveView = "my-tickets" | "create-ticket" | "system-check" | "select-requ
 
 export function AppContent() {
   const {
+    currentRequester,
+    isLoading,
     isFormDirty,
     setFormDirty,
     isDirtyModalOpen,
@@ -27,6 +29,10 @@ export function AppContent() {
     return match ? parseInt(match[1], 10) : null;
   });
   const [activeView, setActiveView] = useState<ActiveView>(() => {
+    const hasRequester = !!localStorage.getItem("toktickit_requester_id");
+    if (!hasRequester) {
+      return "select-requester";
+    }
     if (window.location.pathname.startsWith("/tickets/")) {
       return "ticket-detail";
     }
@@ -36,15 +42,58 @@ export function AppContent() {
     if (window.location.pathname === "/create-ticket") {
       return "create-ticket";
     }
-    return localStorage.getItem("toktickit_requester_id") ? "my-tickets" : "select-requester";
+    return "my-tickets";
   });
   const [pendingScreen, setPendingScreen] = useState<ActiveView | null>(null);
   const [showUnsavedModal, setShowUnsavedModal] = useState<boolean>(false);
   const [formKey, setFormKey] = useState<number>(0);
-  const [successBanner, setSuccessBanner] = useState<string>("");
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
+
+  // Auto-dismiss success banner after 5 seconds
+  useEffect(() => {
+    if (!successBanner) return;
+    const timer = setTimeout(() => {
+      setSuccessBanner(null);
+    }, 5000);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [successBanner]);
+
+  // Dismiss success banner on navigation away from my-tickets
+  useEffect(() => {
+    if (activeView !== "my-tickets") {
+      setSuccessBanner(null);
+    }
+  }, [activeView]);
+
+  // Dismiss success banner on requester switch
+  const prevRequesterIdRef = useRef<number | undefined>(currentRequester?.id);
+  useEffect(() => {
+    if (prevRequesterIdRef.current !== undefined && prevRequesterIdRef.current !== currentRequester?.id) {
+      setSuccessBanner(null);
+    }
+    prevRequesterIdRef.current = currentRequester?.id;
+  }, [currentRequester?.id]);
+
+  // Route guard: if no active requester in context or localStorage, force select-requester screen
+  useEffect(() => {
+    const hasRequester = !!currentRequester || !!localStorage.getItem("toktickit_requester_id");
+    if (!isLoading && !hasRequester) {
+      if (activeView !== "select-requester") {
+        setActiveView("select-requester");
+        window.history.replaceState({}, "", "/select-requester");
+      }
+    }
+  }, [isLoading, currentRequester, activeView]);
 
   useEffect(() => {
     const handlePopState = () => {
+      const hasRequester = !!currentRequester || !!localStorage.getItem("toktickit_requester_id");
+      if (!hasRequester) {
+        setActiveView("select-requester");
+        return;
+      }
       const path = window.location.pathname;
       const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
       if (ticketMatch) {
@@ -61,9 +110,20 @@ export function AppContent() {
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+  }, [currentRequester]);
 
   const handleNavigate = (targetScreen: string, ticketId?: number) => {
+    const hasRequester = !!currentRequester || !!localStorage.getItem("toktickit_requester_id");
+    if (!hasRequester && targetScreen !== "select-requester") {
+      setActiveView("select-requester");
+      window.history.pushState({}, "", "/select-requester");
+      return;
+    }
+
+    if (targetScreen !== "my-tickets") {
+      setSuccessBanner(null);
+    }
+
     if (targetScreen === activeView && !ticketId) {
       return;
     }
@@ -135,9 +195,13 @@ export function AppContent() {
     handleNavigate("my-tickets");
   };
 
+  const handleClearBanner = useCallback(() => {
+    setSuccessBanner(null);
+  }, []);
+
   return (
     <div className="min-vh-100 d-flex flex-column">
-      <Header activeView={activeView} onNavigate={handleNavigate} />
+      <Header activeView={activeView} currentScreen={activeView} onNavigate={handleNavigate} />
       <DirtyGuardModal
         isOpen={showUnsavedModal || isDirtyModalOpen}
         onConfirm={handleModalConfirmDiscard}
@@ -146,7 +210,7 @@ export function AppContent() {
 
       <main
         className="container py-4 flex-grow-1"
-        style={{ maxWidth: activeView === "my-tickets" ? 1200 : 800 }}
+        style={{ maxWidth: (activeView === "my-tickets" || activeView === "select-requester") ? 1200 : 800 }}
       >
         {/* Success Banner */}
         {successBanner && activeView === "my-tickets" && (
@@ -163,7 +227,7 @@ export function AppContent() {
               type="button"
               className="btn-close"
               aria-label="Close"
-              onClick={() => setSuccessBanner("")}
+              onClick={handleClearBanner}
             ></button>
           </div>
         )}
@@ -172,7 +236,11 @@ export function AppContent() {
         {activeView === "select-requester" && (
           <SelectRequesterScreen
             onContinue={() => handleNavigate("my-tickets")}
-            onCancel={() => handleNavigate("my-tickets")}
+            onCancel={() => {
+              if (currentRequester || localStorage.getItem("toktickit_requester_id")) {
+                handleNavigate("my-tickets");
+              }
+            }}
           />
         )}
 
@@ -188,11 +256,13 @@ export function AppContent() {
         )}
 
         {/* My Tickets Dashboard */}
-        {activeView === "my-tickets" && (
+        {activeView === "my-tickets" && (currentRequester || localStorage.getItem("toktickit_requester_id")) && (
           <section data-testid="my-tickets-section">
             <MyTicketsDashboard
               onCreateTicket={() => handleNavigate("create-ticket")}
               onViewTicket={(ticketId) => handleNavigate("ticket-detail", ticketId)}
+              onClearBanner={handleClearBanner}
+              onDismissSuccessBanner={handleClearBanner}
             />
           </section>
         )}

@@ -51,6 +51,7 @@ function TestWrapper({
 describe("Issue 7 — Create Ticket Form Component Tests", () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("toktickit_requester_id", "1");
     vi.restoreAllMocks();
     vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
     vi.spyOn(api, "fetchTickets").mockResolvedValue({

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../src/api.js";
 import { RequesterProvider, useRequester } from "../../src/context/RequesterContext.js";
@@ -514,5 +514,172 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     resolveSecondCall!({});
     await screen.findByTestId("ticket-row-201");
     expect(screen.getAllByText("TKT-2026-99999").length).toBeGreaterThan(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 10. Success Banner Auto-Dismiss Timer (5 seconds)
+  // ---------------------------------------------------------------------------
+  it("10. Success banner auto-dismisses after 5 seconds", async () => {
+    vi.useFakeTimers();
+    const onClearBanner = vi.fn();
+    render(
+      <RequesterProvider>
+        <MyTicketsDashboard
+          successBanner="Ticket TKT-2026-00001 created successfully!"
+          onClearBanner={onClearBanner}
+        />
+      </RequesterProvider>
+    );
+
+    expect(screen.getByTestId("success-banner")).toBeInTheDocument();
+    expect(screen.getByText("Ticket TKT-2026-00001 created successfully!")).toBeInTheDocument();
+
+    // Advance timer by 5000ms
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(screen.queryByTestId("success-banner")).not.toBeInTheDocument();
+    expect(onClearBanner).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 11. Success Banner Manual Dismissal
+  // ---------------------------------------------------------------------------
+  it("11. Success banner dismisses on user clicking close button", async () => {
+    const onClearBanner = vi.fn();
+    render(
+      <RequesterProvider>
+        <MyTicketsDashboard
+          successBanner="Ticket TKT-2026-00001 created successfully!"
+          onClearBanner={onClearBanner}
+        />
+      </RequesterProvider>
+    );
+
+    expect(screen.getByTestId("success-banner")).toBeInTheDocument();
+    const closeBtn = screen.getByRole("button", { name: /close/i });
+    fireEvent.click(closeBtn);
+
+    expect(screen.queryByTestId("success-banner")).not.toBeInTheDocument();
+    expect(onClearBanner).toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 12. Success Banner Dismissal on User Interaction
+  // ---------------------------------------------------------------------------
+  it("12. Success banner dismisses immediately on search input, filter change, or clear filters", async () => {
+    const onClearBanner = vi.fn();
+    const { rerender } = render(
+      <RequesterProvider>
+        <MyTicketsDashboard
+          successBanner="Ticket TKT-2026-00001 created successfully!"
+          onClearBanner={onClearBanner}
+        />
+      </RequesterProvider>
+    );
+
+    expect(screen.getByTestId("success-banner")).toBeInTheDocument();
+
+    // 1. Changing search input dismisses banner
+    const searchInput = screen.getByTestId("ticket-search-input");
+    fireEvent.change(searchInput, { target: { value: "printer" } });
+
+    expect(screen.queryByTestId("success-banner")).not.toBeInTheDocument();
+    expect(onClearBanner).toHaveBeenCalled();
+
+    // 2. Changing category dropdown dismisses banner
+    onClearBanner.mockClear();
+    rerender(
+      <RequesterProvider>
+        <MyTicketsDashboard
+          successBanner="Ticket TKT-2026-00002 created successfully!"
+          onClearBanner={onClearBanner}
+        />
+      </RequesterProvider>
+    );
+    expect(screen.getByTestId("success-banner")).toBeInTheDocument();
+
+    const categorySelect = screen.getByTestId("category-filter-select");
+    fireEvent.change(categorySelect, { target: { value: "1" } });
+
+    expect(screen.queryByTestId("success-banner")).not.toBeInTheDocument();
+    expect(onClearBanner).toHaveBeenCalled();
+
+    // 3. Changing priority dropdown dismisses banner
+    onClearBanner.mockClear();
+    rerender(
+      <RequesterProvider>
+        <MyTicketsDashboard
+          successBanner="Ticket TKT-2026-00003 created successfully!"
+          onClearBanner={onClearBanner}
+        />
+      </RequesterProvider>
+    );
+    expect(screen.getByTestId("success-banner")).toBeInTheDocument();
+
+    const prioritySelect = screen.getByTestId("priority-filter-select");
+    fireEvent.change(prioritySelect, { target: { value: "P0_URGENT" } });
+
+    expect(screen.queryByTestId("success-banner")).not.toBeInTheDocument();
+    expect(onClearBanner).toHaveBeenCalled();
+
+    // 4. Changing status dropdown dismisses banner
+    onClearBanner.mockClear();
+    rerender(
+      <RequesterProvider>
+        <MyTicketsDashboard
+          successBanner="Ticket TKT-2026-00004 created successfully!"
+          onClearBanner={onClearBanner}
+        />
+      </RequesterProvider>
+    );
+    expect(screen.getByTestId("success-banner")).toBeInTheDocument();
+
+    const statusSelect = screen.getByTestId("status-filter-select");
+    fireEvent.change(statusSelect, { target: { value: "NEW" } });
+
+    expect(screen.queryByTestId("success-banner")).not.toBeInTheDocument();
+    expect(onClearBanner).toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 13. Table Cell Wrapping & Text Truncation
+  // ---------------------------------------------------------------------------
+  it("13. Prevents table cell wrapping with whitespace-nowrap and truncates summary with title attribute", async () => {
+    render(
+      <RequesterProvider>
+        <MyTicketsDashboard />
+      </RequesterProvider>
+    );
+
+    await screen.findByTestId("ticket-row-101");
+
+    // 1. Verify Ticket No. button and cell have whitespace-nowrap
+    const ticketLink = screen.getByTestId("ticket-link-101");
+    expect(ticketLink).toHaveClass("whitespace-nowrap");
+    const ticketNoCell = ticketLink.closest("td");
+    expect(ticketNoCell).toHaveClass("whitespace-nowrap");
+
+    // 2. Verify cells have whitespace-nowrap
+    const row = screen.getByTestId("ticket-row-101");
+    const cells = row.querySelectorAll("td");
+    expect(cells[0]).toHaveClass("whitespace-nowrap");
+    expect(cells[1]).toHaveClass("whitespace-nowrap");
+    expect(cells[3]).toHaveClass("whitespace-nowrap");
+    expect(cells[4]).toHaveClass("whitespace-nowrap");
+    expect(cells[5]).toHaveClass("whitespace-nowrap");
+    expect(cells[6]).toHaveClass("whitespace-nowrap");
+    expect(cells[7]).toHaveClass("whitespace-nowrap");
+
+    // 3. Verify Summary cell truncation styling and title attribute
+    const summaryCell = cells[2];
+    expect(summaryCell).toHaveAttribute("title", mockTicketList[0].summary);
+    const summaryDiv = summaryCell.querySelector("div");
+    expect(summaryDiv).toHaveAttribute("title", mockTicketList[0].summary);
+    expect(summaryDiv).toHaveClass("truncate");
+    expect(summaryDiv).toHaveClass("font-medium");
+    expect(summaryDiv).toHaveClass("max-w-[200px]");
   });
 });
