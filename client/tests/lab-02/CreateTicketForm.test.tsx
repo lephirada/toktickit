@@ -402,11 +402,9 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     // Form inputs must still be there
     expect(screen.getByLabelText(/Summary/i)).toHaveValue("Unsaved Network Issue");
 
-    // Now click Switch Requester in profile
+    // Now click Profile button (direct navigation to /select-requester)
     const profileBtn = screen.getByTestId("header-profile-button");
     await user.click(profileBtn);
-    const switchBtn = await screen.findByTestId("menu-switch-requester-btn");
-    await user.click(switchBtn);
 
     // Modal appears again
     expect(await screen.findByRole("dialog")).toBeInTheDocument();

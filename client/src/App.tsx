@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { checkSystem, Category } from "./api.js";
 import { RequesterProvider, useRequester } from "./context/RequesterContext.js";
 import Header from "./components/Header.js";
@@ -9,7 +9,7 @@ import SelectRequesterScreen from "./components/SelectRequesterScreen.js";
 import { CheckCircleIcon } from "./components/icons/index.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
-type ActiveView = "my-tickets" | "create-ticket" | "system-check" | "select-requester";
+type ActiveView = "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail";
 
 export function AppContent() {
   const {
@@ -22,7 +22,20 @@ export function AppContent() {
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => {
+    const match = window.location.pathname.match(/^\/tickets\/(\d+)$/);
+    return match ? parseInt(match[1], 10) : null;
+  });
   const [activeView, setActiveView] = useState<ActiveView>(() => {
+    if (window.location.pathname.startsWith("/tickets/")) {
+      return "ticket-detail";
+    }
+    if (window.location.pathname === "/select-requester") {
+      return "select-requester";
+    }
+    if (window.location.pathname === "/create-ticket") {
+      return "create-ticket";
+    }
     return localStorage.getItem("toktickit_requester_id") ? "my-tickets" : "select-requester";
   });
   const [pendingScreen, setPendingScreen] = useState<ActiveView | null>(null);
@@ -30,8 +43,28 @@ export function AppContent() {
   const [formKey, setFormKey] = useState<number>(0);
   const [successBanner, setSuccessBanner] = useState<string>("");
 
-  const handleNavigate = (targetScreen: string) => {
-    if (targetScreen === activeView) {
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
+      if (ticketMatch) {
+        setSelectedTicketId(parseInt(ticketMatch[1], 10));
+        setActiveView("ticket-detail");
+      } else if (path === "/select-requester") {
+        setActiveView("select-requester");
+      } else if (path === "/create-ticket") {
+        setActiveView("create-ticket");
+      } else {
+        setActiveView("my-tickets");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const handleNavigate = (targetScreen: string, ticketId?: number) => {
+    if (targetScreen === activeView && !ticketId) {
       return;
     }
 
@@ -39,6 +72,17 @@ export function AppContent() {
       setPendingScreen(targetScreen as ActiveView);
       setShowUnsavedModal(true);
       return; // BLOCK navigation immediately
+    }
+
+    if (targetScreen === "ticket-detail" && ticketId) {
+      setSelectedTicketId(ticketId);
+      window.history.pushState({}, "", `/tickets/${ticketId}`);
+    } else if (targetScreen === "my-tickets") {
+      window.history.pushState({}, "", "/my-tickets");
+    } else if (targetScreen === "create-ticket") {
+      window.history.pushState({}, "", "/create-ticket");
+    } else if (targetScreen === "select-requester") {
+      window.history.pushState({}, "", "/select-requester");
     }
 
     setActiveView(targetScreen as ActiveView);
@@ -55,6 +99,11 @@ export function AppContent() {
     setShowUnsavedModal(false);
     confirmDiscard();
     if (pendingScreen) {
+      if (pendingScreen === "my-tickets") {
+        window.history.pushState({}, "", "/my-tickets");
+      } else if (pendingScreen === "select-requester") {
+        window.history.pushState({}, "", "/select-requester");
+      }
       setActiveView(pendingScreen);
       setPendingScreen(null);
     }
@@ -78,6 +127,7 @@ export function AppContent() {
   const handleTicketCreateSuccess = (ticketNo: string) => {
     setFormDirty(false);
     setSuccessBanner(`Ticket ${ticketNo} created successfully!`);
+    window.history.pushState({}, "", "/my-tickets");
     setActiveView("my-tickets");
   };
 
@@ -142,11 +192,32 @@ export function AppContent() {
           <section data-testid="my-tickets-section">
             <MyTicketsDashboard
               onCreateTicket={() => handleNavigate("create-ticket")}
-              onViewTicket={(ticketId) => {
-                // Prepared for Issue 9 detail view
-                console.log("View ticket detail:", ticketId);
-              }}
+              onViewTicket={(ticketId) => handleNavigate("ticket-detail", ticketId)}
             />
+          </section>
+        )}
+
+        {/* Ticket Detail View */}
+        {activeView === "ticket-detail" && (
+          <section data-testid="ticket-detail-section">
+            <div className="d-flex align-items-center justify-content-between mb-4">
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+                onClick={() => handleNavigate("my-tickets")}
+                data-testid="back-to-tickets-btn"
+              >
+                ← Back to My Tickets
+              </button>
+            </div>
+            <div className="card p-4 shadow-sm">
+              <h2 className="h4 fw-bold text-dark mb-2" data-testid="ticket-detail-title">
+                Ticket Detail
+              </h2>
+              <p className="text-muted mb-0" data-testid="ticket-detail-id">
+                Ticket ID: {selectedTicketId}
+              </p>
+            </div>
           </section>
         )}
 

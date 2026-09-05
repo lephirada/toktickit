@@ -1,54 +1,26 @@
-import React, { useState, useEffect, useRef } from "react";
+import React from "react";
 import { useRequester } from "../context/RequesterContext.js";
-import { UserIcon, ChevronDownIcon, SwitchIcon } from "./icons";
+import { UserIcon } from "./icons";
 
 interface HeaderProps {
-  activeView?: "my-tickets" | "create-ticket" | "system-check" | "select-requester";
-  onNavigate?: (view: "my-tickets" | "create-ticket" | "system-check" | "select-requester") => void;
+  activeView?: "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail";
+  onNavigate?: (view: "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail") => void;
 }
 
 export default function Header({ activeView = "my-tickets", onNavigate }: HeaderProps) {
   const { currentRequester, requesters, isLoading, switchRequester } = useRequester();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  // Close dropdown on Escape or outside click
-  useEffect(() => {
-    if (!isMenuOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIsMenuOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(e.target as Node) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(e.target as Node)
-      ) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("mousedown", handleClickOutside);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isMenuOpen]);
-
-  const handleNavClick = (view: "my-tickets" | "create-ticket" | "system-check" | "select-requester") => (e: React.MouseEvent) => {
+  const handleNavClick = (view: "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail") => (e: React.MouseEvent) => {
     e.preventDefault();
-    setIsMenuOpen(false);
     if (onNavigate) {
       onNavigate(view);
+    }
+  };
+
+  const handleProfileClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onNavigate) {
+      onNavigate("select-requester");
     }
   };
 
@@ -94,62 +66,21 @@ export default function Header({ activeView = "my-tickets", onNavigate }: Header
           </nav>
         </div>
 
-        {/* Unified Profile Menu Matching Mockup 8.1 & 8.4 */}
+        {/* Profile Button - Direct navigation to /select-requester per AC 1 */}
         <div className="position-relative d-flex align-items-center">
           <button
-            ref={triggerRef}
             type="button"
             className="zg-profile-pill-btn d-flex align-items-center gap-2"
-            onClick={() => setIsMenuOpen((prev) => !prev)}
-            aria-expanded={isMenuOpen}
-            aria-haspopup="true"
-            aria-label="Profile menu"
+            onClick={handleProfileClick}
+            aria-label="Profile"
+            title="Development Requester Selection"
             data-testid="header-profile-button"
           >
             <UserIcon size={16} />
             <span className="fw-semibold" data-testid="header-profile-name">
               {currentRequester ? currentRequester.fullName : "Profile"}
             </span>
-            <ChevronDownIcon size={12} className="opacity-75" />
           </button>
-
-          {/* Profile Dropdown Card */}
-          {isMenuOpen && (
-            <div
-              ref={menuRef}
-              className="zg-profile-dropdown-menu rounded-3 position-absolute end-0 top-100 mt-2 p-0 border shadow-lg"
-              role="menu"
-              aria-label="User Profile and Requester Menu"
-              data-testid="profile-dropdown-menu"
-            >
-              {/* Identity Details */}
-              <div className="p-3 border-bottom bg-light rounded-top-3">
-                <div className="small text-muted mb-1">Signed in as</div>
-                <div className="fw-bold text-dark fs-6" data-testid="menu-user-name">
-                  {currentRequester?.fullName || "No Requester Selected"}
-                </div>
-                <div className="small text-secondary" data-testid="menu-user-dept">
-                  {currentRequester?.department} • {currentRequester?.email}
-                </div>
-              </div>
-
-              {/* Action: Switch Requester Screen */}
-              <div className="p-2">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-success w-100 d-flex align-items-center justify-content-center gap-2 py-2 fw-semibold"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    if (onNavigate) onNavigate("select-requester");
-                  }}
-                  data-testid="menu-switch-requester-btn"
-                >
-                  <SwitchIcon size={14} />
-                  <span>Switch Requester</span>
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Accessible hidden select preserving test suite compatibility */}
           <label htmlFor="requester-dropdown-select" className="visually-hidden">

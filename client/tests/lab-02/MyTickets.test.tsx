@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../src/api.js";
-import { RequesterProvider } from "../../src/context/RequesterContext.js";
+import { RequesterProvider, useRequester } from "../../src/context/RequesterContext.js";
 import MyTicketsDashboard from "../../src/components/MyTicketsDashboard.js";
 import SelectRequesterScreen from "../../src/components/SelectRequesterScreen.js";
 
@@ -407,5 +407,112 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
 
     expect(localStorage.getItem("toktickit_requester_id")).toBe("2");
     expect(onContinueMock).toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 8. Ticket Navigation to /tickets/:id
+  // ---------------------------------------------------------------------------
+  it("8. Clicking a ticket number or row triggers navigation to /tickets/:id with corresponding ticket ID", async () => {
+    const onViewTicketMock = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <RequesterProvider>
+        <MyTicketsDashboard onViewTicket={onViewTicketMock} />
+      </RequesterProvider>
+    );
+
+    // Wait for table to render
+    await screen.findByTestId("ticket-row-101");
+
+    // 1. Verify clicking ticket number (ticketNo) link navigates to /tickets/101
+    const ticketLink = screen.getByTestId("ticket-link-101");
+    await user.click(ticketLink);
+
+    expect(window.location.pathname).toBe("/tickets/101");
+    expect(onViewTicketMock).toHaveBeenCalledWith(101);
+
+    // Reset pathname
+    window.history.pushState({}, "", "/my-tickets");
+
+    // 2. Verify clicking ticket row navigates to /tickets/102
+    const ticketRow = screen.getByTestId("ticket-row-102");
+    await user.click(ticketRow);
+
+    expect(window.location.pathname).toBe("/tickets/102");
+    expect(onViewTicketMock).toHaveBeenCalledWith(102);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 9. Clear Previous Requester Tickets Immediately
+  // ---------------------------------------------------------------------------
+  it("9. Immediately clears tickets when switching requester so old tickets never linger", async () => {
+    let resolveSecondCall: (val: any) => void;
+    const secondCallPromise = new Promise((resolve) => {
+      resolveSecondCall = resolve;
+    });
+
+    vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
+      if (reqId === 1) {
+        return {
+          data: mockTicketList,
+          pagination: { page: 1, pageSize: 10, totalItems: 3, totalPages: 1, hasNext: false, hasPrev: false },
+        };
+      }
+      // Delay response for Requester 2
+      await secondCallPromise;
+      return {
+        data: [
+          {
+            id: 201,
+            ticketNo: "TKT-2026-99999",
+            summary: "Requester 2 ticket",
+            priority: "P2_MEDIUM",
+            status: "NEW",
+            categoryId: 1,
+            requesterId: 2,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            attachments: [],
+          },
+        ],
+        pagination: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1, hasNext: false, hasPrev: false },
+      };
+    });
+
+    const user = userEvent.setup();
+
+    function SwitcherTestComponent() {
+      const { switchRequester } = useRequester();
+      return (
+        <div>
+          <button data-testid="switch-to-2-btn" onClick={() => switchRequester(2)}>
+            Switch to 2
+          </button>
+          <MyTicketsDashboard />
+        </div>
+      );
+    }
+
+    render(
+      <RequesterProvider>
+        <SwitcherTestComponent />
+      </RequesterProvider>
+    );
+
+    // Initial tickets for Requester 1 are shown
+    await screen.findByTestId("ticket-row-101");
+    expect(screen.getAllByText("TKT-2026-00001").length).toBeGreaterThan(0);
+
+    // Switch requester
+    await user.click(screen.getByTestId("switch-to-2-btn"));
+
+    // Immediately, old tickets must be cleared (ticket-row-101 must NOT be in DOM)
+    expect(screen.queryByTestId("ticket-row-101")).not.toBeInTheDocument();
+
+    // Now resolve the second API call
+    resolveSecondCall!({});
+    await screen.findByTestId("ticket-row-201");
+    expect(screen.getAllByText("TKT-2026-99999").length).toBeGreaterThan(0);
   });
 });

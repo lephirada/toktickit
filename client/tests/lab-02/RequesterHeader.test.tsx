@@ -279,4 +279,27 @@ describe("Issue 6 — Requester Context & Header Component Tests", () => {
     });
     expect(fetchTicketsSpy).toHaveBeenCalledWith(2);
   });
+
+  it("clicking the Profile button navigates directly to select-requester screen", async () => {
+    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+    });
+    const onNavigateMock = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <RequesterProvider>
+        <Header onNavigate={onNavigateMock} />
+      </RequesterProvider>
+    );
+
+    await screen.findByRole("option", { name: /Sarah Connor/i });
+
+    const profileButton = screen.getByTestId("header-profile-button");
+    await user.click(profileButton);
+
+    expect(onNavigateMock).toHaveBeenCalledWith("select-requester");
+  });
 });

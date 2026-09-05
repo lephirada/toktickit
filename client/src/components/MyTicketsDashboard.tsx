@@ -144,6 +144,14 @@ export default function MyTicketsDashboard({
     };
   }, [searchInput]);
 
+  // Navigate to ticket detail route /tickets/:id
+  const handleTicketClick = (ticketId: number) => {
+    window.history.pushState({}, "", `/tickets/${ticketId}`);
+    if (onViewTicket) {
+      onViewTicket(ticketId);
+    }
+  };
+
   // Load categories once
   useEffect(() => {
     let isMounted = true;
@@ -234,8 +242,9 @@ export default function MyTicketsDashboard({
     loadTickets();
   }, [loadTickets]);
 
-  // Reset page to 1 when requester changes
+  // Reset page to 1 and immediately clear previous tickets when requester changes
   useEffect(() => {
+    setTickets([]);
     setPage(1);
   }, [currentRequester?.id]);
 
@@ -544,12 +553,17 @@ export default function MyTicketsDashboard({
                     key={ticket.id}
                     className="zg-table-row"
                     data-testid={`ticket-row-${ticket.id}`}
+                    onClick={() => handleTicketClick(ticket.id)}
+                    style={{ cursor: "pointer" }}
                   >
                     <td>
                       <button
                         type="button"
                         className="btn btn-link font-monospace fw-bold text-success p-0 text-decoration-none"
-                        onClick={() => onViewTicket && onViewTicket(ticket.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTicketClick(ticket.id);
+                        }}
                         data-testid={`ticket-link-${ticket.id}`}
                       >
                         {ticket.ticketNo}
@@ -596,7 +610,7 @@ export default function MyTicketsDashboard({
                   key={ticket.id}
                   className="card zg-mobile-card p-3 shadow-sm border"
                   data-testid={`ticket-card-${ticket.id}`}
-                  onClick={() => onViewTicket && onViewTicket(ticket.id)}
+                  onClick={() => handleTicketClick(ticket.id)}
                   style={{ cursor: "pointer" }}
                 >
                   <div className="d-flex align-items-center justify-content-between mb-2">
@@ -605,7 +619,7 @@ export default function MyTicketsDashboard({
                       className="btn btn-link font-monospace fw-bold text-success p-0 text-decoration-none"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (onViewTicket) onViewTicket(ticket.id);
+                        handleTicketClick(ticket.id);
                       }}
                       data-testid={`mobile-ticket-link-${ticket.id}`}
                     >
