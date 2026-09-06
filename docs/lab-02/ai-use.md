@@ -20,3 +20,7 @@
 ---
 
 ## Reflection
+
+Working with the AI coding agent helped speed up our work a lot. It was great at writing starter code, setting up Prisma database models, creating backend APIs, and writing tests for Vitest, Supertest, and Playwright. Having clear specifications helped the AI write code and tests that matched our requirements much faster than writing everything by hand. However, I learned that we cannot simply trust the AI when it claims a task is "done." The agent missed several important requirements, such as adding attachments to existing tickets and using the exact file names required. It also struggled with UI layout details, such as causing unwanted horizontal scrollbars on desktop screens and breaking table columns when ticket summaries were long. We also had to step in to make sure activity logs were saved permanently in PostgreSQL rather than kept in temporary server memory.
+
+In the end, this lab showed me that a software engineer's main role in the age of AI is to review, verify, and design carefully. While AI can write code quickly, it still requires strong human oversight and clear engineering specifications (Spec DD) to build a truly reliable system.
