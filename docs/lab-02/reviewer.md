@@ -7,13 +7,13 @@
 
 ## Pull Requests I authored (reviewed by my partner)
 
-| PR  | Branch                         | Reviewer verdict         |
-| :-- | :----------------------------- | :----------------------- |
-| #18 | `feature/5-spec-docs`          | Approved                 |
-| —   | `ffeature/6-requester-context` | _Pending Implementation_ |
-| —   | `feature/7-create-ticket`      | _Pending Implementation_ |
-| —   | `feature/8-my-tickets`         | _Pending Implementation_ |
-| —   | `feature/9-ticket-detail`      | _Pending Implementation_ |
+| PR  | Branch                        | Reviewer verdict              |
+| :-- | :---------------------------- | :---------------------------- |
+| #18 | `feature/5-spec-docs`         | Approved                      |
+| #19 | `feature/6-requester-context` | Approved                      |
+| #20 | `feature/7-create-ticket`     | Requested Changes -> Approved |
+| #21 | `feature/8-my-tickets`        | Requested Changes -> Approved |
+| #22 | `feature/9-ticket-detail`     | _Pending Implementation_      |
 
 ---
 

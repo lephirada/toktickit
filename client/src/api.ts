@@ -260,3 +260,193 @@ export async function createTicket(
 
   return body;
 }
+
+// ---------------------------------------------------------------------------
+// Issue 9 — Ticket Detail & Attachment Lifecycle API
+// ---------------------------------------------------------------------------
+
+export interface TicketDetailAttachment {
+  id: number;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  status?: "ACTIVE" | "REMOVED" | string;
+  isSoftDeleted?: boolean;
+  deletedAt?: string | null;
+  deletedBy?: number | null;
+  deletionReason?: string | null;
+  createdAt: string;
+}
+
+export interface TimelineEvent {
+  id: string;
+  type: string;
+  action: string;
+  message: string;
+  timestamp: string;
+  actor?: string;
+  reason?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TicketDetailItem {
+  id: number;
+  ticketNo: string;
+  summary: string;
+  description: string;
+  priority: string;
+  status: string;
+  requesterId: number;
+  requester: {
+    id: number;
+    fullName: string;
+    displayName?: string;
+    email: string;
+    department: string;
+  };
+  category: {
+    id: number;
+    name: string;
+  };
+  relatedSystem?: {
+    id: number;
+    name: string;
+  } | null;
+  attachments: TicketDetailAttachment[];
+  activityTimeline: TimelineEvent[];
+  timeline?: TimelineEvent[];
+  activityHistory?: TimelineEvent[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchTicketDetail(
+  ticketId: number,
+  requesterId: number
+): Promise<TicketDetailItem> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}`, {
+    headers: {
+      "X-Requester-Id": String(requesterId),
+    },
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch ticket with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body.data ?? body;
+}
+
+export async function removeAttachment(
+  attachmentId: number,
+  payload: { reason: string; customReason?: string },
+  requesterId: number
+): Promise<TicketDetailAttachment> {
+  const res = await fetch(`${API_URL}/api/attachments/${attachmentId}/remove`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requester-Id": String(requesterId),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to remove attachment with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body.data ?? body;
+}
+
+export async function addAttachmentToTicket(
+  ticketId: number,
+  file: File,
+  requesterId: number
+): Promise<TicketDetailAttachment> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
+    method: "POST",
+    headers: {
+      "X-Requester-Id": String(requesterId),
+    },
+    body: formData,
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to add attachment with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body.data ?? body;
+}
+
+export function getAttachmentDownloadUrl(attachmentId: number): string {
+  return `${API_URL}/api/attachments/${attachmentId}/download`;
+}
+
+export async function downloadAttachment(
+  attachmentId: number,
+  originalName: string,
+  requesterId: number
+): Promise<void> {
+  const res = await fetch(`${API_URL}/api/attachments/${attachmentId}/download`, {
+    headers: {
+      "X-Requester-Id": String(requesterId),
+    },
+  });
+
+  if (res.status === 410) {
+    const body = await res.json().catch(() => null);
+    throw new ApiError(
+      body?.error || body?.message || "Attachment has been removed",
+      "ATTACHMENT_SOFT_DELETED",
+      undefined,
+      410
+    );
+  }
+
+  if (!res.ok) {
+    throw new ApiError(
+      `Download failed with status ${res.status}`,
+      undefined,
+      undefined,
+      res.status
+    );
+  }
+
+  const blob = await res.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = originalName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(blobUrl);
+}
+

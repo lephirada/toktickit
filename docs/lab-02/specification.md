@@ -58,6 +58,7 @@ Deliver a production-ready, secure, and intuitive **Requester-Facing MVP** for T
 - **FR-10 (Attachment Download):** The system shall stream active attachment files via `GET /api/attachments/:id/download`.
 - **FR-11 (Attachment Soft-Removal):** The application shall provide a soft-removal action on ticket attachments requiring a non-empty audit reason (5-255 characters). The server updates `deletedAt`, `deletedBy`, and `deletionReason`.
 - **FR-12 (Soft-Deleted File Access Guard):** When an attachment is soft-deleted, subsequent calls to `GET /api/attachments/:id/download` shall return `410 Gone`. The UI shall display the item as soft-deleted with the deletion reason and disable the download action.
+- **FR-13 (Add Attachment to Existing Ticket):** The application shall allow an authorized requester to upload additional attachments to their existing ticket via `POST /api/tickets/:id/attachments`, enforcing a maximum limit of 5 active attachments and recording an audit event in the activity timeline.
 
 ---
 
@@ -76,6 +77,7 @@ Deliver a production-ready, secure, and intuitive **Requester-Facing MVP** for T
 | **BR-09** | **Mandatory Deletion Reason** | A soft-removal request must provide a `reason` string between 5 and 255 characters. | Server API Validation (422 Unprocessable) |
 | **BR-10** | **Requester Eligibility** | Only users with `isActive = true` can be selected in the context switcher or author tickets. Inactive users cannot submit tickets. | API Filter & Validation |
 | **BR-11** | **Ownership Isolation** | A Requester can only list, view, and modify attachments on tickets where `ticket.requesterId == X-Requester-Id`. Violations return `403 Forbidden`. | Server Controller / Route Guard |
+| **BR-12** | **Add Attachment to Existing Ticket** | An authenticated requester may add attachments directly to an existing owned ticket via `POST /api/tickets/:id/attachments`. Total ACTIVE attachments on the ticket cannot exceed 5. Adding an attachment generates an audit entry in the activity timeline. | Server API & UI Attachment Section |
 
 ---
 

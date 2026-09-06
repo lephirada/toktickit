@@ -121,3 +121,57 @@ export function handlePreUploadMiddleware(
     next();
   });
 }
+
+export function handleTicketAttachmentUpload(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const uploadHandler = multerUpload.any();
+
+  uploadHandler(req, res, (err: unknown) => {
+    if (err) {
+      const multerErr = err as { code?: string; message?: string };
+      if (multerErr.code === "LIMIT_FILE_SIZE") {
+        res
+          .status(413)
+          .json(
+            createErrorEnvelope("FILE_TOO_LARGE", "File size exceeds 5MB limit.")
+          );
+        return;
+      }
+      if (multerErr.code === "UNSUPPORTED_MEDIA_TYPE") {
+        res
+          .status(415)
+          .json(
+            createErrorEnvelope(
+              "UNSUPPORTED_MEDIA_TYPE",
+              "Allowed file types: JPEG, PNG, WEBP, PDF."
+            )
+          );
+        return;
+      }
+      res
+        .status(400)
+        .json(
+          createErrorEnvelope(
+            "UPLOAD_ERROR",
+            multerErr.message || "Failed to process uploaded file."
+          )
+        );
+      return;
+    }
+
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (!files || files.length === 0) {
+      res
+        .status(400)
+        .json(
+          createErrorEnvelope("NO_FILE_PROVIDED", "No file provided for upload.")
+        );
+      return;
+    }
+
+    next();
+  });
+}

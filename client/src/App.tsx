@@ -6,6 +6,7 @@ import DirtyGuardModal from "./components/DirtyGuardModal.js";
 import CreateTicketForm from "./components/CreateTicketForm.js";
 import MyTicketsDashboard from "./components/MyTicketsDashboard.js";
 import SelectRequesterScreen from "./components/SelectRequesterScreen.js";
+import TicketDetailScreen from "./components/TicketDetailScreen.js";
 import { CheckCircleIcon } from "./components/icons/index.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
@@ -209,8 +210,17 @@ export function AppContent() {
       />
 
       <main
-        className="container py-4 flex-grow-1"
-        style={{ maxWidth: (activeView === "my-tickets" || activeView === "select-requester") ? 1200 : 800 }}
+        className="container-fluid py-4 flex-grow-1 px-3 px-sm-4 px-lg-5"
+        style={{
+          maxWidth:
+            activeView === "my-tickets" || activeView === "ticket-detail"
+              ? 1380
+              : activeView === "select-requester"
+              ? 1200
+              : 800,
+          margin: "0 auto",
+          width: "100%",
+        }}
       >
         {/* Success Banner */}
         {successBanner && activeView === "my-tickets" && (
@@ -270,24 +280,10 @@ export function AppContent() {
         {/* Ticket Detail View */}
         {activeView === "ticket-detail" && (
           <section data-testid="ticket-detail-section">
-            <div className="d-flex align-items-center justify-content-between mb-4">
-              <button
-                type="button"
-                className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
-                onClick={() => handleNavigate("my-tickets")}
-                data-testid="back-to-tickets-btn"
-              >
-                ← Back to My Tickets
-              </button>
-            </div>
-            <div className="card p-4 shadow-sm">
-              <h2 className="h4 fw-bold text-dark mb-2" data-testid="ticket-detail-title">
-                Ticket Detail
-              </h2>
-              <p className="text-muted mb-0" data-testid="ticket-detail-id">
-                Ticket ID: {selectedTicketId}
-              </p>
-            </div>
+            <TicketDetailScreen
+              ticketId={selectedTicketId || 0}
+              onNavigate={(view) => handleNavigate(view)}
+            />
           </section>
         )}
 
