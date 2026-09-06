@@ -433,6 +433,30 @@ textarea:focus-visible {
 }
 
 /* Table Hover & Styles */
+.zg-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.zg-table th,
+.zg-table td {
+  padding: 0.7rem 0.5rem;
+  vertical-align: middle;
+  overflow: hidden;
+}
+
+.zg-table th:first-child,
+.zg-table td:first-child {
+  padding-left: 0.875rem;
+}
+
+.zg-table th:last-child,
+.zg-table td:last-child {
+  padding-right: 0.875rem;
+}
+
 .zg-table-row:hover td {
   background-color: var(--zg-pale) !important;
 }
@@ -441,10 +465,27 @@ textarea:focus-visible {
   background-color: var(--zg-surface-subtle);
   color: var(--zg-text-secondary);
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   border-bottom: 2px solid var(--zg-border-subtle);
+}
+
+.zg-table-container {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+@media (max-width: 991px) {
+  .zg-table {
+    table-layout: auto;
+    min-width: 860px;
+  }
+  .zg-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .zg-mobile-card {
@@ -456,4 +497,31 @@ textarea:focus-visible {
 
 .zg-mobile-card:hover {
   box-shadow: var(--zg-shadow-md);
+}
+
+/* Table Column Locking & Layout Utilities */
+.whitespace-nowrap {
+  white-space: nowrap !important;
+}
+
+.text-gray-500 {
+  color: #6b7280 !important;
+}
+
+.text-gray-900 {
+  color: #111827 !important;
+}
+
+.max-w-\[200px\] {
+  max-width: 200px !important;
+}
+
+.max-w-7xl {
+  max-width: 80rem !important;
+}
+
+.truncate {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }

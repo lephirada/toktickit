@@ -14,3 +14,5 @@ export * from "./BoltIcon";
 export * from "./ChevronDownIcon";
 export * from "./SwitchIcon";
 export * from "./HomeIcon";
+export * from "./DownloadIcon";
+export * from "./TrashIcon";

@@ -15,3 +15,7 @@ uploads/
 # logs & OS
 *.log
 .DS_Store
+
+# playwright test artifacts
+test-results/
+playwright-report/

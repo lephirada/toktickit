@@ -7,13 +7,13 @@
 
 ## Pull Requests I authored (reviewed by my partner)
 
-| PR  | Branch                         | Reviewer verdict         |
-| :-- | :----------------------------- | :----------------------- |
-| #18 | `feature/5-spec-docs`          | Approved                 |
-| —   | `ffeature/6-requester-context` | _Pending Implementation_ |
-| —   | `feature/7-create-ticket`      | _Pending Implementation_ |
-| —   | `feature/8-my-tickets`         | _Pending Implementation_ |
-| —   | `feature/9-ticket-detail`      | _Pending Implementation_ |
+| PR  | Branch                        | Reviewer verdict              |
+| :-- | :---------------------------- | :---------------------------- |
+| #18 | `feature/5-spec-docs`         | Approved                      |
+| #19 | `feature/6-requester-context` | Approved                      |
+| #20 | `feature/7-create-ticket`     | Requested Changes -> Approved |
+| #21 | `feature/8-my-tickets`        | Requested Changes -> Approved |
+| #22 | `feature/9-ticket-detail`     | Requested Changes -> Approved |
 
 ---
 
@@ -89,6 +89,28 @@
 - **How I responded:**
   > Thanks! I’ve updated the peer review record in reviewer.md. PR #21 is ready to be merged into lab2-staging now.
 
+### PR #22 — Issue 9 (View ticket details and manage attachment soft-removal)
+
+- **Reviewer comment I received:**
+
+  > Overall, the PR looks good and most of the acceptance criteria are covered. The frontend/backend tests and builds are also passing.
+  > There are just a couple of things I think we should fix before merging:
+  > The ticket activity audit log is currently stored in an in-memory Map. This means the activity history will be lost whenever the server restarts or is redeployed. I think the audit record should be persisted in the database so it remains part of the ticket history.
+  > I also couldn't verify the Playwright E2E-01 test from the latest CI run. The CI only shows the client and server jobs, so it would be good to run/verify the E2E test as well.
+  > Once these are addressed, I think the PR should be good to merge.
+  > Reviewed the PR against all acceptance criteria.
+  > Ticket detail and requester access control are correctly implemented.
+  > Secure attachment download and 410 Gone handling are covered.
+  > Attachment soft-removal, validation, audit logging, and transaction rollback are implemented.
+  > Required UI/UX flows and removal modal are covered.
+  > Supertest, Vitest, and Playwright E2E tests are included and passing.
+  > Latest CI run is green.
+  > The previous atomicity issue between attachment removal and audit logging has also been resolved. I Approve na
+  > Let me know when you are ready to Merge
+
+- **How I responded:**
+  > Thanks for the review! I’ve updated the docs/lab-02/reviewer.md to include this PR review record. PR #22 is ready to be merged into lab2-staging now.
+
 ## Pull Requests I reviewed for my partner
 
 ### PR #26 — Issue 5 (Sprint Specification and Test Plan (Spec DD))
@@ -157,3 +179,12 @@
 
 - **Partner's response to me:**
   > Thank you for the re-review and approval! I have recorded the approved peer review in reviewer.md. PR #31 is ready to be merged into lab2-staging.
+
+### PR #32 — Issue 11 (Sprint Documentation, Peer Review & Release Integration)
+
+- **My comment:**
+
+  > Checked and approved! The test results and documentation look solid. Feel free to proceed with updating reviewer.md and merging into lab2-staging. Nice work!
+
+- **Partner's response to me:**
+  > Thank you of your review! I have already uploaded all the file. you can merge now.

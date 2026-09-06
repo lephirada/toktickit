@@ -474,3 +474,74 @@ Performs an audited soft-deletion of an attachment.
   }
 }
 ```
+
+---
+
+#### `POST /api/tickets/:id/attachments`
+Uploads and attaches a file directly to an existing owned ticket (Section 14 Part 8).
+
+* **Headers:**
+  * `X-Requester-Id` *(required, integer)*
+  * `Content-Type: multipart/form-data`
+* **Path Parameters:**
+  * `id` *(required, integer)*: Ticket ID.
+* **Form-Data Body:**
+  * `file`: Single binary file (JPEG, PNG, WEBP, PDF, max 5MB).
+* **Constraints & Business Rules:**
+  * Requires requester ownership: The ticket's `requesterId` must match the authenticated requester.
+  * Maximum 5 active attachments per ticket: If `activeCount + files.length > 5`, returns `400 Bad Request`.
+  * Appends an audit event to the ticket's activity timeline.
+* **Response `201 Created`:**
+```json
+{
+  "data": {
+    "id": 883,
+    "originalName": "diagnostics_log.pdf",
+    "mimeType": "application/pdf",
+    "sizeBytes": 1048576,
+    "status": "ACTIVE",
+    "isSoftDeleted": false,
+    "createdAt": "2026-08-22T16:45:00.000Z"
+  }
+}
+```
+* **Error Response `400 Bad Request` (Attachment limit exceeded):**
+```json
+{
+  "error": {
+    "code": "MAX_ATTACHMENTS_EXCEEDED",
+    "message": "Cannot add attachment. Ticket already has 5 active attachments (maximum is 5).",
+    "correlationId": "req_e12849102"
+  }
+}
+```
+* **Error Response `403 Forbidden` (Cross-requester access):**
+```json
+{
+  "error": {
+    "code": "FORBIDDEN_RESOURCE",
+    "message": "You are not authorized to modify attachments for this ticket.",
+    "correlationId": "req_f39281921"
+  }
+}
+```
+* **Error Response `413 Payload Too Large`:**
+```json
+{
+  "error": {
+    "code": "FILE_TOO_LARGE",
+    "message": "File size exceeds 5MB limit.",
+    "correlationId": "req_g48192011"
+  }
+}
+```
+* **Error Response `415 Unsupported Media Type`:**
+```json
+{
+  "error": {
+    "code": "UNSUPPORTED_MEDIA_TYPE",
+    "message": "Allowed file types: JPEG, PNG, WEBP, PDF.",
+    "correlationId": "req_h59201923"
+  }
+}
+```

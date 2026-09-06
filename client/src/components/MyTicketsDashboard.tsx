@@ -353,7 +353,10 @@ export default function MyTicketsDashboard({
   const endItem = Math.min(pagination.page * pagination.pageSize, pagination.totalItems);
 
   return (
-    <>
+    <div
+      className="max-w-7xl max-w-[1320px] mx-auto w-full"
+      style={{ maxWidth: 1320, width: "100%", margin: "0 auto" }}
+    >
       {banner && (
         <div
           className="alert alert-success d-flex align-items-center justify-content-between mb-4 shadow-sm"
@@ -373,8 +376,8 @@ export default function MyTicketsDashboard({
         </div>
       )}
       <div
-        className="card shadow-sm border-0 p-3 p-md-4 mb-4 rounded-3"
-        style={{ maxWidth: 1200, margin: "0 auto" }}
+        className="w-full max-w-7xl max-w-[1320px] mx-auto overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm p-4 sm:p-6 mb-4 card"
+        style={{ maxWidth: 1320, width: "100%", margin: "0 auto" }}
         data-testid="my-tickets-dashboard"
       >
       {/* 1. Header & Action Bar */}
@@ -583,21 +586,25 @@ export default function MyTicketsDashboard({
       ) : (
         <>
           {/* Section 8.4 Ticket Display Area */}
-          <div className="table-responsive d-none d-md-block mb-3" data-testid="tickets-desktop-table">
+          <div
+            className="w-full zg-table-container d-none d-md-block mb-3"
+            data-testid="tickets-desktop-table"
+          >
             {/* Desktop Table View */}
-            <table className="table table-hover align-middle zg-table mb-0">
+            <table className="w-full text-left border-collapse table table-hover align-middle zg-table mb-0">
               <thead className="table-light">
                 <tr>
-                  <th scope="col" className="whitespace-nowrap text-nowrap">
+                  <th scope="col" className="whitespace-nowrap font-semibold" style={{ width: "14%" }}>
                     <button
                       type="button"
                       className="btn btn-link p-0 text-decoration-none text-muted fw-bold small d-inline-flex align-items-center gap-1 whitespace-nowrap text-nowrap"
                       onClick={() => handleSortToggle("ticketNo")}
                       data-testid="sort-ticket-no-btn"
+                      style={{ whiteSpace: "nowrap" }}
                     >
                       Ticket No.
                       {sortBy === "ticketNo" && (
-                        <span className="ms-1">
+                        <span className="ms-1 flex-shrink-0 d-inline-flex">
                           {sortOrder === "asc" ? (
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 4 22 20 2 20" /></svg>
                           ) : (
@@ -607,16 +614,17 @@ export default function MyTicketsDashboard({
                       )}
                     </button>
                   </th>
-                  <th scope="col" className="whitespace-nowrap text-nowrap">
+                  <th scope="col" className="whitespace-nowrap text-gray-500" style={{ width: "15%" }}>
                     <button
                       type="button"
                       className="btn btn-link p-0 text-decoration-none text-muted fw-bold small d-inline-flex align-items-center gap-1 whitespace-nowrap text-nowrap"
                       onClick={() => handleSortToggle("createdAt")}
                       data-testid="sort-created-at-btn"
+                      style={{ whiteSpace: "nowrap" }}
                     >
                       Created Date
                       {sortBy === "createdAt" && (
-                        <span className="ms-1">
+                        <span className="ms-1 flex-shrink-0 d-inline-flex">
                           {sortOrder === "asc" ? (
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 4 22 20 2 20" /></svg>
                           ) : (
@@ -626,12 +634,12 @@ export default function MyTicketsDashboard({
                       )}
                     </button>
                   </th>
-                  <th scope="col">Summary</th>
-                  <th scope="col" className="whitespace-nowrap text-nowrap">Category</th>
-                  <th scope="col" className="whitespace-nowrap text-nowrap">Requested Priority</th>
-                  <th scope="col" className="whitespace-nowrap text-nowrap">IT Priority</th>
-                  <th scope="col" className="whitespace-nowrap text-nowrap">Current Status</th>
-                  <th scope="col" className="whitespace-nowrap text-nowrap">Last Updated</th>
+                  <th scope="col" style={{ width: "14%" }}>Summary</th>
+                  <th scope="col" className="whitespace-nowrap text-center" style={{ width: "8%" }}>Category</th>
+                  <th scope="col" className="whitespace-nowrap text-center" style={{ width: "13%" }}>Requested Priority</th>
+                  <th scope="col" className="whitespace-nowrap text-center" style={{ width: "7%" }}>IT Priority</th>
+                  <th scope="col" className="whitespace-nowrap text-center" style={{ width: "13%" }}>Current Status</th>
+                  <th scope="col" className="whitespace-nowrap text-gray-500" style={{ width: "16%" }}>Last Updated</th>
                 </tr>
               </thead>
               <tbody>
@@ -643,7 +651,7 @@ export default function MyTicketsDashboard({
                     onClick={() => handleTicketClick(ticket.id)}
                     style={{ cursor: "pointer" }}
                   >
-                    <td className="whitespace-nowrap text-nowrap">
+                    <td className="whitespace-nowrap font-semibold">
                       <button
                         type="button"
                         className="btn btn-link font-monospace fw-bold text-success p-0 text-decoration-none whitespace-nowrap text-nowrap"
@@ -652,28 +660,23 @@ export default function MyTicketsDashboard({
                           handleTicketClick(ticket.id);
                         }}
                         data-testid={`ticket-link-${ticket.id}`}
+                        style={{ whiteSpace: "nowrap" }}
                       >
                         {ticket.ticketNo}
                       </button>
                     </td>
-                    <td className="small text-muted whitespace-nowrap text-nowrap">
+                    <td className="whitespace-nowrap text-gray-500 small">
                       {formatTicketDate(ticket.createdAt)}
                     </td>
                     <td title={ticket.summary}>
                       <div
-                        className="truncate max-w-[200px] lg:max-w-xs font-medium fw-semibold text-dark text-truncate"
-                        style={{
-                          maxWidth: 220,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
+                        className="truncate max-w-[200px] font-medium text-gray-900"
                         title={ticket.summary}
                       >
                         {ticket.summary}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap text-nowrap">
+                    <td className="whitespace-nowrap text-center">
                       {ticket.category ? (
                         <span className="badge bg-light text-dark border">
                           {ticket.category.name}
@@ -682,10 +685,10 @@ export default function MyTicketsDashboard({
                         <span className="text-muted small">—</span>
                       )}
                     </td>
-                    <td className="whitespace-nowrap text-nowrap">{renderPriorityBadge(ticket.priority)}</td>
-                    <td className="small text-muted whitespace-nowrap text-nowrap">—</td>
-                    <td className="whitespace-nowrap text-nowrap">{renderStatusBadge(ticket.status)}</td>
-                    <td className="small text-muted whitespace-nowrap text-nowrap">
+                    <td className="whitespace-nowrap text-center">{renderPriorityBadge(ticket.priority)}</td>
+                    <td className="whitespace-nowrap text-center small text-muted">—</td>
+                    <td className="whitespace-nowrap text-center">{renderStatusBadge(ticket.status)}</td>
+                    <td className="whitespace-nowrap text-gray-500 small">
                       {formatTicketDate(ticket.updatedAt)}
                     </td>
                   </tr>
@@ -839,6 +842,6 @@ export default function MyTicketsDashboard({
           </div>
         )}
     </div>
-    </>
+    </div>
   );
 }

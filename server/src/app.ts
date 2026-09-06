@@ -6,7 +6,11 @@ import { randomUUID } from "node:crypto";
 import { getPrisma } from "./prisma.js";
 import { Prisma, Priority, TicketStatus } from "@prisma/client";
 import { requireRequesterAuth, AuthenticatedRequest } from "./middleware/auth.js";
-import { handlePreUploadMiddleware, UPLOAD_DIR } from "./middleware/upload.js";
+import {
+  handlePreUploadMiddleware,
+  handleTicketAttachmentUpload,
+  UPLOAD_DIR,
+} from "./middleware/upload.js";
 import { createErrorEnvelope, FieldError } from "./utils/errors.js";
 
 export const app = express();
@@ -505,11 +509,50 @@ app.post(
           },
         });
 
+        // Record initial ticket creation in TicketActivity table
+        if ((tx as any).ticketActivity) {
+          await (tx as any).ticketActivity.create({
+            data: {
+              ticketId: newTicket.id,
+              type: "TICKET_CREATED",
+              action: "Ticket created",
+              message: `Ticket ${ticketNo} created with status NEW.`,
+              actorId: requesterId,
+              actorName: req.requester?.fullName || "Requester",
+              createdAt: newTicket.createdAt,
+            },
+          });
+        }
+
         if (Array.isArray(attachmentIds) && attachmentIds.length > 0) {
           await tx.attachment.updateMany({
             where: { id: { in: attachmentIds } },
             data: { ticketId: newTicket.id },
           });
+
+          // Record ATTACHMENT_ADDED activities for linked attachments
+          const linkedAtts = await tx.attachment.findMany({
+            where: { id: { in: attachmentIds } },
+          });
+          for (const att of linkedAtts) {
+            if ((tx as any).ticketActivity) {
+              await (tx as any).ticketActivity.create({
+                data: {
+                  ticketId: newTicket.id,
+                  type: "ATTACHMENT_ADDED",
+                  action: "Attachment uploaded",
+                  message: `Attachment ${att.originalName} attached to ticket.`,
+                  actorId: requesterId,
+                  actorName: req.requester?.fullName || "Requester",
+                  metadata: {
+                    attachmentId: att.id,
+                    originalName: att.originalName,
+                  },
+                  createdAt: att.createdAt,
+                },
+              });
+            }
+          }
         }
 
         return tx.ticket.findUnique({
@@ -549,4 +592,872 @@ app.post(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Issue 9 — Ticket Details, Attachments Lifecycle & Audit Timeline
+// ---------------------------------------------------------------------------
+
+export interface TicketAuditEntry {
+  id: string;
+  ticketId: number;
+  type: string;
+  action: string;
+  message: string;
+  timestamp: Date;
+  actorId?: number;
+  actorName?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export const ticketAuditLogs = new Map<number, TicketAuditEntry[]>();
+
+export async function appendTicketAuditLog(
+  ticketId: number,
+  entry: Omit<TicketAuditEntry, "id" | "ticketId" | "timestamp"> & {
+    timestamp?: Date;
+  },
+  prismaClient?: any
+): Promise<TicketAuditEntry> {
+  const client = prismaClient || getPrisma();
+  const timestamp = entry.timestamp || new Date();
+  const dbClient = client as any;
+
+  // Persist directly to PostgreSQL as the single source of truth (propagate on failure)
+  const createdRecord = await dbClient.ticketActivity.create({
+    data: {
+      ticketId,
+      type: entry.type,
+      action: entry.action,
+      message: entry.message,
+      actorId: entry.actorId ?? null,
+      actorName: entry.actorName || "Requester",
+      metadata: entry.metadata ? (entry.metadata as any) : undefined,
+      createdAt: timestamp,
+    },
+  });
+
+  const newEntry: TicketAuditEntry = {
+    id: `activity_${createdRecord.id}`,
+    ticketId,
+    type: entry.type,
+    action: entry.action,
+    message: entry.message,
+    timestamp: createdRecord.createdAt || timestamp,
+    actorId: entry.actorId,
+    actorName: entry.actorName,
+    metadata: entry.metadata,
+  };
+
+  // Keep in-memory cache synchronized with DB
+  const logs = ticketAuditLogs.get(ticketId) || [];
+  logs.push(newEntry);
+  ticketAuditLogs.set(ticketId, logs);
+  return newEntry;
+}
+
+export async function getTicketAuditLogs(
+  ticketId: number
+): Promise<TicketAuditEntry[]> {
+  const prisma = getPrisma() as any;
+  const records = await prisma.ticketActivity.findMany({
+    where: { ticketId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (records && records.length > 0) {
+    return records.map((r: any) => ({
+      id: `activity_${r.id}`,
+      ticketId: r.ticketId,
+      type: r.type,
+      action: r.action,
+      message: r.message,
+      timestamp: r.createdAt,
+      actorId: r.actorId ?? undefined,
+      actorName: r.actorName,
+      metadata: (r.metadata as Record<string, unknown>) ?? undefined,
+    }));
+  }
+  return ticketAuditLogs.get(ticketId) || [];
+}
+
+export const auditService = {
+  appendTicketAuditLog,
+  getTicketAuditLogs,
+};
+
+// ---------------------------------------------------------------------------
+// Issue 9 — Read-only Ticket Details with Timeline & Attachments (AC 1)
+// GET /api/tickets/:id
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/tickets/:id",
+  requireRequesterAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const requesterId = req.requesterId!;
+      const ticketId = parseInt(req.params.id, 10);
+
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          relatedSystem: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          requester: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              department: true,
+            },
+          },
+          attachments: {
+            orderBy: { id: "asc" },
+            select: {
+              id: true,
+              originalName: true,
+              storageKey: true,
+              mimeType: true,
+              sizeBytes: true,
+              isSoftDeleted: true,
+              deletedAt: true,
+              deletedBy: true,
+              deletionReason: true,
+              createdAt: true,
+            },
+          },
+          activities: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Requester Isolation: Never leak tickets across requesters
+      if (ticket.requesterId !== requesterId) {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN_RESOURCE",
+              "You are not authorized to view or access this ticket."
+            )
+          );
+        return;
+      }
+
+      // Construct activity history timeline from DB activities
+      const timeline: Array<{
+        id: string;
+        type: string;
+        action: string;
+        message: string;
+        timestamp: Date;
+        actor: string;
+        reason?: string | null;
+        metadata?: Record<string, unknown>;
+      }> = [];
+
+      const dbActivities = ticket.activities || [];
+      if (dbActivities.length > 0) {
+        for (const act of dbActivities) {
+          timeline.push({
+            id: `activity_${act.id}`,
+            type: act.type,
+            action: act.action,
+            message: act.message,
+            timestamp: act.createdAt,
+            actor: act.actorName,
+            reason: ((act.metadata as any)?.reason as string) || null,
+            metadata: (act.metadata as Record<string, unknown>) || undefined,
+          });
+        }
+      } else {
+        timeline.push({
+          id: `timeline_create_${ticket.id}`,
+          type: "TICKET_CREATED",
+          action: "Ticket created",
+          message: `Ticket ${ticket.ticketNo} created with status ${ticket.status}.`,
+          timestamp: ticket.createdAt,
+          actor: ticket.requester.fullName,
+        });
+      }
+
+      for (const att of ticket.attachments) {
+        const hasAdd = timeline.some(
+          (t) =>
+            t.type === "ATTACHMENT_ADDED" &&
+            (t.metadata?.attachmentId === att.id ||
+              t.message.includes(att.originalName))
+        );
+        if (!hasAdd) {
+          timeline.push({
+            id: `timeline_att_add_${att.id}`,
+            type: "ATTACHMENT_ADDED",
+            action: "Attachment uploaded",
+            message: `Attachment ${att.originalName} attached to ticket.`,
+            timestamp: att.createdAt,
+            actor: ticket.requester.fullName,
+            metadata: {
+              attachmentId: att.id,
+              originalName: att.originalName,
+            },
+          });
+        }
+
+        if (att.isSoftDeleted && att.deletedAt) {
+          const hasRem = timeline.some(
+            (t) =>
+              t.type === "ATTACHMENT_REMOVED" &&
+              (t.metadata?.attachmentId === att.id ||
+                t.message.includes(att.originalName))
+          );
+          if (!hasRem) {
+            timeline.push({
+              id: `timeline_att_rem_${att.id}`,
+              type: "ATTACHMENT_REMOVED",
+              action: "Attachment removed",
+              message: `Attachment ${att.originalName} removed by requester. Reason: ${att.deletionReason || "Removed"}`,
+              timestamp: att.deletedAt,
+              reason: att.deletionReason,
+              actor: ticket.requester.fullName,
+              metadata: {
+                attachmentId: att.id,
+                originalName: att.originalName,
+                reason: att.deletionReason,
+              },
+            });
+          }
+        }
+      }
+
+      // Merge additional recorded in-memory logs
+      const extraLogs = await getTicketAuditLogs(ticket.id);
+      for (const log of extraLogs) {
+        const alreadyInTimeline = timeline.some(
+          (t) => t.message === log.message || t.id === log.id
+        );
+        if (!alreadyInTimeline) {
+          timeline.push({
+            id: log.id,
+            type: log.type,
+            action: log.action,
+            message: log.message,
+            timestamp: log.timestamp,
+            reason: (log.metadata?.reason as string) || undefined,
+            actor: log.actorName || ticket.requester.fullName,
+            metadata: log.metadata,
+          });
+        }
+      }
+
+      timeline.sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+
+      const formattedAttachments = ticket.attachments.map((att) => ({
+        id: att.id,
+        originalName: att.originalName,
+        mimeType: att.mimeType,
+        sizeBytes: att.sizeBytes,
+        status: att.isSoftDeleted ? "REMOVED" : "ACTIVE",
+        isSoftDeleted: att.isSoftDeleted,
+        deletedAt: att.deletedAt,
+        deletedBy: att.deletedBy,
+        deletionReason: att.deletionReason,
+        createdAt: att.createdAt,
+      }));
+
+      res.status(200).json({
+        data: {
+          id: ticket.id,
+          ticketNo: ticket.ticketNo,
+          summary: ticket.summary,
+          description: ticket.description,
+          priority: ticket.priority,
+          status: ticket.status,
+          requesterId: ticket.requesterId,
+          requester: {
+            id: ticket.requester.id,
+            fullName: ticket.requester.fullName,
+            displayName: ticket.requester.fullName,
+            email: ticket.requester.email,
+            department: ticket.requester.department,
+          },
+          category: {
+            id: ticket.category.id,
+            name: ticket.category.name,
+          },
+          relatedSystem: ticket.relatedSystem
+            ? {
+                id: ticket.relatedSystem.id,
+                name: ticket.relatedSystem.name,
+              }
+            : null,
+          attachments: formattedAttachments,
+          activityTimeline: timeline,
+          timeline,
+          activityHistory: timeline,
+          createdAt: ticket.createdAt,
+          updatedAt: ticket.updatedAt,
+        },
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to fetch ticket details."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Section 14 Part 8 — Add Attachment to Existing Ticket
+// POST /api/tickets/:id/attachments
+// ---------------------------------------------------------------------------
+app.post(
+  "/api/tickets/:id/attachments",
+  requireRequesterAuth,
+  handleTicketAttachmentUpload,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const requesterId = req.requesterId!;
+      const ticketId = parseInt(req.params.id, 10);
+
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+        include: {
+          requester: {
+            select: {
+              id: true,
+              fullName: true,
+            },
+          },
+        },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Check ownership
+      if (ticket.requesterId !== requesterId) {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN_RESOURCE",
+              "You are not authorized to modify attachments for this ticket."
+            )
+          );
+        return;
+      }
+
+      // Check active attachments limit (Max 5 per ticket)
+      const activeCount = await getPrisma().attachment.count({
+        where: {
+          ticketId,
+          isSoftDeleted: false,
+        },
+      });
+
+      const files = req.files as Express.Multer.File[];
+      if (activeCount + files.length > 5) {
+        res
+          .status(400)
+          .json(
+            createErrorEnvelope(
+              "MAX_ATTACHMENTS_EXCEEDED",
+              `Cannot add attachment. Ticket already has ${activeCount} active attachments (maximum is 5).`
+            )
+          );
+        return;
+      }
+
+      const file = files[0];
+      const sanitizedFilename = path
+        .basename(file.originalname)
+        .replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storageKey = `att_${Date.now()}_${randomUUID().replace(/-/g, "")}_${sanitizedFilename}`;
+      const filePath = path.join(UPLOAD_DIR, storageKey);
+
+      await fs.promises.writeFile(filePath, file.buffer);
+
+      const mimeType =
+        file.mimetype === "image/jpg" ? "image/jpeg" : file.mimetype;
+
+      const attachment = await getPrisma().$transaction(async (tx) => {
+        const createdAtt = await tx.attachment.create({
+          data: {
+            originalName: file.originalname,
+            storageKey,
+            mimeType,
+            sizeBytes: file.size,
+            uploadedById: requesterId,
+            ticketId: ticket.id,
+            isSoftDeleted: false,
+          },
+          select: {
+            id: true,
+            originalName: true,
+            mimeType: true,
+            sizeBytes: true,
+            ticketId: true,
+            isSoftDeleted: true,
+            createdAt: true,
+          },
+        });
+
+        // Append audit timeline entry inside the same transaction
+        await auditService.appendTicketAuditLog(
+          ticket.id,
+          {
+            type: "ATTACHMENT_ADDED",
+            action: "Attachment uploaded",
+            message: `Attachment ${file.originalname} added by requester.`,
+            timestamp: new Date(),
+            actorId: requesterId,
+            actorName: ticket.requester.fullName,
+            metadata: {
+              attachmentId: createdAtt.id,
+              originalName: file.originalname,
+            },
+          },
+          tx
+        );
+
+        return createdAtt;
+      });
+
+      res.status(201).json({
+        data: {
+          id: attachment.id,
+          originalName: attachment.originalName,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+          status: "ACTIVE",
+          isSoftDeleted: false,
+          createdAt: attachment.createdAt,
+        },
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to add attachment to ticket."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Issue 9 — Active Attachment Streaming Download & 410 Gone Guard (AC 2 & 4)
+// GET /api/attachments/:id/download
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/attachments/:id/download",
+  requireRequesterAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const requesterId = req.requesterId!;
+      const attachmentId = parseInt(req.params.id, 10);
+
+      if (isNaN(attachmentId) || attachmentId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "ATTACHMENT_NOT_FOUND",
+              "The requested attachment does not exist."
+            )
+          );
+        return;
+      }
+
+      const attachment = await getPrisma().attachment.findUnique({
+        where: { id: attachmentId },
+        include: {
+          ticket: {
+            select: {
+              id: true,
+              requesterId: true,
+            },
+          },
+        },
+      });
+
+      if (!attachment) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "ATTACHMENT_NOT_FOUND",
+              "The requested attachment does not exist."
+            )
+          );
+        return;
+      }
+
+      // Check Ownership: ticket requesterId if linked, or uploadedById if staged
+      const ownerId = attachment.ticket
+        ? attachment.ticket.requesterId
+        : attachment.uploadedById;
+
+      if (ownerId !== requesterId) {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN_RESOURCE",
+              "You do not have permission to download this attachment."
+            )
+          );
+        return;
+      }
+
+      // Soft-removal guard: Return 410 Gone immediately
+      if (attachment.isSoftDeleted) {
+        res.status(410).json({
+          error: "Attachment has been removed",
+          message: "Attachment has been removed by requester.",
+          code: "ATTACHMENT_SOFT_DELETED",
+          removedAt: attachment.deletedAt
+            ? attachment.deletedAt.toISOString()
+            : new Date().toISOString(),
+          deletedAt: attachment.deletedAt
+            ? attachment.deletedAt.toISOString()
+            : new Date().toISOString(),
+          reason: attachment.deletionReason || "Removed",
+          deletionReason: attachment.deletionReason || "Removed",
+        });
+        return;
+      }
+
+      const filePath = path.join(UPLOAD_DIR, attachment.storageKey);
+      if (!fs.existsSync(filePath)) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "ATTACHMENT_FILE_NOT_FOUND",
+              "The requested attachment file is missing on storage."
+            )
+          );
+        return;
+      }
+
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${attachment.originalName}"`
+      );
+      res.setHeader("Content-Type", attachment.mimeType);
+
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.on("error", () => {
+        if (!res.headersSent) {
+          res
+            .status(500)
+            .json(
+              createErrorEnvelope(
+                "INTERNAL_SERVER_ERROR",
+                "Error streaming attachment file."
+              )
+            );
+        }
+      });
+
+      fileStream.pipe(res);
+    } catch (error) {
+      if (!res.headersSent) {
+        res
+          .status(500)
+          .json(
+            createErrorEnvelope(
+              "INTERNAL_SERVER_ERROR",
+              "Failed to process attachment download."
+            )
+          );
+      }
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Issue 9 — Attachment Soft-Removal with Reason & Audit Logging (AC 3)
+// POST /api/attachments/:id/remove
+// PATCH /api/attachments/:id/remove
+// DELETE /api/attachments/:id
+// ---------------------------------------------------------------------------
+export const PRESET_REMOVAL_REASONS = [
+  "Uploaded incorrect document / file",
+  "Contains sensitive or confidential data",
+  "Duplicate file",
+];
+
+async function handleAttachmentRemoval(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const requesterId = req.requesterId!;
+    const attachmentId = parseInt(req.params.id, 10);
+
+    if (isNaN(attachmentId) || attachmentId <= 0) {
+      res
+        .status(404)
+        .json(
+          createErrorEnvelope(
+            "ATTACHMENT_NOT_FOUND",
+            "The requested attachment does not exist."
+          )
+        );
+      return;
+    }
+
+    const attachment = await getPrisma().attachment.findUnique({
+      where: { id: attachmentId },
+      include: {
+        ticket: {
+          select: {
+            id: true,
+            ticketNo: true,
+            requesterId: true,
+          },
+        },
+      },
+    });
+
+    if (!attachment) {
+      res
+        .status(404)
+        .json(
+          createErrorEnvelope(
+            "ATTACHMENT_NOT_FOUND",
+            "The requested attachment does not exist."
+          )
+        );
+      return;
+    }
+
+    // Ownership check
+    const ownerId = attachment.ticket
+      ? attachment.ticket.requesterId
+      : attachment.uploadedById;
+
+    if (ownerId !== requesterId) {
+      res
+        .status(403)
+        .json(
+          createErrorEnvelope(
+            "FORBIDDEN_RESOURCE",
+            "You do not have permission to remove this attachment."
+          )
+        );
+      return;
+    }
+
+    if (attachment.isSoftDeleted) {
+      res
+        .status(400)
+        .json(
+          createErrorEnvelope(
+            "ALREADY_REMOVED",
+            "Attachment has already been removed."
+          )
+        );
+      return;
+    }
+
+    const { reason, customReason } = req.body || {};
+    let resolvedReason = "";
+
+    if (reason === "Other") {
+      if (
+        typeof customReason !== "string" ||
+        customReason.trim().length < 5 ||
+        customReason.trim().length > 255
+      ) {
+        res.status(400).json(
+          createErrorEnvelope(
+            "VALIDATION_FAILED",
+            "When selecting 'Other', a customReason between 5 and 255 characters is required.",
+            [
+              {
+                field: "customReason",
+                message: "Custom reason must be at least 5 characters long.",
+              },
+            ]
+          )
+        );
+        return;
+      }
+      resolvedReason = customReason.trim();
+    } else if (
+      typeof reason === "string" &&
+      PRESET_REMOVAL_REASONS.includes(reason.trim())
+    ) {
+      resolvedReason = reason.trim();
+    } else if (
+      req.method === "DELETE" &&
+      typeof reason === "string" &&
+      reason.trim().length >= 5 &&
+      reason.trim().length <= 255
+    ) {
+      resolvedReason = reason.trim();
+    } else {
+      res.status(400).json(
+        createErrorEnvelope(
+          "VALIDATION_FAILED",
+          "A valid preset reason or 'Other' with a custom reason (min 5 chars) is required.",
+          [
+            {
+              field: "reason",
+              message:
+                "Reason must be one of the preset reasons or 'Other' with customReason.",
+            },
+          ]
+        )
+      );
+      return;
+    }
+
+    const now = new Date();
+    const updated = await getPrisma().$transaction(async (tx) => {
+      const updatedAtt = await tx.attachment.update({
+        where: { id: attachment.id },
+        data: {
+          isSoftDeleted: true,
+          deletedAt: now,
+          deletedBy: requesterId,
+          deletionReason: resolvedReason,
+        },
+      });
+
+      // Record audit entry in ticket activity timeline inside the same atomic transaction
+      if (attachment.ticketId) {
+        await auditService.appendTicketAuditLog(
+          attachment.ticketId,
+          {
+            type: "ATTACHMENT_REMOVED",
+            action: "Attachment removed",
+            message: `Attachment ${attachment.originalName} removed by requester. Reason: ${resolvedReason}`,
+            timestamp: now,
+            actorId: requesterId,
+            actorName: req.requester?.fullName || "Requester",
+            metadata: {
+              attachmentId: attachment.id,
+              originalName: attachment.originalName,
+              reason: resolvedReason,
+            },
+          },
+          tx
+        );
+      }
+
+      return updatedAtt;
+    });
+
+    res.status(200).json({
+      data: {
+        id: updated.id,
+        ticketId: updated.ticketId,
+        originalName: updated.originalName,
+        mimeType: updated.mimeType,
+        sizeBytes: updated.sizeBytes,
+        status: "REMOVED",
+        isSoftDeleted: true,
+        removedAt: updated.deletedAt,
+        deletedAt: updated.deletedAt,
+        deletedBy: updated.deletedBy,
+        reason: updated.deletionReason,
+        deletionReason: updated.deletionReason,
+      },
+      message: "Attachment removed successfully",
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json(
+        createErrorEnvelope(
+          "INTERNAL_SERVER_ERROR",
+          "Failed to remove attachment."
+        )
+      );
+  }
+}
+
+app.post(
+  "/api/attachments/:id/remove",
+  requireRequesterAuth,
+  handleAttachmentRemoval
+);
+app.patch(
+  "/api/attachments/:id/remove",
+  requireRequesterAuth,
+  handleAttachmentRemoval
+);
+app.delete(
+  "/api/attachments/:id",
+  requireRequesterAuth,
+  handleAttachmentRemoval
+);
+
 export default app;
+
