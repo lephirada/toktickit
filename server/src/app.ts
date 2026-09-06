@@ -619,44 +619,35 @@ export async function appendTicketAuditLog(
 ): Promise<TicketAuditEntry> {
   const client = prismaClient || getPrisma();
   const timestamp = entry.timestamp || new Date();
+  const dbClient = client as any;
 
-  // 1. Persist directly to PostgreSQL via TicketActivity model
-  let createdRecord: any = null;
-  try {
-    const dbClient = client as any;
-    if (dbClient.ticketActivity) {
-      createdRecord = await dbClient.ticketActivity.create({
-        data: {
-          ticketId,
-          type: entry.type,
-          action: entry.action,
-          message: entry.message,
-          actorId: entry.actorId ?? null,
-          actorName: entry.actorName || "Requester",
-          metadata: entry.metadata ? (entry.metadata as any) : undefined,
-          createdAt: timestamp,
-        },
-      });
-    }
-  } catch (err) {
-    console.error("Failed to persist ticket activity to DB:", err);
-  }
+  // Persist directly to PostgreSQL as the single source of truth (propagate on failure)
+  const createdRecord = await dbClient.ticketActivity.create({
+    data: {
+      ticketId,
+      type: entry.type,
+      action: entry.action,
+      message: entry.message,
+      actorId: entry.actorId ?? null,
+      actorName: entry.actorName || "Requester",
+      metadata: entry.metadata ? (entry.metadata as any) : undefined,
+      createdAt: timestamp,
+    },
+  });
 
   const newEntry: TicketAuditEntry = {
-    id: createdRecord
-      ? `activity_${createdRecord.id}`
-      : `audit_${Date.now()}_${randomUUID().replace(/-/g, "").slice(0, 8)}`,
+    id: `activity_${createdRecord.id}`,
     ticketId,
     type: entry.type,
     action: entry.action,
     message: entry.message,
-    timestamp,
+    timestamp: createdRecord.createdAt || timestamp,
     actorId: entry.actorId,
     actorName: entry.actorName,
     metadata: entry.metadata,
   };
 
-  // 2. Also keep in-memory for instant reference
+  // Keep in-memory cache synchronized with DB
   const logs = ticketAuditLogs.get(ticketId) || [];
   logs.push(newEntry);
   ticketAuditLogs.set(ticketId, logs);
@@ -666,27 +657,23 @@ export async function appendTicketAuditLog(
 export async function getTicketAuditLogs(
   ticketId: number
 ): Promise<TicketAuditEntry[]> {
-  try {
-    const prisma = getPrisma() as any;
-    const records = await prisma.ticketActivity?.findMany({
-      where: { ticketId },
-      orderBy: { createdAt: "asc" },
-    });
-    if (records && records.length > 0) {
-      return records.map((r: any) => ({
-        id: `activity_${r.id}`,
-        ticketId: r.ticketId,
-        type: r.type,
-        action: r.action,
-        message: r.message,
-        timestamp: r.createdAt,
-        actorId: r.actorId ?? undefined,
-        actorName: r.actorName,
-        metadata: (r.metadata as Record<string, unknown>) ?? undefined,
-      }));
-    }
-  } catch (err) {
-    console.error("Failed to query ticket activities from DB:", err);
+  const prisma = getPrisma() as any;
+  const records = await prisma.ticketActivity.findMany({
+    where: { ticketId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (records && records.length > 0) {
+    return records.map((r: any) => ({
+      id: `activity_${r.id}`,
+      ticketId: r.ticketId,
+      type: r.type,
+      action: r.action,
+      message: r.message,
+      timestamp: r.createdAt,
+      actorId: r.actorId ?? undefined,
+      actorName: r.actorName,
+      metadata: (r.metadata as Record<string, unknown>) ?? undefined,
+    }));
   }
   return ticketAuditLogs.get(ticketId) || [];
 }
