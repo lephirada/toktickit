@@ -286,18 +286,24 @@ model Attachment {
 - **When** any client requests `GET /api/attachments/:id/download`,
 - **Then** the server responds with `410 Gone` and message "Attachment has been removed by requester".
 
+### AC-13: Add Attachment to Existing Ticket (Section 14 Part 8)
+- **Given** an authorized requester viewing their existing ticket,
+- **When** the requester uploads an additional valid attachment (PDF/PNG/JPG/WEBP $\le 5$MB) via `POST /api/tickets/:id/attachments`,
+- **Then** the server validates ownership, verifies the ticket has fewer than 5 active attachments, persists the attachment, appends an event to the Activity Timeline, and returns `201 Created`.
+- **When** the ticket already has 5 active attachments, the upload button is disabled in the UI and the API returns `400 Bad Request` (`MAX_ATTACHMENTS_EXCEEDED`).
+
 ---
 
 ## 10. Definition of Done (DoD)
 
-- [ ] **Prisma Migration:** Schema migration applied to PostgreSQL adding `RequesterUser`, `RelatedSystem`, `Ticket`, and `Attachment` models with indexes and seed data.
-- [ ] **REST API Endpoints:** All 9 endpoints implemented with full input validation, error handling envelope, and unit/integration test coverage.
-- [ ] **Security & Isolation:** `X-Requester-Id` header middleware enforced; cross-tenant ticket or attachment access blocked with `403 Forbidden`.
-- [ ] **Responsive Frontend:** Zen Green UI implemented across Desktop ($\ge 992$px), Tablet ($768$-$991$px), and Mobile ($< 768$px) without horizontal scrolling.
-- [ ] **Pre-upload Staging:** Drag-and-drop file staging implemented with size/type validation and retry/removal capability.
-- [ ] **Dirty State Guard:** Unsaved changes modal functional across React router transitions and requester switcher.
-- [ ] **Test Coverage:** All Vitest unit tests, Supertest API tests, and Playwright E2E flows passing in CI without flake.
-- [ ] **Documentation:** API specifications, UI guidelines, and test matrix committed to `docs/lab-02/`.
+- [x] **Prisma Migration:** Schema migration applied to PostgreSQL adding `RequesterUser`, `RelatedSystem`, `Ticket`, and `Attachment` models with indexes and seed data.
+- [x] **REST API Endpoints:** All endpoints implemented with full input validation, error handling envelope, and unit/integration test coverage.
+- [x] **Security & Isolation:** `X-Requester-Id` header middleware enforced; cross-tenant ticket or attachment access blocked with `403 Forbidden`.
+- [x] **Responsive Frontend:** Zen Green UI implemented across Desktop ($\ge 992$px), Tablet ($768$-$991$px), and Mobile ($< 768$px) without horizontal scrolling.
+- [x] **Pre-upload Staging:** Drag-and-drop file staging implemented with size/type validation and retry/removal capability.
+- [x] **Dirty State Guard:** Unsaved changes modal functional across React router transitions and requester switcher.
+- [x] **Test Coverage:** All Vitest unit tests (48 frontend tests) and Supertest API tests (32 backend tests) passing in CI, with Playwright E2E flows passing cleanly without flake.
+- [x] **Documentation:** API specifications, UI guidelines, and test matrix committed to `docs/lab-02/`.
 
 ---
 

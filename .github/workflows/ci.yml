@@ -116,3 +116,71 @@ jobs:
 
       - name: Build backend
         run: npm run build
+
+  e2e-test:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    needs: [client-build, server-build]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: toktickit
+          POSTGRES_PASSWORD: toktickit
+          POSTGRES_DB: toktickit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://toktickit:toktickit@localhost:5432/toktickit?schema=public"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Deploy Prisma migrations & seed
+        working-directory: server
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run prisma:seed
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        run: npm run test:e2e
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+

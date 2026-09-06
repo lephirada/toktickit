@@ -509,11 +509,50 @@ app.post(
           },
         });
 
+        // Record initial ticket creation in TicketActivity table
+        if ((tx as any).ticketActivity) {
+          await (tx as any).ticketActivity.create({
+            data: {
+              ticketId: newTicket.id,
+              type: "TICKET_CREATED",
+              action: "Ticket created",
+              message: `Ticket ${ticketNo} created with status NEW.`,
+              actorId: requesterId,
+              actorName: req.requester?.fullName || "Requester",
+              createdAt: newTicket.createdAt,
+            },
+          });
+        }
+
         if (Array.isArray(attachmentIds) && attachmentIds.length > 0) {
           await tx.attachment.updateMany({
             where: { id: { in: attachmentIds } },
             data: { ticketId: newTicket.id },
           });
+
+          // Record ATTACHMENT_ADDED activities for linked attachments
+          const linkedAtts = await tx.attachment.findMany({
+            where: { id: { in: attachmentIds } },
+          });
+          for (const att of linkedAtts) {
+            if ((tx as any).ticketActivity) {
+              await (tx as any).ticketActivity.create({
+                data: {
+                  ticketId: newTicket.id,
+                  type: "ATTACHMENT_ADDED",
+                  action: "Attachment uploaded",
+                  message: `Attachment ${att.originalName} attached to ticket.`,
+                  actorId: requesterId,
+                  actorName: req.requester?.fullName || "Requester",
+                  metadata: {
+                    attachmentId: att.id,
+                    originalName: att.originalName,
+                  },
+                  createdAt: att.createdAt,
+                },
+              });
+            }
+          }
         }
 
         return tx.ticket.findUnique({
@@ -571,22 +610,84 @@ export interface TicketAuditEntry {
 
 export const ticketAuditLogs = new Map<number, TicketAuditEntry[]>();
 
-export function appendTicketAuditLog(
+export async function appendTicketAuditLog(
   ticketId: number,
-  entry: Omit<TicketAuditEntry, "id" | "ticketId">
-): TicketAuditEntry {
-  const logs = ticketAuditLogs.get(ticketId) || [];
+  entry: Omit<TicketAuditEntry, "id" | "ticketId" | "timestamp"> & {
+    timestamp?: Date;
+  },
+  prismaClient?: any
+): Promise<TicketAuditEntry> {
+  const client = prismaClient || getPrisma();
+  const timestamp = entry.timestamp || new Date();
+
+  // 1. Persist directly to PostgreSQL via TicketActivity model
+  let createdRecord: any = null;
+  try {
+    const dbClient = client as any;
+    if (dbClient.ticketActivity) {
+      createdRecord = await dbClient.ticketActivity.create({
+        data: {
+          ticketId,
+          type: entry.type,
+          action: entry.action,
+          message: entry.message,
+          actorId: entry.actorId ?? null,
+          actorName: entry.actorName || "Requester",
+          metadata: entry.metadata ? (entry.metadata as any) : undefined,
+          createdAt: timestamp,
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Failed to persist ticket activity to DB:", err);
+  }
+
   const newEntry: TicketAuditEntry = {
-    id: `audit_${Date.now()}_${randomUUID().replace(/-/g, "").slice(0, 8)}`,
+    id: createdRecord
+      ? `activity_${createdRecord.id}`
+      : `audit_${Date.now()}_${randomUUID().replace(/-/g, "").slice(0, 8)}`,
     ticketId,
-    ...entry,
+    type: entry.type,
+    action: entry.action,
+    message: entry.message,
+    timestamp,
+    actorId: entry.actorId,
+    actorName: entry.actorName,
+    metadata: entry.metadata,
   };
+
+  // 2. Also keep in-memory for instant reference
+  const logs = ticketAuditLogs.get(ticketId) || [];
   logs.push(newEntry);
   ticketAuditLogs.set(ticketId, logs);
   return newEntry;
 }
 
-export function getTicketAuditLogs(ticketId: number): TicketAuditEntry[] {
+export async function getTicketAuditLogs(
+  ticketId: number
+): Promise<TicketAuditEntry[]> {
+  try {
+    const prisma = getPrisma() as any;
+    const records = await prisma.ticketActivity?.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: "asc" },
+    });
+    if (records && records.length > 0) {
+      return records.map((r: any) => ({
+        id: `activity_${r.id}`,
+        ticketId: r.ticketId,
+        type: r.type,
+        action: r.action,
+        message: r.message,
+        timestamp: r.createdAt,
+        actorId: r.actorId ?? undefined,
+        actorName: r.actorName,
+        metadata: (r.metadata as Record<string, unknown>) ?? undefined,
+      }));
+    }
+  } catch (err) {
+    console.error("Failed to query ticket activities from DB:", err);
+  }
   return ticketAuditLogs.get(ticketId) || [];
 }
 
@@ -652,6 +753,9 @@ app.get(
               createdAt: true,
             },
           },
+          activities: {
+            orderBy: { createdAt: "asc" },
+          },
         },
       });
 
@@ -680,7 +784,7 @@ app.get(
         return;
       }
 
-      // Construct activity history timeline
+      // Construct activity history timeline from DB activities
       const timeline: Array<{
         id: string;
         type: string;
@@ -690,51 +794,83 @@ app.get(
         actor: string;
         reason?: string | null;
         metadata?: Record<string, unknown>;
-      }> = [
-        {
+      }> = [];
+
+      const dbActivities = ticket.activities || [];
+      if (dbActivities.length > 0) {
+        for (const act of dbActivities) {
+          timeline.push({
+            id: `activity_${act.id}`,
+            type: act.type,
+            action: act.action,
+            message: act.message,
+            timestamp: act.createdAt,
+            actor: act.actorName,
+            reason: ((act.metadata as any)?.reason as string) || null,
+            metadata: (act.metadata as Record<string, unknown>) || undefined,
+          });
+        }
+      } else {
+        timeline.push({
           id: `timeline_create_${ticket.id}`,
           type: "TICKET_CREATED",
           action: "Ticket created",
           message: `Ticket ${ticket.ticketNo} created with status ${ticket.status}.`,
           timestamp: ticket.createdAt,
           actor: ticket.requester.fullName,
-        },
-      ];
+        });
+      }
 
       for (const att of ticket.attachments) {
-        timeline.push({
-          id: `timeline_att_add_${att.id}`,
-          type: "ATTACHMENT_ADDED",
-          action: "Attachment uploaded",
-          message: `Attachment ${att.originalName} attached to ticket.`,
-          timestamp: att.createdAt,
-          actor: ticket.requester.fullName,
-          metadata: {
-            attachmentId: att.id,
-            originalName: att.originalName,
-          },
-        });
-
-        if (att.isSoftDeleted && att.deletedAt) {
+        const hasAdd = timeline.some(
+          (t) =>
+            t.type === "ATTACHMENT_ADDED" &&
+            (t.metadata?.attachmentId === att.id ||
+              t.message.includes(att.originalName))
+        );
+        if (!hasAdd) {
           timeline.push({
-            id: `timeline_att_rem_${att.id}`,
-            type: "ATTACHMENT_REMOVED",
-            action: "Attachment removed",
-            message: `Attachment ${att.originalName} removed by requester. Reason: ${att.deletionReason || "Removed"}`,
-            timestamp: att.deletedAt,
-            reason: att.deletionReason,
+            id: `timeline_att_add_${att.id}`,
+            type: "ATTACHMENT_ADDED",
+            action: "Attachment uploaded",
+            message: `Attachment ${att.originalName} attached to ticket.`,
+            timestamp: att.createdAt,
             actor: ticket.requester.fullName,
             metadata: {
               attachmentId: att.id,
               originalName: att.originalName,
-              reason: att.deletionReason,
             },
           });
+        }
+
+        if (att.isSoftDeleted && att.deletedAt) {
+          const hasRem = timeline.some(
+            (t) =>
+              t.type === "ATTACHMENT_REMOVED" &&
+              (t.metadata?.attachmentId === att.id ||
+                t.message.includes(att.originalName))
+          );
+          if (!hasRem) {
+            timeline.push({
+              id: `timeline_att_rem_${att.id}`,
+              type: "ATTACHMENT_REMOVED",
+              action: "Attachment removed",
+              message: `Attachment ${att.originalName} removed by requester. Reason: ${att.deletionReason || "Removed"}`,
+              timestamp: att.deletedAt,
+              reason: att.deletionReason,
+              actor: ticket.requester.fullName,
+              metadata: {
+                attachmentId: att.id,
+                originalName: att.originalName,
+                reason: att.deletionReason,
+              },
+            });
+          }
         }
       }
 
       // Merge additional recorded in-memory logs
-      const extraLogs = getTicketAuditLogs(ticket.id);
+      const extraLogs = await getTicketAuditLogs(ticket.id);
       for (const log of extraLogs) {
         const alreadyInTimeline = timeline.some(
           (t) => t.message === log.message || t.id === log.id
@@ -934,7 +1070,7 @@ app.post(
       });
 
       // Append audit timeline entry
-      appendTicketAuditLog(ticket.id, {
+      await appendTicketAuditLog(ticket.id, {
         type: "ATTACHMENT_ADDED",
         action: "Attachment uploaded",
         message: `Attachment ${file.originalname} added by requester.`,
@@ -1255,7 +1391,7 @@ async function handleAttachmentRemoval(
 
     // Record audit entry in ticket activity timeline
     if (attachment.ticketId) {
-      appendTicketAuditLog(attachment.ticketId, {
+      await appendTicketAuditLog(attachment.ticketId, {
         type: "ATTACHMENT_REMOVED",
         action: "Attachment removed",
         message: `Attachment ${attachment.originalName} removed by requester. Reason: ${resolvedReason}`,

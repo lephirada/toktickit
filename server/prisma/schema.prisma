@@ -75,6 +75,7 @@ model Ticket {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   attachments     Attachment[]
+  activities      TicketActivity[]
 
   @@index([requesterId])
   @@index([status])
@@ -101,3 +102,20 @@ model Attachment {
   @@index([uploadedById])
   @@index([isSoftDeleted])
 }
+
+model TicketActivity {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  type      String
+  action    String
+  message   String
+  actorId   Int?
+  actorName String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([createdAt])
+}
+
