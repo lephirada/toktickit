@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
 import path from "node:path";
 import fs from "node:fs";
 import { app } from "../../src/app.js";
+import * as appModule from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { UPLOAD_DIR } from "../../src/middleware/upload.js";
 import { Priority, TicketStatus } from "@prisma/client";
@@ -578,6 +579,104 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
       expect(customAuditItem.message).toContain(
         "Accidentally uploaded confidential government passport scan"
       );
+    });
+
+    it("successfully soft-removes attachment with 'Other' and valid customReason (full lifecycle)", async () => {
+      const tempKey = `att_other_flow_${Date.now()}.png`;
+      const tempAtt = await prisma.attachment.create({
+        data: {
+          originalName: "other_flow_test.png",
+          storageKey: tempKey,
+          mimeType: "image/png",
+          sizeBytes: 256,
+          uploadedById: requesterAId,
+          ticketId: ticketAId,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/attachments/${tempAtt.id}/remove`)
+        .set("X-Requester-Id", String(requesterAId))
+        .send({
+          reason: "Other",
+          customReason: "Accidentally uploaded draft document that needs redaction",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.isSoftDeleted).toBe(true);
+      expect(res.body.data.deletionReason).toBe(
+        "Accidentally uploaded draft document that needs redaction"
+      );
+
+      // Verify directly in DB
+      const dbAtt = await prisma.attachment.findUnique({
+        where: { id: tempAtt.id },
+      });
+      expect(dbAtt?.isSoftDeleted).toBe(true);
+      expect(dbAtt?.deletionReason).toBe(
+        "Accidentally uploaded draft document that needs redaction"
+      );
+
+      // Verify in activity timeline
+      const ticketRes = await request(app)
+        .get(`/api/tickets/${ticketAId}`)
+        .set("X-Requester-Id", String(requesterAId));
+      const timeline = ticketRes.body.data.activityTimeline;
+      const otherAudit = timeline.find(
+        (t: { type: string; message: string; reason?: string }) =>
+          t.type === "ATTACHMENT_REMOVED" &&
+          t.message.includes("other_flow_test.png")
+      );
+      expect(otherAudit).toBeDefined();
+      expect(otherAudit.reason).toBe(
+        "Accidentally uploaded draft document that needs redaction"
+      );
+
+      await prisma.ticketActivity.deleteMany({
+        where: { ticketId: ticketAId, message: { contains: "other_flow_test.png" } },
+      });
+      await prisma.attachment.delete({ where: { id: tempAtt.id } });
+    });
+
+    it("rolls back attachment soft-removal if audit log creation fails during transaction (Atomicity / AC3)", async () => {
+      const tempKey = `att_rollback_test_${Date.now()}.png`;
+      const tempAtt = await prisma.attachment.create({
+        data: {
+          originalName: "rollback_test.png",
+          storageKey: tempKey,
+          mimeType: "image/png",
+          sizeBytes: 128,
+          uploadedById: requesterAId,
+          ticketId: ticketAId,
+          isSoftDeleted: false,
+        },
+      });
+
+      // Spy on appendTicketAuditLog to simulate failure inside the Prisma transaction
+      const auditSpy = vi
+        .spyOn(appModule.auditService, "appendTicketAuditLog")
+        .mockRejectedValueOnce(new Error("Simulated Database write failure in TicketActivity"));
+
+      const res = await request(app)
+        .post(`/api/attachments/${tempAtt.id}/remove`)
+        .set("X-Requester-Id", String(requesterAId))
+        .send({
+          reason: "Duplicate file",
+        });
+
+      expect(res.status).toBe(500);
+      auditSpy.mockRestore();
+
+      // Verify that the attachment update was ROLLED BACK and remains active in DB
+      const dbAtt = await prisma.attachment.findUnique({
+        where: { id: tempAtt.id },
+      });
+      expect(dbAtt).toBeDefined();
+      expect(dbAtt?.isSoftDeleted).toBe(false);
+      expect(dbAtt?.deletedAt).toBeNull();
+      expect(dbAtt?.deletionReason).toBeNull();
+
+      await prisma.attachment.delete({ where: { id: tempAtt.id } });
     });
   });
 });

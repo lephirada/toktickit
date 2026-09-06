@@ -678,6 +678,11 @@ export async function getTicketAuditLogs(
   return ticketAuditLogs.get(ticketId) || [];
 }
 
+export const auditService = {
+  appendTicketAuditLog,
+  getTicketAuditLogs,
+};
+
 // ---------------------------------------------------------------------------
 // Issue 9 — Read-only Ticket Details with Timeline & Attachments (AC 1)
 // GET /api/tickets/:id
@@ -1035,39 +1040,47 @@ app.post(
       const mimeType =
         file.mimetype === "image/jpg" ? "image/jpeg" : file.mimetype;
 
-      const attachment = await getPrisma().attachment.create({
-        data: {
-          originalName: file.originalname,
-          storageKey,
-          mimeType,
-          sizeBytes: file.size,
-          uploadedById: requesterId,
-          ticketId: ticket.id,
-          isSoftDeleted: false,
-        },
-        select: {
-          id: true,
-          originalName: true,
-          mimeType: true,
-          sizeBytes: true,
-          ticketId: true,
-          isSoftDeleted: true,
-          createdAt: true,
-        },
-      });
+      const attachment = await getPrisma().$transaction(async (tx) => {
+        const createdAtt = await tx.attachment.create({
+          data: {
+            originalName: file.originalname,
+            storageKey,
+            mimeType,
+            sizeBytes: file.size,
+            uploadedById: requesterId,
+            ticketId: ticket.id,
+            isSoftDeleted: false,
+          },
+          select: {
+            id: true,
+            originalName: true,
+            mimeType: true,
+            sizeBytes: true,
+            ticketId: true,
+            isSoftDeleted: true,
+            createdAt: true,
+          },
+        });
 
-      // Append audit timeline entry
-      await appendTicketAuditLog(ticket.id, {
-        type: "ATTACHMENT_ADDED",
-        action: "Attachment uploaded",
-        message: `Attachment ${file.originalname} added by requester.`,
-        timestamp: new Date(),
-        actorId: requesterId,
-        actorName: ticket.requester.fullName,
-        metadata: {
-          attachmentId: attachment.id,
-          originalName: file.originalname,
-        },
+        // Append audit timeline entry inside the same transaction
+        await auditService.appendTicketAuditLog(
+          ticket.id,
+          {
+            type: "ATTACHMENT_ADDED",
+            action: "Attachment uploaded",
+            message: `Attachment ${file.originalname} added by requester.`,
+            timestamp: new Date(),
+            actorId: requesterId,
+            actorName: ticket.requester.fullName,
+            metadata: {
+              attachmentId: createdAtt.id,
+              originalName: file.originalname,
+            },
+          },
+          tx
+        );
+
+        return createdAtt;
       });
 
       res.status(201).json({
@@ -1366,32 +1379,40 @@ async function handleAttachmentRemoval(
     }
 
     const now = new Date();
-    const updated = await getPrisma().attachment.update({
-      where: { id: attachment.id },
-      data: {
-        isSoftDeleted: true,
-        deletedAt: now,
-        deletedBy: requesterId,
-        deletionReason: resolvedReason,
-      },
-    });
-
-    // Record audit entry in ticket activity timeline
-    if (attachment.ticketId) {
-      await appendTicketAuditLog(attachment.ticketId, {
-        type: "ATTACHMENT_REMOVED",
-        action: "Attachment removed",
-        message: `Attachment ${attachment.originalName} removed by requester. Reason: ${resolvedReason}`,
-        timestamp: now,
-        actorId: requesterId,
-        actorName: req.requester?.fullName || "Requester",
-        metadata: {
-          attachmentId: attachment.id,
-          originalName: attachment.originalName,
-          reason: resolvedReason,
+    const updated = await getPrisma().$transaction(async (tx) => {
+      const updatedAtt = await tx.attachment.update({
+        where: { id: attachment.id },
+        data: {
+          isSoftDeleted: true,
+          deletedAt: now,
+          deletedBy: requesterId,
+          deletionReason: resolvedReason,
         },
       });
-    }
+
+      // Record audit entry in ticket activity timeline inside the same atomic transaction
+      if (attachment.ticketId) {
+        await auditService.appendTicketAuditLog(
+          attachment.ticketId,
+          {
+            type: "ATTACHMENT_REMOVED",
+            action: "Attachment removed",
+            message: `Attachment ${attachment.originalName} removed by requester. Reason: ${resolvedReason}`,
+            timestamp: now,
+            actorId: requesterId,
+            actorName: req.requester?.fullName || "Requester",
+            metadata: {
+              attachmentId: attachment.id,
+              originalName: attachment.originalName,
+              reason: resolvedReason,
+            },
+          },
+          tx
+        );
+      }
+
+      return updatedAtt;
+    });
 
     res.status(200).json({
       data: {

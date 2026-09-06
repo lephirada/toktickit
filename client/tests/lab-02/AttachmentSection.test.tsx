@@ -201,6 +201,42 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
     expect(confirmBtn).not.toBeDisabled();
   });
 
+  it("4B. Submitting removal modal with 'Other' and valid customReason calls removeAttachment API", async () => {
+    const user = userEvent.setup();
+    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("remove-btn-881")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId("remove-btn-881"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("attachment-removal-modal")).toBeInTheDocument();
+    });
+
+    const otherRadio = screen.getByTestId("preset-reason-other");
+    await user.click(otherRadio);
+
+    const textarea = screen.getByTestId("custom-reason-textarea");
+    await user.type(textarea, "Confidential client credentials exposed in logs");
+
+    const confirmBtn = screen.getByTestId("confirm-remove-btn");
+    expect(confirmBtn).not.toBeDisabled();
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(api.removeAttachment).toHaveBeenCalledWith(
+        881,
+        {
+          reason: "Other",
+          customReason: "Confidential client credentials exposed in logs",
+        },
+        1
+      );
+    });
+  });
+
   it("5. Download active attachment calls downloadAttachment API", async () => {
     renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
