@@ -252,8 +252,8 @@ For input validation failures, `details.fieldErrors` maps specific invalid input
   - `summary`: Mandatory, 5–100 characters, trimmed.
   - `description`: Mandatory, 10–2,000 characters, trimmed.
   - `categoryId`: Mandatory valid Category ID.
-  - `priority`: Valid `Priority` enum (`P0_URGENT`, `P1_HIGH`, `P2_MEDIUM`, `P3_LOW`).
-* **Success Response (`201 Created`):** Returns Ticket object with `ticketNo` (`TKT-YYYY-NNNNN`), `status: "NEW"`, `requestedPriority`, `itPriority`, and linked attachments.
+  - `priority` (or `requestedPriority`): Valid `Priority` enum (`P0_URGENT`, `P1_HIGH`, `P2_MEDIUM`, `P3_LOW`). The server persists this as `ticket.requestedPriority` and initializes `itPriority` to `null`.
+* **Success Response (`201 Created`):** Returns Ticket object with `ticketNo` (`TKT-YYYY-NNNNN`), `status: "NEW"`, `requestedPriority`, `itPriority: null`, and linked attachments.
 
 ### 3.3 Requester Ticket Detail
 * **Method:** `GET`

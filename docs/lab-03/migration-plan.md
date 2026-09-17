@@ -125,21 +125,24 @@ Sprint 3 requires 8 distinct statuses: `'NEW', 'OPEN', 'IN_PROGRESS', 'WAITING_F
   2. `migration_2`: `UPDATE "Ticket" SET "status" = 'CANCELLED' WHERE "status"::text = 'REJECTED';` $\rightarrow$ Committed.
   *(The Recreate-and-Cast pattern is recommended as it runs atomically in a single Prisma migration file).*
 
-### 3.2 Ticket Model Extensions
+### 3.2 Ticket Model Extensions & Priority Separation
 ```sql
--- 1. Operational IT Priority
+-- 1. Priority Separation: Rename existing legacy "priority" column to "requestedPriority"
+ALTER TABLE "Ticket" RENAME COLUMN "priority" TO "requestedPriority";
+
+-- 2. Operational IT Priority: Add new "itPriority" column (nullable)
 ALTER TABLE "Ticket" ADD COLUMN "itPriority" "Priority" NULL;
 
--- 2. Resolution Indicator Flag
+-- 3. Resolution Indicator Flag
 ALTER TABLE "Ticket" ADD COLUMN "resolutionIndicated" BOOLEAN NOT NULL DEFAULT false;
 
--- 3. Operational Owner
+-- 4. Operational Owner
 ALTER TABLE "Ticket" ADD COLUMN "ownerId" INTEGER NULL;
 ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_ownerId_fkey" 
   FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE SET NULL;
 CREATE INDEX "Ticket_ownerId_idx" ON "Ticket"("ownerId");
 
--- 4. Mandatory State Transition Reason Columns
+-- 5. Mandatory State Transition Reason Columns
 ALTER TABLE "Ticket" ADD COLUMN "resolutionSummary" VARCHAR(2000) NULL;
 ALTER TABLE "Ticket" ADD COLUMN "cancellationReason" VARCHAR(1000) NULL;
 ALTER TABLE "Ticket" ADD COLUMN "reopenReason" VARCHAR(1000) NULL;
@@ -300,13 +303,14 @@ DROP INDEX IF EXISTS "Ticket_ownerId_idx";
 -- Step 2: Drop Discussion Comments Table and Indexes
 DROP TABLE IF EXISTS "Comment";
 
--- Step 3: Remove Added Columns from Ticket Table
+-- Step 3: Remove Added Columns and Revert Priority Separation
 ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "itPriority";
 ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "resolutionIndicated";
 ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "ownerId";
 ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "resolutionSummary";
 ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "cancellationReason";
 ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "reopenReason";
+ALTER TABLE "Ticket" RENAME COLUMN "requestedPriority" TO "priority";
 
 -- Step 4: Revert Status Enum from 8 values to original 5 values (mapping CANCELLED back to REJECTED)
 CREATE TYPE "TicketStatus_legacy" AS ENUM ('NEW', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'REJECTED');

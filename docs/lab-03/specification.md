@@ -49,7 +49,7 @@ The system must ensure that:
    * Complete Lab 3 specification documents (`specification.md`, `api-spec.md`, `ui-spec.md`, `tests.md`, `migration-plan.md`, `evidence.md`, `reviewer.md`).
 2. **Database and Migration (Issue 11):**
    * Evolve `RequesterUser` to unified `User` model with roles (`REQUESTER`, `IT_STAFF`, `ADMINISTRATOR`) and password hashes.
-   * Add `requestedPriority`, `itPriority`, `ownerId`, `resolutionIndicated`, and `resolutionSummary` to `Ticket`.
+   * Priority Separation: Rename legacy `priority` column to `requestedPriority`, and add operational `itPriority` column. Add `ownerId`, `resolutionIndicated`, and `resolutionSummary` to `Ticket`.
    * Expand `TicketStatus` enum (`NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`), mapping legacy `REJECTED` tickets to `CANCELLED`.
     * Add `Comment` model (mapped to database column `isInternal: Boolean`, where `isInternal = false` represents PUBLIC visibility and `isInternal = true` represents INTERNAL visibility) and `TicketActivity` audit history.
    * Non-destructive migration preserving existing 5 users, 16 tickets, and 7 attachments.
@@ -185,7 +185,7 @@ To guarantee absolute consistency across all application layers without altering
 | **BR-05** | **Requester Resolution Limitation** | A Requester may indicate that a problem appears resolved (`resolutionIndicated = true`), but cannot formally set the ticket to `RESOLVED` or `CLOSED`. Formal resolution is reserved for IT Staff and Administrator. | Server Controller & State Machine |
 | **BR-06** | **Single Role Assignment** | Every user account has exactly one assigned role: `REQUESTER`, `IT_STAFF`, or `ADMINISTRATOR`. Multiple roles per user are prohibited. | Server Schema & Validation |
 | **BR-07** | **Ticket Ownership Eligibility** | A Ticket may have zero or one primary Ticket Owner (`ownerId`). Only active users with role `IT_STAFF` or `ADMINISTRATOR` may be assigned as ticket owners. Inactive users cannot receive new assignments. | Server Assignment Endpoint |
-| **BR-08** | **Priority Separation** | `requestedPriority` preserves the Requester's submitted priority. `itPriority` is initialized to `requestedPriority` and can subsequently be updated only by IT Staff or Administrator. | Server Model & Update Controller |
+| **BR-08** | **Priority Separation** | `requestedPriority` preserves the Requester's submitted priority (renamed from legacy `priority` column in database). `itPriority` is initialized to `null` and can subsequently be updated only by IT Staff or Administrator. | Server Model & Update Controller |
 | **BR-09** | **Permitted Status State Machine** | Permitted statuses: `NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`. Transitioning `NEW` -> `OPEN` requires an assigned owner. Invalid transitions return `422 Unprocessable Entity`. | Server State Machine Controller |
 | **BR-10** | **Discussion Immutability & Validation** | Public Comments and Internal Notes are append-only. Editing and deletion are excluded. Content must be 1 to 2,000 characters; whitespace-only submissions are rejected (`422 Unprocessable Entity`). | Server Validation |
 | **BR-11** | **Admin Self-Deactivation Guard** | An Administrator cannot deactivate their own active account (`req.user.id !== targetUser.id`). Violations return `400 Bad Request` (`CANNOT_DEACTIVATE_SELF`). | Server Controller (`PATCH /api/admin/users/:id`) |

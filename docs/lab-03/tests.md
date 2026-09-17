@@ -41,7 +41,13 @@ TokTickIT enforces a rigorous multi-tiered automated testing pyramid ensuring st
 
 | Issue ID | Acceptance Criterion | Test Target File | Test Method / Type |
 | :--- | :--- | :--- | :--- |
-| **Issue 10** | Specification & Engineering Contract complete and consistent | `docs/lab-03/*.md` | Static Review / Audit |
+| **AC-10-01** | Required Documentation Exists (specification, api-spec, ui-spec, tests, migration-plan, evidence, reviewer, ai-use) | `docs/lab-03/*.md` | Static File Audit & Integrity Check |
+| **AC-10-02** | Functional Requirements Defined (numbered FR-01 through FR-15 clearly specified) | `docs/lab-03/specification.md` | Static Specification Audit |
+| **AC-10-03** | API Contract Defined (methods, endpoints, auth, schemas, error envelopes, status codes) | `docs/lab-03/api-spec.md` | Static API Contract Audit |
+| **AC-10-04** | UI Contract Defined (Zen Green tokens, component states, 3 viewports, 24 screenshots) | `docs/lab-03/ui-spec.md` | Static Design System Audit |
+| **AC-10-05** | Test Traceability Exists (FR-01..15 and BR-01..15 mapped to planned tests) | `docs/lab-03/tests.md` | Traceability Matrix Review |
+| **AC-10-06** | Documents Are Consistent (roles, statuses, priority separation, pagination totalItems, comment visibility) | `docs/lab-03/*.md` | Cross-Document Consistency Audit |
+| **AC-10-07** | Documentation Ready Before Feature Implementation (authoritative contract established) | `docs/lab-03/reviewer.md` | Peer Review Approval Gate |
 | **Issue 11** | Non-destructive schema migration; 5 legacy users, 16 tickets, 7 attachments preserved | `server/tests/lab-03/migration-verification.test.ts` | Supertest / Prisma DB Test |
 | **Issue 11** | Idempotent seed script; 10 users total (5 Requesters, 4 IT Staff, 1 Admin) | `server/tests/lab-03/migration-verification.test.ts` | Vitest Script Test |
 | **Issue 12** | Valid credentials return 200 OK and set HTTP-Only session cookie | `server/tests/lab-03/auth.api.test.ts` | Supertest API |
@@ -121,7 +127,7 @@ TokTickIT enforces a rigorous multi-tiered automated testing pyramid ensuring st
   - Verifies table name is `users` and sequence is `users_id_seq`.
   - Verifies `role` column defaults to `REQUESTER`.
   - Verifies `mustChangePassword` defaults to `false`.
-  - Verifies `itPriority` column defaults to `null`.
+  - Verifies legacy `priority` column is renamed to `requestedPriority`, and new `itPriority` column defaults to `null`.
   - Verifies `resolutionIndicated` column defaults to `false`.
   - Verifies legacy `REJECTED` ticket status successfully converted to `CANCELLED`.
 * **Seed Idempotency:**
