@@ -35,7 +35,9 @@ TokTickIT enforces a rigorous multi-tiered automated testing pyramid ensuring st
 
 ---
 
-## 2. Traceability Matrix: Acceptance Criteria to Planned Automated Test Files
+## 2. Comprehensive Traceability Matrices
+
+### 2.1 Acceptance Criteria to Planned Automated Tests
 
 | Issue ID | Acceptance Criterion | Test Target File | Test Method / Type |
 | :--- | :--- | :--- | :--- |
@@ -65,6 +67,46 @@ TokTickIT enforces a rigorous multi-tiered automated testing pyramid ensuring st
 | **Issue 16** | Admin User Management UI renders table, create/edit modals, safety dialogs | `client/tests/lab-03/UserManagement.test.tsx` | RTL / Vitest |
 | **Issue 17** | Complete 20-step multi-role end-to-end user journey passes in browser | `e2e/lab-03/full-journey.spec.ts` | Playwright E2E |
 | **Issue 17** | 24 responsive screenshots captured across Desktop, Tablet, and Mobile | `e2e/lab-03/capture-screenshots.spec.ts` | Playwright E2E |
+
+### 2.2 Functional Requirements (FR-01..15) to Planned Automated Tests
+
+| Requirement | Requirement Summary | Planned Test File | Target Test Scope / Method |
+| :--- | :--- | :--- | :--- |
+| **FR-01** | Secure Authentication (`/api/auth/login`, JWT, cookie) | `server/tests/lab-03/auth.api.test.ts` | Supertest: `describe('POST /api/auth/login')` |
+| **FR-02** | Account Active Verification (`isActive = true`) | `server/tests/lab-03/auth.api.test.ts` | Supertest: inactive account rejection (401) |
+| **FR-03** | Mandatory First-Login Password Change | `server/tests/lab-03/auth.api.test.ts` | Supertest: route block & password change |
+| **FR-04** | Identity Retrieval (`/api/auth/me`) & Logout | `server/tests/lab-03/auth.api.test.ts` | Supertest: identity payload & cookie clearing |
+| **FR-05** | Server-Side Role Authorization (RBAC) | `server/tests/lab-03/authorization.api.test.ts` | Supertest: 403 Forbidden role gating |
+| **FR-06** | Requester Ownership Isolation (404 anti-leakage) | `server/tests/lab-03/authorization.api.test.ts` | Supertest: 404 on unowned ticket/attachment |
+| **FR-07** | Authenticated Requester Ticket Operations | `server/tests/lab-03/authorization.api.test.ts` | Supertest: session identity ticket creation |
+| **FR-08** | Public Comments Discussion Thread (`isInternal = false`) | `server/tests/lab-03/comments-notes.api.test.ts` | Supertest: public comment validation (1-2000) |
+| **FR-09** | Problem Appears Resolved Confirmation | `server/tests/lab-03/comments-notes.api.test.ts` | Supertest: `POST /confirm-resolved` (flag set) |
+| **FR-10** | Staff Ticket Queue (search, filters, pagination) | `server/tests/lab-03/staff-queue.api.test.ts` | Supertest: pagination (default 10, max 50) |
+| **FR-11** | Ticket Claiming & Assignment (`NEW` $\rightarrow$ `OPEN`) | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Supertest: claim and reassign endpoints |
+| **FR-12** | Operational IT Priority Management | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Supertest: `PATCH /priority` (separate IT priority) |
+| **FR-13** | Status State Machine Enforcement (8 statuses) | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Supertest: transitions & required reason fields |
+| **FR-14** | Role-Restricted Internal Notes (`isInternal = true`) | `server/tests/lab-03/comments-notes.api.test.ts` | Supertest: staff access, requester 404/403 |
+| **FR-15** | Admin User Management & Safety Guardrails | `server/tests/lab-03/users-admin.api.test.ts` | Supertest: CRUD, self-deactivation & last-admin |
+
+### 2.3 Business Rules (BR-01..15) to Planned Automated Tests
+
+| Rule ID | Business Rule Name | Planned Test Target File | Verification Assertion |
+| :--- | :--- | :--- | :--- |
+| **BR-01** | Active User Authentication | `server/tests/lab-03/auth.api.test.ts` | Returns generic 401 `INVALID_CREDENTIALS` |
+| **BR-02** | First-Login Password Reset Gate | `server/tests/lab-03/auth.api.test.ts` | Returns 403 on operational routes until reset |
+| **BR-03** | Authenticated Identity Authority | `server/tests/lab-03/authorization.api.test.ts` | Ignores client `X-Requester-Id`, uses `req.user.id` |
+| **BR-04** | Public vs. Internal Note Visibility | `server/tests/lab-03/comments-notes.api.test.ts` | Internal notes absent from requester responses |
+| **BR-05** | Requester Resolution Limitation | `server/tests/lab-03/comments-notes.api.test.ts` | `confirm-resolved` does NOT set status to `RESOLVED` |
+| **BR-06** | Single Role Assignment | `server/tests/lab-03/users-admin.api.test.ts` | Schema rejects multi-role array payloads |
+| **BR-07** | Ticket Ownership Eligibility | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Only active Staff/Admin accepted as owner |
+| **BR-08** | Priority Separation | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Updating `itPriority` preserves `requestedPriority` |
+| **BR-09** | Permitted Status State Machine | `server/tests/lab-03/staff-ticket-detail.api.test.ts` | Invalid transition returns 422 with valid next list |
+| **BR-10** | Discussion Immutability & Validation | `server/tests/lab-03/comments-notes.api.test.ts` | Whitespace/empty returns 422; no edit/delete API |
+| **BR-11** | Admin Self-Deactivation Guard | `server/tests/lab-03/users-admin.api.test.ts` | Setting own `isActive: false` returns 400 |
+| **BR-12** | Last Active Admin Protection | `server/tests/lab-03/users-admin.api.test.ts` | Demoting/deactivating last admin returns 409 |
+| **BR-13** | Unique Email Enforcement | `server/tests/lab-03/users-admin.api.test.ts` | Creating duplicate email returns 409 |
+| **BR-14** | Initial Password Reset Mandate | `server/tests/lab-03/users-admin.api.test.ts` | Admin password reset sets `mustChangePassword: true` |
+| **BR-15** | Account Deactivation Over Deletion | `server/tests/lab-03/users-admin.api.test.ts` | `DELETE /api/admin/users/:id` returns 404/405 |
 
 ---
 
@@ -122,7 +164,7 @@ TokTickIT enforces a rigorous multi-tiered automated testing pyramid ensuring st
 * Confirm Resolved Duplicate Gate: Calling `POST /confirm-resolved` a second time returns 409 `ALREADY_CONFIRMED_RESOLVED`.
 
 #### 4. Staff Queue Suite (`staff-queue.api.test.ts`)
-* Returns tickets across all requesters with pagination metadata (`page`, `pageSize`, `totalCount`, `totalPages`).
+* Returns tickets across all requesters with pagination metadata (`page`, `pageSize`, `totalItems`, `totalPages`).
 * Text search matches `ticketNo` or `summary` (case-insensitive).
 * Taxonomy filtering matches `category` and `relatedSystem`.
 * Priority filtering matches `requestedPriority` and `itPriority`.

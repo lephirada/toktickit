@@ -188,7 +188,7 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
 * **Desktop Table View ($\ge 992$px):**
   * Columns: Ticket No, Created Date, Summary, Category, Req Priority, IT Priority, Status, Assigned Owner, Indicators.
   * When `resolutionIndicated = true`, displays `[Requester Confirmed Resolved]` badge.
-  * Pagination footer: Current page, page size selector (10, 25, 50), total count, Prev / Next buttons.
+  * Pagination footer: Current page, page size selector (10, 25, 50), totalItems, Prev / Next buttons.
 * **Mobile Card View ($< 768$px):**
   * Responsive transformation into cards showing Ticket No, Status badge, IT Priority badge, Summary, Owner, and Confirm-Resolved indicator.
 * **States:**
@@ -241,10 +241,14 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
 | **Header Navigation** | Fixed top bar with text links & user dropdown | Compact top bar with role badge & user dropdown | Top bar with hamburger icon opening off-canvas drawer |
 | **Login / Change Password**| Centered card ($420$px / $480$px) | Centered card ($440$px) | Full-width container with responsive padding ($16$px) |
 | **Requester Ticket Detail**| 2-column layout (Metadata left, Discussion right) | Single-column stacked layout | Single-column stacked layout, full-width action buttons |
-| **Staff Ticket Queue** | Full 9-column data table with pagination controls | Scrollable data table with sticky left column | Stacked ticket cards with badge header and touch targets |
+| **Staff Ticket Queue** | Full 9-column data table with pagination controls | Scrollable table inside container (`overflow-x: auto`) | Stacked ticket cards with badge header and touch targets |
 | **Staff Ticket Detail** | 2-column layout (Controls left, Tabs right) | Single-column stacked layout | Single-column stacked layout; tabs switch between Public & Internal |
-| **User Management** | Full 5-column table with inline toggles | Full 5-column table with horizontal scroll | Stacked user cards with edit buttons and status pills |
+| **User Management** | Full 5-column table with inline toggles | Scrollable table inside container (`overflow-x: auto`) | Stacked user cards with edit buttons and status pills |
 | **Modals & Dialogs** | Floating modal centered ($520$px max width) | Floating modal centered ($90\%$ screen width) | Bottom sheet modal ($100\%$ width, rounded top corners) |
+
+> [!IMPORTANT]
+> **Container vs. Page Scrolling Clarification:**
+> Table containers may scroll horizontally (`overflow-x: auto`) on tablet viewports when column widths exceed container space. However, the root document and viewport (`html`, `body`, and page layout wrappers) must strictly maintain **zero horizontal page overflow** (`overflow-x: hidden`), guaranteeing no horizontal page-level body scrollbars exist.
 
 ---
 
@@ -252,7 +256,7 @@ TokTickIT adopts the **Zen Green Design System**, engineered for visual clarity,
 
 - [ ] **WCAG 2.1 AA Compliance:** Minimum 4.5:1 contrast ratio across all text and background pairings.
 - [ ] **Focus Rings:** Visible focus ring (`2px solid var(--zg-secondary)`) on all interactive inputs, buttons, and dropdowns.
-- [ ] **Zero Mobile Overflow:** All mobile screens verified at $375 \times 812$px with strictly zero horizontal scrolling (`overflow-x: hidden`).
+- [ ] **Zero Page-Level Overflow:** All viewports verified (Desktop $1280 \times 900$, Tablet $768 \times 1024$, Mobile $375 \times 812$) with strictly zero page-level horizontal overflow (`overflow-x: hidden`). Internal horizontal scrolling is confined strictly within responsive table wrappers (`.table-scroll-container { overflow-x: auto; }`).
 - [ ] **Read-Only vs Editable Distinction:** Editable fields have white backgrounds with `#D0D5DD` borders; read-only wells have `#FAFCFB` backgrounds with subtle borders.
 - [ ] **Information Leakage Prevention:**
   - Internal Notes tab and badges are never rendered in requester views.

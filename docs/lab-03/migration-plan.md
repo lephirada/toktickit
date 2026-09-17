@@ -83,17 +83,47 @@ To ensure 100% data preservation and avoid dropping existing records, the `"Requ
 The Lab 2 `TicketStatus` enum contained: `'NEW', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'REJECTED'`.  
 Sprint 3 requires 8 distinct statuses: `'NEW', 'OPEN', 'IN_PROGRESS', 'WAITING_FOR_REQUESTER', 'RESOLVED', 'CLOSED', 'REOPENED', 'CANCELLED'`.
 
-* **Safe Enum Conversion Steps:**
-  ```sql
-  -- 1. Add new enum values to PostgreSQL enum
-  ALTER TYPE "TicketStatus" ADD VALUE IF NOT EXISTS 'OPEN';
-  ALTER TYPE "TicketStatus" ADD VALUE IF NOT EXISTS 'WAITING_FOR_REQUESTER';
-  ALTER TYPE "TicketStatus" ADD VALUE IF NOT EXISTS 'REOPENED';
-  ALTER TYPE "TicketStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
+> [!WARNING]
+> **PostgreSQL Transaction Safety Notice (55P04 Trap):**
+> In PostgreSQL, executing `ALTER TYPE "TicketStatus" ADD VALUE 'CANCELLED'` cannot be combined with an immediate `UPDATE "Ticket" SET "status" = 'CANCELLED'` inside the same migration transaction block. PostgreSQL will abort with:
+> `ERROR: 55P04: unsafe use of new value "CANCELLED" of enum type "TicketStatus" in transaction` (hint: new enum values must be committed before they can be used).
+> To ensure 100% executable and transaction-safe migration in Prisma, we enforce the **Recreate-and-Cast Pattern**:
 
-  -- 2. Convert any existing REJECTED tickets to CANCELLED
-  UPDATE "Ticket" SET "status" = 'CANCELLED' WHERE "status"::text = 'REJECTED';
+* **Executable Migration SQL Sequence (Single-Transaction Safe):**
+  ```sql
+  -- Step 1: Create new status enum containing all 8 target values
+  CREATE TYPE "TicketStatus_new" AS ENUM (
+    'NEW', 'OPEN', 'IN_PROGRESS', 'WAITING_FOR_REQUESTER', 
+    'RESOLVED', 'CLOSED', 'REOPENED', 'CANCELLED'
+  );
+
+  -- Step 2: Drop default constraint temporarily on Ticket.status
+  ALTER TABLE "Ticket" ALTER COLUMN "status" DROP DEFAULT;
+
+  -- Step 3: Cast existing data to the new enum type while mapping legacy REJECTED -> CANCELLED
+  ALTER TABLE "Ticket" ALTER COLUMN "status" TYPE "TicketStatus_new" 
+  USING (
+    CASE "status"::text
+      WHEN 'REJECTED' THEN 'CANCELLED'::"TicketStatus_new"
+      ELSE "status"::text::"TicketStatus_new"
+    END
+  );
+
+  -- Step 4: Drop old 5-value enum type
+  DROP TYPE "TicketStatus";
+
+  -- Step 5: Rename new enum type to canonical name
+  ALTER TYPE "TicketStatus_new" RENAME TO "TicketStatus";
+
+  -- Step 6: Restore default constraint on Ticket.status
+  ALTER TABLE "Ticket" ALTER COLUMN "status" SET DEFAULT 'NEW';
   ```
+
+* **Alternative Two-Step Migration Sequence (Runner Commit Boundary):**
+  If using native `ALTER TYPE ... ADD VALUE`, the addition of values must be isolated in a dedicated migration file and committed prior to running the update query:
+  1. `migration_1`: `ALTER TYPE "TicketStatus" ADD VALUE 'CANCELLED';` $\rightarrow$ Committed.
+  2. `migration_2`: `UPDATE "Ticket" SET "status" = 'CANCELLED' WHERE "status"::text = 'REJECTED';` $\rightarrow$ Committed.
+  *(The Recreate-and-Cast pattern is recommended as it runs atomically in a single Prisma migration file).*
 
 ### 3.2 Ticket Model Extensions
 ```sql
@@ -118,6 +148,12 @@ ALTER TABLE "Ticket" ADD COLUMN "reopenReason" VARCHAR(1000) NULL;
 ---
 
 ## 4. Discussion & Discussion Models
+
+> [!NOTE]
+> **Data Model & Visibility Mapping Contract:**
+> The database schema enforces a unified `"Comment"` table containing the `"isInternal" BOOLEAN NOT NULL DEFAULT false` column.
+> - **Public Comments:** API visibility `PUBLIC` maps to `"isInternal" = false`.
+> - **Internal Notes:** API visibility `INTERNAL` maps to `"isInternal" = true`.
 
 ### 4.1 New `Comment` Table (Public Comments & Internal Notes)
 ```sql
@@ -217,9 +253,9 @@ This guarantees that when automated test suites run the seed or re-seed the envi
 To guarantee zero regression and schema correctness before starting Issue 12, the automated test suite `server/tests/lab-03/migration-verification.test.ts` executes the following checks:
 
 ```typescript
-// 1. Verify User Count & Preserved Primary Keys
+// 1. Verify Exactly 10 Users & Preserved Primary Keys
 const users = await prisma.user.findMany({ orderBy: { id: "asc" } });
-expect(users.length).toBeGreaterThanOrEqual(10);
+expect(users.length).toBe(10); // Exactly 10 users populated by seed
 expect(users[0].id).toBe(1);
 expect(users[0].email).toBe("sarah.connor@toktickit.com");
 expect(users[2].id).toBe(3);
@@ -227,41 +263,112 @@ expect(users[2].email).toBe("jennifer.anderson@toktickit.com");
 
 // 2. Verify Ticket Count & Requester Association
 const tickets = await prisma.ticket.findMany({ where: { requesterId: 3 } });
-expect(tickets.length).toBe(16);
+expect(tickets.length).toBe(16); // Exactly 16 baseline tickets for Jennifer
 expect(tickets[0].ticketNo).toBe("TKT-2026-00001");
 
-// 3. Verify Attachments
-const attachments = await prisma.attachment.findMany();
-expect(attachments.length).toBeGreaterThanOrEqual(7);
+// 3. Verify Baseline Attachments Preservation
+const baselineAttachments = await prisma.attachment.findMany({
+  where: { id: { in: [1, 2, 3, 4, 5, 6, 7] } },
+});
+expect(baselineAttachments.length).toBe(7); // Exactly 7 pre-migration baseline attachments preserved
+expect(baselineAttachments.every((a) => a.uploadedById > 0)).toBe(true);
 
-// 4. Verify Enum Values
-const invalidStatusCount = await prisma.$queryRaw`
+// 4. Verify Status Enum Values
+const invalidStatusCount = await prisma.$queryRaw<{ count: bigint }[]>`
   SELECT COUNT(*) FROM "Ticket" WHERE "status"::text = 'REJECTED'
 `;
 expect(Number(invalidStatusCount[0].count)).toBe(0);
+
+const cancelledStatusCount = await prisma.$queryRaw<{ count: bigint }[]>`
+  SELECT COUNT(*) FROM "Ticket" WHERE "status"::text = 'CANCELLED'
+`;
+expect(Number(cancelledStatusCount[0].count)).toBeGreaterThanOrEqual(0);
 ```
 
 ---
 
 ## 8. Rollback & Disaster Recovery Strategy
 
-In the event of an unexpected migration failure during deployment:
-1. **Pre-Migration Snapshot:** A full PostgreSQL database dump (`pg_dump toktickit_db > backup_pre_lab3.sql`) is executed immediately prior to running `prisma migrate deploy`.
-2. **Reverse Migration Script:** If rollback is required before production data is committed:
-   ```sql
-   -- Revert Comment table
-   DROP TABLE IF EXISTS "Comment";
-   -- Remove Ticket extensions
-   ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "itPriority";
-   ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "resolutionIndicated";
-   ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "ownerId";
-   ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "resolutionSummary";
-   ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "cancellationReason";
-   ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "reopenReason";
-   -- Revert User table to RequesterUser
-   ALTER TABLE "User" DROP COLUMN IF EXISTS "role";
-   ALTER TABLE "User" DROP COLUMN IF EXISTS "passwordHash";
-   ALTER TABLE "User" DROP COLUMN IF EXISTS "mustChangePassword";
-   ALTER TABLE "User" RENAME TO "RequesterUser";
-   ALTER SEQUENCE "User_id_seq" RENAME TO "RequesterUser_id_seq";
-   ```
+### 8.1 Symmetrical Reverse Migration Script
+If a rollback is required before production transactions begin, every DDL mutation introduced in the forward migration must be cleanly and symmetrically reversed:
+
+```sql
+-- Step 1: Drop Ticket Owner Foreign Key and Index
+ALTER TABLE "Ticket" DROP CONSTRAINT IF EXISTS "Ticket_ownerId_fkey";
+DROP INDEX IF EXISTS "Ticket_ownerId_idx";
+
+-- Step 2: Drop Discussion Comments Table and Indexes
+DROP TABLE IF EXISTS "Comment";
+
+-- Step 3: Remove Added Columns from Ticket Table
+ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "itPriority";
+ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "resolutionIndicated";
+ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "ownerId";
+ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "resolutionSummary";
+ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "cancellationReason";
+ALTER TABLE "Ticket" DROP COLUMN IF EXISTS "reopenReason";
+
+-- Step 4: Revert Status Enum from 8 values to original 5 values (mapping CANCELLED back to REJECTED)
+CREATE TYPE "TicketStatus_legacy" AS ENUM ('NEW', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'REJECTED');
+ALTER TABLE "Ticket" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "Ticket" ALTER COLUMN "status" TYPE "TicketStatus_legacy" 
+USING (
+  CASE "status"::text 
+    WHEN 'CANCELLED' THEN 'REJECTED'::"TicketStatus_legacy" 
+    WHEN 'OPEN' THEN 'NEW'::"TicketStatus_legacy"
+    WHEN 'WAITING_FOR_REQUESTER' THEN 'IN_PROGRESS'::"TicketStatus_legacy"
+    WHEN 'REOPENED' THEN 'IN_PROGRESS'::"TicketStatus_legacy"
+    ELSE "status"::text::"TicketStatus_legacy" 
+  END
+);
+DROP TYPE "TicketStatus";
+ALTER TYPE "TicketStatus_legacy" RENAME TO "TicketStatus";
+ALTER TABLE "Ticket" ALTER COLUMN "status" SET DEFAULT 'NEW';
+
+-- Step 5: Revert Foreign Keys on Ticket, Attachment, and Activity back to RequesterUser
+ALTER TABLE "Ticket" DROP CONSTRAINT IF EXISTS "Ticket_requesterId_fkey";
+ALTER TABLE "Attachment" DROP CONSTRAINT IF EXISTS "Attachment_uploadedById_fkey";
+ALTER TABLE "TicketActivity" DROP CONSTRAINT IF EXISTS "TicketActivity_actorId_fkey";
+
+-- Step 6: Revert User Table back to RequesterUser
+ALTER TABLE "User" DROP COLUMN IF EXISTS "role";
+ALTER TABLE "User" DROP COLUMN IF EXISTS "passwordHash";
+ALTER TABLE "User" DROP COLUMN IF EXISTS "mustChangePassword";
+DROP TYPE IF EXISTS "UserRole";
+
+-- Revert department to NOT NULL
+UPDATE "User" SET "department" = 'General' WHERE "department" IS NULL;
+ALTER TABLE "User" ALTER COLUMN "department" SET NOT NULL;
+
+-- Rename constraints and indexes back to RequesterUser
+ALTER TABLE "User" RENAME CONSTRAINT "User_pkey" TO "RequesterUser_pkey";
+ALTER INDEX "User_email_key" RENAME TO "RequesterUser_email_key";
+ALTER INDEX "User_isActive_idx" RENAME TO "RequesterUser_isActive_idx";
+
+-- Rename table and sequence back
+ALTER TABLE "User" RENAME TO "RequesterUser";
+ALTER SEQUENCE "User_id_seq" RENAME TO "RequesterUser_id_seq";
+
+-- Step 7: Restore Foreign Keys pointing to RequesterUser
+ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_requesterId_fkey" 
+  FOREIGN KEY ("requesterId") REFERENCES "RequesterUser"("id") ON DELETE RESTRICT;
+
+ALTER TABLE "Attachment" ADD CONSTRAINT "Attachment_uploadedById_fkey" 
+  FOREIGN KEY ("uploadedById") REFERENCES "RequesterUser"("id") ON DELETE RESTRICT;
+
+ALTER TABLE "TicketActivity" ADD CONSTRAINT "TicketActivity_actorId_fkey" 
+  FOREIGN KEY ("actorId") REFERENCES "RequesterUser"("id") ON DELETE SET NULL;
+```
+
+### 8.2 Database Snapshot & Disaster Recovery Protocol
+* **Pre-Migration Snapshot Command:**
+  Immediately prior to applying migrations on any environment, take an authoritative binary snapshot:
+  ```bash
+  pg_dump -Fc toktickit_db > backup_pre_lab3.dump
+  ```
+* **Irreversible Data Transformation Fallback:**
+  If irreversible data mutations or foreign key violations occur during rollout, SQL reversal is considered secondary to snapshot restoration:
+  ```bash
+  pg_restore --clean --if-exists -d toktickit_db backup_pre_lab3.dump
+  ```
+  This restores the exact pre-migration baseline (5 users, 16 tickets, 7 attachments) in under 5 seconds.

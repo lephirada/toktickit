@@ -297,6 +297,12 @@ For input validation failures, `details.fieldErrors` maps specific invalid input
 
 ## 4. Discussion Endpoints (Comments & Notes)
 
+> [!NOTE]
+> **Data Model & Visibility Mapping Contract:**
+> At the database persistence layer, both Public Comments and Internal Notes are stored in the unified `"Comment"` table.
+> - **Public Comments** (`/api/tickets/:id/comments`) correspond to `visibility: PUBLIC` and map to database column `"isInternal" = false`.
+> - **Internal Notes** (`/api/staff/tickets/:id/notes`) correspond to `visibility: INTERNAL` and map to database column `"isInternal" = true`.
+
 ### 4.1 List Public Comments
 * **Method:** `GET`
 * **Route:** `/api/tickets/:id/comments`

@@ -9,7 +9,7 @@
 
 | PR                      | Branch                                    | Reviewer verdict   |
 | :---------------------- | :---------------------------------------- | :----------------- |
-| `[PR #... Placeholder]` | `feature/10-lab3-documentation`           | `[Pending Review]` |
+| `[PR #32]`              | `feature/10-lab3-documentation`           | `[Pending Review]` |
 | `[PR #... Placeholder]` | `feature/11-database-migration`           | `[Pending]`        |
 | `[PR #... Placeholder]` | `feature/12-authentication-authorization` | `[Pending]`        |
 | `[PR #... Placeholder]` | `feature/13-client-auth-shell`            | `[Pending]`        |

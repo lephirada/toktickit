@@ -51,7 +51,7 @@ The system must ensure that:
    * Evolve `RequesterUser` to unified `User` model with roles (`REQUESTER`, `IT_STAFF`, `ADMINISTRATOR`) and password hashes.
    * Add `requestedPriority`, `itPriority`, `ownerId`, `resolutionIndicated`, and `resolutionSummary` to `Ticket`.
    * Expand `TicketStatus` enum (`NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`), mapping legacy `REJECTED` tickets to `CANCELLED`.
-   * Add `Comment` model (`visibility: PUBLIC | INTERNAL`) and `TicketActivity` audit history.
+    * Add `Comment` model (mapped to database column `isInternal: Boolean`, where `isInternal = false` represents PUBLIC visibility and `isInternal = true` represents INTERNAL visibility) and `TicketActivity` audit history.
    * Non-destructive migration preserving existing 5 users, 16 tickets, and 7 attachments.
    * Idempotent seed populating 10 users (5 Requesters, 4 IT Staff, 1 Administrator).
 3. **Authentication and Authorization (Issue 12):**
@@ -137,26 +137,40 @@ To ensure strict sequential delivery and avoid circular dependencies or boundary
 
 ---
 
-## 5. Numbered Functional Requirements
+## 5. Numbered Functional Requirements (FR-01..15)
 
 - **FR-01 (Secure Authentication):** The system shall authenticate users via `POST /api/auth/login` using email address and password, issuing an HTTP-Only, SameSite session cookie (`toktickit_session`) containing a signed HS256 JWT upon credential validation.
 - **FR-02 (Account Active Verification):** The system shall verify that an account is active (`isActive = true`) during login and on every protected API request. Inactive accounts receive `401 Unauthorized` (`INVALID_CREDENTIALS` or `ACCOUNT_DEACTIVATED`).
 - **FR-03 (Mandatory First-Login Password Change):** Users flagged with `mustChangePassword = true` shall be blocked from all operational endpoints (`403 Forbidden`) until submitting a compliant new password via `POST /api/auth/change-password`.
-- **FR-04 (Identity Retrieval):** The system shall expose `GET /api/auth/me` to return the authenticated user's ID, email, full name, role, and `mustChangePassword` state (accessible even during mandatory password change).
-- **FR-05 (Authenticated Logout):** The system shall provide `POST /api/auth/logout` which clears the session cookie and terminates authenticated access.
-- **FR-06 (Server-Side Role Authorization):** All protected endpoints shall verify that the caller possesses the required role (`REQUESTER`, `IT_STAFF`, or `ADMINISTRATOR`). Unauthorized roles receive `403 Forbidden`.
-- **FR-07 (Requester Ownership Isolation):** Requesters shall access only tickets and attachments where `ticket.requesterId === req.user.id`. Direct access to foreign resources shall return `404 Not Found` without disclosing resource existence.
-- **FR-08 (Requester Ticket Operations):** Authenticated Requesters shall create tickets, stage attachments, query their dashboard, and inspect ticket details using authenticated session identity without client-supplied identity headers (`X-Requester-Id`).
-- **FR-09 (Public Comments Thread):** Authorized Requesters, IT Staff, and Administrators shall view and append Public Comments (`GET` / `POST /api/tickets/:id/comments`) to tickets. Comments are append-only and validate length (1–2000 chars).
-- **FR-10 (Problem Appears Resolved Confirmation):** An authenticated Requester viewing an owned ticket in `IN_PROGRESS` or `WAITING_FOR_REQUESTER` status shall be able to invoke `POST /api/tickets/:id/confirm-resolved`. This sets `resolutionIndicated = true`, auto-transitions `WAITING_FOR_REQUESTER` to `IN_PROGRESS`, posts a public comment, and logs an activity record, without setting the status to `RESOLVED`.
-- **FR-11 (Staff Ticket Queue):** The system shall provide `GET /api/staff/tickets` allowing IT Staff and Administrators to search by ticket number/summary, filter by category/priority/status/owner, sort, and paginate (default 10, max 50).
-- **FR-12 (Ticket Claiming & Reassignment):** IT Staff and Administrators shall be able to claim unassigned tickets (`NEW` -> `OPEN`) or reassign ownership (`PATCH /api/staff/tickets/:id/assign`) to any active IT Staff or Administrator.
-- **FR-13 (IT Priority Management):** IT Staff and Administrators shall be able to update `itPriority` (`PATCH /api/staff/tickets/:id/priority`) independently of the Requester's original `requestedPriority`.
-- **FR-14 (Status State Machine Enforcement):** IT Staff and Administrators shall be able to transition tickets across the 8 permitted statuses (`NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`). Mandatory summaries are enforced for `RESOLVED` (`resolutionSummary`), `CANCELLED` (`cancellationReason`), and `REOPENED` (`reopenReason`).
-- **FR-15 (Role-Restricted Internal Notes):** IT Staff and Administrators shall be able to create and view Internal Notes (`POST` / `GET /api/staff/tickets/:id/notes`). Requesters shall receive `404 Not Found` or `403 Forbidden` and never receive internal notes in any response.
-- **FR-16 (Administrator User Management):** Administrators shall be able to list users (`GET /api/admin/users`), search, filter by role, create users with initial passwords (`POST /api/admin/users`), edit user details (`PATCH /api/admin/users/:id`), toggle active/inactive status, and set new initial passwords (`POST /api/admin/users/:id/initial-password`).
-- **FR-17 (Administrator Safety Guardrails):** The administrative subsystem shall reject self-deactivation attempts (`400 Bad Request`), prevent deactivating or demoting the last active Administrator (`409 Conflict`), reject duplicate email addresses (`409 Conflict`), and prohibit user deletion.
-- **FR-18 (Responsive Presentation):** All views shall adapt smoothly across Desktop (>=992px), Tablet (768–991px), and Mobile (<768px) viewports with zero unintended page-level horizontal overflow.
+- **FR-04 (Identity Retrieval & Session Termination):** The system shall expose `GET /api/auth/me` to return authenticated identity (ID, email, name, role, `mustChangePassword`), and provide `POST /api/auth/logout` to clear session cookies and terminate authenticated access.
+- **FR-05 (Server-Side Role Authorization):** All protected endpoints shall verify that the caller possesses the required role (`REQUESTER`, `IT_STAFF`, or `ADMINISTRATOR`). Unauthorized roles receive `403 Forbidden`.
+- **FR-06 (Requester Ownership Isolation):** Requesters shall access only tickets and attachments where `ticket.requesterId === req.user.id`. Direct access to foreign resources shall return `404 Not Found` without disclosing resource existence.
+- **FR-07 (Requester Ticket Operations):** Authenticated Requesters shall create tickets, stage attachments, query their dashboard, and inspect ticket details using authenticated session identity without client-supplied identity headers (`X-Requester-Id`).
+- **FR-08 (Public Comments Discussion Thread):** Authorized Requesters, IT Staff, and Administrators shall view and append Public Comments (`GET` / `POST /api/tickets/:id/comments`). Public comments correspond to `visibility: PUBLIC` (`isInternal = false`), are append-only, and enforce character length validation (1–2,000 characters).
+- **FR-09 (Problem Appears Resolved Confirmation):** An authenticated Requester viewing an owned ticket in `IN_PROGRESS` or `WAITING_FOR_REQUESTER` status shall be able to invoke `POST /api/tickets/:id/confirm-resolved`. This sets `resolutionIndicated = true`, auto-transitions `WAITING_FOR_REQUESTER` to `IN_PROGRESS`, posts a public comment, and logs an activity record, without setting the status to `RESOLVED`.
+- **FR-10 (Staff Ticket Queue):** The system shall provide `GET /api/staff/tickets` allowing IT Staff and Administrators to search by ticket number/summary, filter by category/priority/status/owner, sort, and paginate (default 10, max 50).
+- **FR-11 (Ticket Claiming & Reassignment):** IT Staff and Administrators shall be able to claim unassigned tickets (`NEW` -> `OPEN`) or reassign ownership (`PATCH /api/staff/tickets/:id/assign`) to any active IT Staff or Administrator.
+- **FR-12 (IT Priority Management):** IT Staff and Administrators shall be able to update `itPriority` (`PATCH /api/staff/tickets/:id/priority`) independently of the Requester's original `requestedPriority`.
+- **FR-13 (Status State Machine Enforcement):** IT Staff and Administrators shall be able to transition tickets across the 8 permitted statuses (`NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`). Mandatory summaries are enforced for `RESOLVED` (`resolutionSummary`), `CANCELLED` (`cancellationReason`), and `REOPENED` (`reopenReason`).
+- **FR-14 (Role-Restricted Internal Notes):** IT Staff and Administrators shall be able to create and view Internal Notes (`POST` / `GET /api/staff/tickets/:id/notes`). Internal notes correspond to `visibility: INTERNAL` (`isInternal = true`). Requesters shall receive `404 Not Found` or `403 Forbidden` and never receive internal notes in any response.
+- **FR-15 (Administrator User Management & Safety Guardrails):** Administrators shall be able to list users (`GET /api/admin/users`), search, filter by role, create users with initial passwords (`POST /api/admin/users`), edit user details (`PATCH /api/admin/users/:id`), toggle active/inactive status, and set new initial passwords (`POST /api/admin/users/:id/initial-password`). The system shall strictly enforce administrative safety guardrails: reject self-deactivation attempts (`400 Bad Request`), prevent deactivating or demoting the last active Administrator (`409 Conflict`), reject duplicate email addresses (`409 Conflict`), and prohibit physical user deletion.
+
+### 5.1 Non-Functional & Presentation Requirements (NFR)
+
+- **NFR-01 (Responsive Presentation & Zero Horizontal Page Overflow):** All views shall adapt smoothly across Desktop ($\ge 992$px), Tablet ($768$px–$991$px), and Mobile ($< 768$px) viewports. Horizontal scrolling is strictly confined within isolated table containers (`overflow-x: auto`); the root page/document must strictly have zero horizontal page overflow.
+- **NFR-02 (Performance & Latency):** Authenticated API requests shall respond within 200ms under standard local test conditions.
+- **NFR-03 (Accessibility Compliance):** All UI elements shall meet WCAG 2.1 AA contrast requirements ($\ge 4.5:1$ for normal text).
+
+### 5.2 Discussion Model & Visibility Mapping Contract
+
+To guarantee absolute consistency across all application layers without altering API contracts:
+* **API & Domain Layer:** Discussions are exposed via distinct semantic visibility contracts:
+  * **Public Comments:** Endpoints `GET /api/tickets/:id/comments` and `POST /api/tickets/:id/comments` represent `visibility = PUBLIC`. Accessible to Requesters, IT Staff, and Administrators.
+  * **Internal Notes:** Endpoints `GET /api/staff/tickets/:id/notes` and `POST /api/staff/tickets/:id/notes` represent `visibility = INTERNAL`. Restricted strictly to IT Staff and Administrators; never exposed to Requesters.
+* **Database Persistence Layer:** Stored in the unified `"Comment"` table with column `"isInternal" BOOLEAN NOT NULL DEFAULT false`.
+* **Cross-Layer Mapping Rule:**
+  * `visibility = PUBLIC` $\iff$ `"isInternal" = false`
+  * `visibility = INTERNAL` $\iff$ `"isInternal" = true`
 
 ---
 
