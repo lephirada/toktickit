@@ -20,10 +20,10 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
 
   beforeAll(async () => {
     // 1. Retrieve Requesters
-    const sarah = await prisma.requesterUser.findFirstOrThrow({
+    const sarah = await prisma.user.findFirstOrThrow({
       where: { email: "sarah.connor@toktickit.com" },
     });
-    const john = await prisma.requesterUser.findFirstOrThrow({
+    const john = await prisma.user.findFirstOrThrow({
       where: { email: "john.doe@toktickit.com" },
     });
 
@@ -39,7 +39,7 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
         ticketNo: "TKT-2026-99042",
         summary: "Attachment Lifecycle Spec Ticket",
         description: "Testing API-09, API-08B, and API-10 specifications.",
-        priority: Priority.P2_MEDIUM,
+        requestedPriority: Priority.P2_MEDIUM,
         status: TicketStatus.NEW,
         requesterId: requester1Id,
         categoryId: category.id,

@@ -64,11 +64,11 @@ To ensure 100% data preservation and avoid dropping existing records, the `"Requ
      -- Initial hash for 'Password123!' ($2b$10$wE1...):
      ALTER TABLE "User" ADD COLUMN "passwordHash" TEXT NOT NULL DEFAULT '$2b$10$epR.zIe6lO2vE9tK4x8GkOCsM4.W1YI2fT1J2V9q8J5B9X9b1w7y2';
      ```
-   * Add `mustChangePassword` boolean:
+   * Add `mustChangePassword` boolean (defaults to `true` for all new users; legacy users updated to `false` except Sarah Connor):
      ```sql
-     ALTER TABLE "User" ADD COLUMN "mustChangePassword" BOOLEAN NOT NULL DEFAULT false;
-     -- Sarah Connor set to true to test forced change-password flow:
-     UPDATE "User" SET "mustChangePassword" = true WHERE "email" = 'sarah.connor@toktickit.com';
+     ALTER TABLE "User" ADD COLUMN "mustChangePassword" BOOLEAN NOT NULL DEFAULT true;
+     -- Preserve legacy users who don't need initial password change as false, while keeping Sarah Connor as true:
+     UPDATE "User" SET "mustChangePassword" = false WHERE "email" != 'sarah.connor@toktickit.com';
      ```
    * Alter `department` to be optional:
      ```sql
@@ -211,18 +211,24 @@ All foreign keys previously pointing to `"RequesterUser"` must be verified and r
 ### 6.1 Total User Inventory (10 Users)
 Post-migration, the database seed must contain exactly 10 distinct users:
 
-| ID | Full Name | Email Address | Role | Department | Active | Initial Password | `mustChangePassword` |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | Sarah Connor | `sarah.connor@toktickit.com` | `REQUESTER` | Engineering | Yes | `Password123!` | **`true`** |
-| 2 | John Doe | `john.doe@toktickit.com` | `REQUESTER` | Finance | Yes | `Password123!` | `false` |
-| 3 | Jennifer Anderson | `jennifer.anderson@toktickit.com` | `REQUESTER` | Engineering | Yes | `Password123!` | `false` |
-| 4 | Michael Brown | `michael.brown@toktickit.com` | `REQUESTER` | Marketing | Yes | `Password123!` | `false` |
-| 5 | Kyle Reese | `kyle.reese@toktickit.com` | `REQUESTER` | Operations | **No** | `Password123!` | `false` |
-| 6 | David Lee | `david.lee@toktickit.com` | `IT_STAFF` | IT Support | Yes | `Password123!` | `false` |
-| 7 | Alex Morgan | `alex.morgan@toktickit.com` | `IT_STAFF` | Infrastructure | Yes | `Password123!` | `false` |
-| 8 | Chris Taylor | `chris.taylor@toktickit.com` | `IT_STAFF` | IT Support | Yes | `Password123!` | `false` |
-| 9 | Pat Riley | `pat.riley@toktickit.com` | `IT_STAFF` | Helpdesk | Yes | `Password123!` | `false` |
-| 10 | System Admin | `admin@toktickit.com` | `ADMINISTRATOR` | IT Administration | Yes | `Admin123!` | `false` |
+| ID | Full Name | Email Address | Role | Department | Active | Initial Password | `mustChangePassword` | Source of Truth / Test Purpose |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | Sarah Connor | `sarah.connor@toktickit.com` | `REQUESTER` | Engineering | Yes | `Password123!` | **`true`** | **FR-03** & E2E Step 6 (Requester forced password change flow) |
+| 2 | John Doe | `john.doe@toktickit.com` | `REQUESTER` | Finance | Yes | `Password123!` | `false` | Baseline preserved Requester |
+| 3 | Jennifer Anderson | `jennifer.anderson@toktickit.com` | `REQUESTER` | Engineering | Yes | `Password123!` | `false` | Preserved Requester owning 16 tickets |
+| 4 | Michael Brown | `michael.brown@toktickit.com` | `REQUESTER` | Marketing | Yes | `Password123!` | `false` | Baseline preserved Requester |
+| 5 | Kyle Reese | `kyle.reese@toktickit.com` | `REQUESTER` | Operations | **No** | `Password123!` | `false` | Preserved inactive Requester (login rejection) |
+| 6 | David Lee | `david.lee@toktickit.com` | `IT_STAFF` | IT Support | Yes | `Password123!` | `false` | Active IT Staff (ticket claim/assignment) |
+| 7 | Alex Morgan | `alex.morgan@toktickit.com` | `IT_STAFF` | Infrastructure | Yes | `Password123!` | `false` | Active IT Staff |
+| 8 | Chris Taylor | `chris.taylor@toktickit.com` | `IT_STAFF` | IT Support | Yes | `Password123!` | `false` | Active IT Staff |
+| 9 | Kevin Patel | `kevin.patel@toktickit.com` | `IT_STAFF` | Helpdesk | **No** | `Password123!` | `false` | Inactive IT Staff (**AC-15-05** / **AC-16-08** assignment guardrail) |
+| 10 | System Admin | `admin@toktickit.com` | `ADMINISTRATOR` | IT Administration | Yes | `Admin123!` | **`true`** | Peer Reviewer Note (PR #43) & **FR-03** (Admin forced change) |
+
+> [!NOTE]
+> **Seed vs Migration Test Responsibilities:**
+> - `server/prisma/seed.ts` is strictly responsible for seeding 4 Categories, 6 Related Systems, 10 Users, and Jennifer Anderson's 16 development tickets.
+> - Baseline attachments (7 files) are managed and asserted as controlled test fixtures within `server/tests/lab-03/migration.test.ts` to verify zero-data-loss table evolution, and are not seeded during normal application bootstrap.
+> - The `priority` field is maintained on ticket API payloads as a legacy read-only compatibility alias reflecting `requestedPriority`.
 
 ### 6.2 Idempotency Rule: Password & Flag Protection
 In `server/prisma/seed.ts`, all `prisma.user.upsert` queries MUST NOT overwrite existing credentials:

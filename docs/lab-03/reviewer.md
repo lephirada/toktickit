@@ -7,16 +7,16 @@
 
 ## Pull Requests I authored (reviewed by my partner)
 
-| PR                      | Branch                                    | Reviewer verdict |
-| :---------------------- | :---------------------------------------- | :--------------- |
-| `[PR #32]`              | `feature/10-lab3-documentation`           | `[Approved]`     |
-| `[PR #... Placeholder]` | `feature/11-database-migration`           | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/12-authentication-authorization` | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/13-client-auth-shell`            | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/14-staff-queue`                  | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/15-staff-ticket-operations`      | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/16-user-management`              | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Pending]`      |
+| PR                      | Branch                                    | Reviewer verdict                |
+| :---------------------- | :---------------------------------------- | :------------------------------ |
+| `[PR #32]`              | `feature/10-lab3-documentation`           | `[Approved]`                    |
+| `[PR #33]`              | `feature/11-database-migration`           | `[Request Changes -> Approved]` |
+| `[PR #... Placeholder]` | `feature/12-authentication-authorization` | `[Pending]`                     |
+| `[PR #... Placeholder]` | `feature/13-client-auth-shell`            | `[Pending]`                     |
+| `[PR #... Placeholder]` | `feature/14-staff-queue`                  | `[Pending]`                     |
+| `[PR #... Placeholder]` | `feature/15-staff-ticket-operations`      | `[Pending]`                     |
+| `[PR #... Placeholder]` | `feature/16-user-management`              | `[Pending]`                     |
+| `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Pending]`                     |
 
 ---
 
@@ -37,10 +37,29 @@
 - **Branch:** `feature/11-database-migration`
 - **Reviewer comment I received:**
 
-  > `[Placeholder: Partner review comments for Issue 11 PR]`
+  > Request Changes
+  > I found two issues that should be fixed before approval:
+  >
+  > 1. mustChangePassword is set to false by default in both schema.prisma and the migration, but the acceptance criteria require the default to be true.
+  > 2. migration.test.ts tests a locally duplicated runSeed() implementation instead of executing the actual server/prisma/seed.ts. Therefore, it does not fully verify the real seed script's idempotency and password-state preservation required by AC-11-05 and AC-11-08.
+  >    Please fix these issues and update the migration tests accordingly.
 
 - **How I responded:**
-  > `[Placeholder: Author response to partner feedback]`
+
+  > Thank you for the feedback Ka. I have reviewed and addressed both concerns. Please check the PR again.
+
+- **Reviewer comment I received:**
+
+  > Reviewed the latest changes against the Lab 03 acceptance criteria.
+  > The previous issues have been addressed:
+  >
+  > - mustChangePassword now defaults to true in both the Prisma schema and migration.
+  > - migration.test.ts now executes the actual server/prisma/seed.ts and verifies seed idempotency and credential preservation.
+  > - The migration, schema changes, seed logic, and verification tests are consistent with the requirements. CI is also passing.
+  > - No blocking issues found.
+
+- **How I responded:**
+  > Thank you for the review and approval Ka, I have updated reviewer.md of docs/lab-03. You can merging this PR into lab2-staging now.
 
 ---
 
@@ -187,10 +206,11 @@
 
 - **My comment:**
 
-  > `[Placeholder: My review comment for partner's Issue 12 PR]`
+  > Reviewed the latest updates against the acceptance criteria. The mock requester selector has been removed, authentication state and route guards are implemented, mandatory password change is handled, and role-based navigation and logout are working as required.
+  > Approved.
 
 - **Partner's response:**
-  > `[Placeholder: Partner's response]`
+  > Thank you so much @lephirada for reviewing and approving PR #44! All acceptance criteria and tests have been confirmed. You can go ahead and merge this PR into lab3-staging whenever you're ready.
 
 ---
 

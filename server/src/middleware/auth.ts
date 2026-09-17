@@ -46,7 +46,7 @@ export async function requireRequesterAuth(
   }
 
   try {
-    const requester = await getPrisma().requesterUser.findUnique({
+    const requester = await getPrisma().user.findUnique({
       where: { id: requesterId },
     });
 
@@ -63,7 +63,13 @@ export async function requireRequesterAuth(
     }
 
     req.requesterId = requester.id;
-    req.requester = requester;
+    req.requester = {
+      id: requester.id,
+      email: requester.email,
+      fullName: requester.fullName,
+      department: requester.department ?? "",
+      isActive: requester.isActive,
+    };
     next();
   } catch (error) {
     res

@@ -33,13 +33,13 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
 
   beforeAll(async () => {
     // 1. Retrieve seeded requesters
-    const sarah = await prisma.requesterUser.findFirstOrThrow({
+    const sarah = await prisma.user.findFirstOrThrow({
       where: { email: "sarah.connor@toktickit.com" },
     });
-    const john = await prisma.requesterUser.findFirstOrThrow({
+    const john = await prisma.user.findFirstOrThrow({
       where: { email: "john.doe@toktickit.com" },
     });
-    const kyle = await prisma.requesterUser.findFirstOrThrow({
+    const kyle = await prisma.user.findFirstOrThrow({
       where: { email: "kyle.reese@toktickit.com" },
     });
 
@@ -69,7 +69,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
         ticketNo: "TKT-2026-90001",
         summary: "MacBook Pro screen flickering issue",
         description: "The built-in Liquid Retina display flickers violently when launching heavy IDE workloads.",
-        priority: Priority.P1_HIGH,
+        requestedPriority: Priority.P1_HIGH,
         status: TicketStatus.NEW,
         requesterId: requesterAId,
         categoryId,
@@ -84,7 +84,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
         ticketNo: "TKT-2026-90002",
         summary: "Requester B confidential ticket",
         description: "Confidential hardware diagnostic notes owned strictly by John Doe.",
-        priority: Priority.P2_MEDIUM,
+        requestedPriority: Priority.P2_MEDIUM,
         status: TicketStatus.NEW,
         requesterId: requesterBId,
         categoryId,
