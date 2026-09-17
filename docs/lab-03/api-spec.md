@@ -254,6 +254,7 @@ For input validation failures, `details.fieldErrors` maps specific invalid input
   - `categoryId`: Mandatory valid Category ID.
   - `priority` (or `requestedPriority`): Valid `Priority` enum (`P0_URGENT`, `P1_HIGH`, `P2_MEDIUM`, `P3_LOW`). The server persists this as `ticket.requestedPriority` and initializes `itPriority` to `null`.
 * **Success Response (`201 Created`):** Returns Ticket object with `ticketNo` (`TKT-YYYY-NNNNN`), `status: "NEW"`, `requestedPriority`, `itPriority: null`, and linked attachments.
+* **Legacy Compatibility Note on `priority` Field:** In all ticket response JSON payloads (`GET /api/tickets`, `GET /api/tickets/:id`, `POST /api/tickets`), the server additionally returns `priority` as a read-only compatibility alias reflecting `requestedPriority`. This ensures that existing Lab 2 client views and automated regression suites continue functioning without breaking changes during Sprint 3. New Sprint 3 screens consume canonical `requestedPriority` and `itPriority`.
 
 ### 3.3 Requester Ticket Detail
 * **Method:** `GET`

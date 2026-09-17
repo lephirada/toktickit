@@ -1,5 +1,5 @@
 import { getPrisma } from "../src/prisma.js";
-import { Priority, TicketStatus } from "@prisma/client";
+import { Priority, TicketStatus, UserRole } from "@prisma/client";
 
 const categories = [
   "Account and Access",
@@ -17,40 +17,109 @@ const relatedSystems = [
   { name: "Grade Submission App", categoryName: "Software" },
 ];
 
-const requesters = [
+// Valid bcrypt hashes
+const DEFAULT_USER_PASSWORD_HASH = "$2b$10$epR.zIe6lO2vE9tK4x8GkOCsM4.W1YI2fT1J2V9q8J5B9X9b1w7y2"; // Password123!
+const DEFAULT_ADMIN_PASSWORD_HASH = "$2b$10$ZpI3K7v2Y5n.u0e1G3h5QOKsR3.X1YI2fT1J2V9q8J5B9X9b1w7y2"; // Admin123!
+
+const seedUsers = [
+  // 5 Preserved Requesters (IDs 1-5)
   {
     fullName: "Sarah Connor",
     email: "sarah.connor@toktickit.com",
     department: "Engineering",
+    role: UserRole.REQUESTER,
     isActive: true,
+    passwordHash: DEFAULT_USER_PASSWORD_HASH,
+    mustChangePassword: true, // FR-03 & E2E Step 6: forced first-login password change
   },
   {
     fullName: "John Doe",
     email: "john.doe@toktickit.com",
     department: "Finance",
+    role: UserRole.REQUESTER,
     isActive: true,
+    passwordHash: DEFAULT_USER_PASSWORD_HASH,
+    mustChangePassword: false,
   },
   {
     fullName: "Jennifer Anderson",
     email: "jennifer.anderson@toktickit.com",
     department: "Engineering",
+    role: UserRole.REQUESTER,
     isActive: true,
+    passwordHash: DEFAULT_USER_PASSWORD_HASH,
+    mustChangePassword: false,
   },
   {
     fullName: "Michael Brown",
     email: "michael.brown@toktickit.com",
     department: "Marketing",
+    role: UserRole.REQUESTER,
     isActive: true,
+    passwordHash: DEFAULT_USER_PASSWORD_HASH,
+    mustChangePassword: false,
   },
   {
     fullName: "Kyle Reese",
     email: "kyle.reese@toktickit.com",
     department: "Operations",
-    isActive: false,
+    role: UserRole.REQUESTER,
+    isActive: false, // Inactive requester
+    passwordHash: DEFAULT_USER_PASSWORD_HASH,
+    mustChangePassword: false,
+  },
+
+  // 4 IT Staff (IDs 6-9)
+  {
+    fullName: "David Lee",
+    email: "david.lee@toktickit.com",
+    department: "IT Support",
+    role: UserRole.IT_STAFF,
+    isActive: true,
+    passwordHash: DEFAULT_USER_PASSWORD_HASH,
+    mustChangePassword: false,
+  },
+  {
+    fullName: "Alex Morgan",
+    email: "alex.morgan@toktickit.com",
+    department: "Infrastructure",
+    role: UserRole.IT_STAFF,
+    isActive: true,
+    passwordHash: DEFAULT_USER_PASSWORD_HASH,
+    mustChangePassword: false,
+  },
+  {
+    fullName: "Chris Taylor",
+    email: "chris.taylor@toktickit.com",
+    department: "IT Support",
+    role: UserRole.IT_STAFF,
+    isActive: true,
+    passwordHash: DEFAULT_USER_PASSWORD_HASH,
+    mustChangePassword: false,
+  },
+  {
+    fullName: "Kevin Patel",
+    email: "kevin.patel@toktickit.com",
+    department: "Helpdesk",
+    role: UserRole.IT_STAFF,
+    isActive: false, // Inactive IT Staff (AC-15-05 & AC-16-08 assignment guardrail)
+    passwordHash: DEFAULT_USER_PASSWORD_HASH,
+    mustChangePassword: false,
+  },
+
+  // 1 Administrator (ID 10)
+  {
+    fullName: "System Admin",
+    email: "admin@toktickit.com",
+    department: "IT Administration",
+    role: UserRole.ADMINISTRATOR,
+    isActive: true,
+    passwordHash: DEFAULT_ADMIN_PASSWORD_HASH,
+    mustChangePassword: true, // Reviewer Record (PR #43) & FR-03
   },
 ];
 
-async function main() {
+export async function seedDatabase() {
   const prisma = getPrisma();
 
   // 1. Seed Categories idempotently
@@ -87,27 +156,32 @@ async function main() {
   }
   console.log("Successfully seeded related systems:", relatedSystems.map((s) => s.name).join(", "));
 
-  // 3. Seed Requester Users idempotently
-  for (const req of requesters) {
-    await prisma.requesterUser.upsert({
-      where: { email: req.email },
+  // 3. Seed Users idempotently (AC-11-05 & AC-11-08: NEVER overwrite modified password credentials)
+  for (const u of seedUsers) {
+    await prisma.user.upsert({
+      where: { email: u.email },
       update: {
-        fullName: req.fullName,
-        department: req.department,
-        isActive: req.isActive,
+        fullName: u.fullName,
+        department: u.department,
+        role: u.role,
+        isActive: u.isActive,
+        // passwordHash and mustChangePassword are intentionally omitted from update
       },
       create: {
-        email: req.email,
-        fullName: req.fullName,
-        department: req.department,
-        isActive: req.isActive,
+        email: u.email,
+        fullName: u.fullName,
+        department: u.department,
+        role: u.role,
+        isActive: u.isActive,
+        passwordHash: u.passwordHash,
+        mustChangePassword: u.mustChangePassword,
       },
     });
   }
-  console.log("Successfully seeded requester users:", requesters.map((r) => r.fullName).join(", "));
+  console.log("Successfully seeded 10 users:", seedUsers.map((u) => u.fullName).join(", "));
 
   // 4. Seed Realistic Tickets for Jennifer Anderson (Pagination & Filter testing)
-  const jennifer = await prisma.requesterUser.findUnique({
+  const jennifer = await prisma.user.findUnique({
     where: { email: "jennifer.anderson@toktickit.com" },
   });
 
@@ -148,117 +222,117 @@ async function main() {
       },
       {
         ticketNo: "TKT-2026-00003",
-        summary: "VPN client crashes on macOS Sequoia during login",
-        description: "Whenever I click connect on the corporate VPN client after entering 2FA, the application terminates abruptly.",
+        summary: "VPN authentication failure with valid credentials",
+        description: "FortiClient VPN client returns authentication failed error even after verifying active directory password.",
         priority: Priority.P0_URGENT,
         status: TicketStatus.NEW,
         categoryId: netCat!,
         relatedSystemId: vpn?.id,
-        createdAt: new Date("2026-02-05T14:20:00Z"),
+        createdAt: new Date("2026-02-05T08:00:00Z"),
       },
       {
         ticketNo: "TKT-2026-00004",
-        summary: "Email password reset link expired prematurely",
-        description: "Requested an email password reset, but the link indicated expired within 2 minutes instead of 24 hours.",
-        priority: Priority.P1_HIGH,
-        status: TicketStatus.RESOLVED,
+        summary: "Corporate email quota exceeded notification",
+        description: "Exchange mailbox storage warning at 98% capacity. Need temporary increase or archive assistance.",
+        priority: Priority.P3_LOW,
+        status: TicketStatus.CLOSED,
         categoryId: accCat!,
         relatedSystemId: email?.id,
-        createdAt: new Date("2026-02-07T08:45:00Z"),
+        createdAt: new Date("2026-02-07T14:20:00Z"),
       },
       {
         ticketNo: "TKT-2026-00005",
-        summary: "LEB2 App session timeout is too short during lecture",
-        description: "The platform logs out after only 10 minutes of inactivity while presenting slides to students.",
-        priority: Priority.P3_LOW,
-        status: TicketStatus.NEW,
-        categoryId: swCat!,
-        relatedSystemId: leb2?.id,
-        createdAt: new Date("2026-02-09T11:00:00Z"),
+        summary: "External monitor not detected via USB-C dock",
+        description: "Dell U2720Q display shows no signal when connected through standard CalDigit USB-C docking station.",
+        priority: Priority.P2_MEDIUM,
+        status: TicketStatus.IN_PROGRESS,
+        categoryId: hwCat!,
+        relatedSystemId: laptop?.id,
+        createdAt: new Date("2026-02-10T11:00:00Z"),
       },
       {
         ticketNo: "TKT-2026-00006",
-        summary: "Grade Submission App returns 500 error when uploading CSV",
-        description: "Uploading the midterm grade spreadsheet results in an internal server error response with HTTP 500.",
-        priority: Priority.P0_URGENT,
-        status: TicketStatus.IN_PROGRESS,
+        summary: "LEB2 App crashes when submitting assignment PDF",
+        description: "Uploading any PDF file larger than 10MB in the assignment submission portal triggers an unhandled React runtime error.",
+        priority: Priority.P1_HIGH,
+        status: TicketStatus.OPEN,
         categoryId: swCat!,
-        relatedSystemId: grade?.id,
-        createdAt: new Date("2026-02-11T16:15:00Z"),
+        relatedSystemId: leb2?.id,
+        createdAt: new Date("2026-02-12T16:45:00Z"),
       },
       {
         ticketNo: "TKT-2026-00007",
-        summary: "Second monitor not detected via USB-C dock",
-        description: "DisplayPort over USB-C dock only powers the laptop but does not output video signal to Dell monitor.",
-        priority: Priority.P2_MEDIUM,
-        status: TicketStatus.RESOLVED,
-        categoryId: hwCat!,
-        relatedSystemId: laptop?.id,
-        createdAt: new Date("2026-02-13T13:00:00Z"),
+        summary: "Grade Submission App session expires prematurely",
+        description: "The faculty grade portal logs users out after exactly 3 minutes of idle time, losing unsaved grade entries.",
+        priority: Priority.P1_HIGH,
+        status: TicketStatus.WAITING_FOR_REQUESTER,
+        categoryId: swCat!,
+        relatedSystemId: grade?.id,
+        createdAt: new Date("2026-02-14T09:00:00Z"),
       },
       {
         ticketNo: "TKT-2026-00008",
-        summary: "Request access to Engineering Git repository",
-        description: "Need read/write permission to the department curriculum repository for course material updates.",
-        priority: Priority.P2_MEDIUM,
-        status: TicketStatus.IN_PROGRESS,
-        categoryId: accCat!,
-        relatedSystemId: email?.id,
-        createdAt: new Date("2026-02-15T09:00:00Z"),
-      },
-      {
-        ticketNo: "TKT-2026-00009",
-        summary: "Slow Wi-Fi speed during peak hours in Library",
-        description: "Bandwidth drops below 1 Mbps between 1 PM and 3 PM in the quiet study zone.",
+        summary: "Slow internet throughput on Library 4th floor",
+        description: "Speedtest measures less than 1.5 Mbps downstream in the quiet study zone during peak afternoon hours.",
         priority: Priority.P3_LOW,
         status: TicketStatus.RESOLVED,
         categoryId: netCat!,
         relatedSystemId: wifi?.id,
-        createdAt: new Date("2026-02-17T15:40:00Z"),
+        createdAt: new Date("2026-02-16T13:30:00Z"),
+      },
+      {
+        ticketNo: "TKT-2026-00009",
+        summary: "Reset 2FA token for corporate single sign-on",
+        description: "Replaced personal phone and lost access to Microsoft Authenticator TOTP codes for corporate SSO login.",
+        priority: Priority.P0_URGENT,
+        status: TicketStatus.CLOSED,
+        categoryId: accCat!,
+        relatedSystemId: email?.id,
+        createdAt: new Date("2026-02-18T08:30:00Z"),
       },
       {
         ticketNo: "TKT-2026-00010",
-        summary: "Request 16GB RAM upgrade for development workstation",
-        description: "Local Docker containers and IDE require more memory than current 8GB allocation.",
-        priority: Priority.P1_HIGH,
+        summary: "Request license for JetBrains All Products Pack",
+        description: "Software engineering course instructor requires upgraded JetBrains suite license for Spring semester projects.",
+        priority: Priority.P2_MEDIUM,
         status: TicketStatus.NEW,
-        categoryId: hwCat!,
-        relatedSystemId: laptop?.id,
-        createdAt: new Date("2026-02-19T10:10:00Z"),
+        categoryId: swCat!,
+        relatedSystemId: null,
+        createdAt: new Date("2026-02-20T10:15:00Z"),
       },
       {
         ticketNo: "TKT-2026-00011",
-        summary: "Cannot access staging server via VPN",
-        description: "Route to 10.20.0.0/16 is not resolving after the latest firewall policy update.",
-        priority: Priority.P1_HIGH,
+        summary: "Laptop fan noise excessive during video calls",
+        description: "Cooling fans spin up to maximum RPM immediately upon joining Zoom or Google Meet meetings.",
+        priority: Priority.P3_LOW,
         status: TicketStatus.IN_PROGRESS,
-        categoryId: netCat!,
-        relatedSystemId: vpn?.id,
-        createdAt: new Date("2026-02-21T14:50:00Z"),
+        categoryId: hwCat!,
+        relatedSystemId: laptop?.id,
+        createdAt: new Date("2026-02-22T15:00:00Z"),
       },
       {
         ticketNo: "TKT-2026-00012",
-        summary: "LEB2 App quiz submission button disabled unexpectedly",
-        description: "Students report the submit quiz button remained disabled even after answering all required questions.",
+        summary: "DNS resolution failure for internal git server",
+        description: "Unable to clone or fetch from gitlab.internal.toktickit.com; nslookup reports server failure.",
         priority: Priority.P0_URGENT,
         status: TicketStatus.RESOLVED,
-        categoryId: swCat!,
-        relatedSystemId: leb2?.id,
-        createdAt: new Date("2026-02-23T11:25:00Z"),
+        categoryId: netCat!,
+        relatedSystemId: null,
+        createdAt: new Date("2026-02-24T09:30:00Z"),
       },
       {
         ticketNo: "TKT-2026-00013",
-        summary: "Outlook 365 2FA prompt looping repeatedly",
-        description: "Microsoft Authenticator approval succeeds on phone but desktop client continues prompting for approval.",
+        summary: "Request shared mailbox access for admissions committee",
+        description: "Need delegate access permissions for admissions-inquiries@toktickit.com for newly onboarded staff.",
         priority: Priority.P2_MEDIUM,
-        status: TicketStatus.NEW,
+        status: TicketStatus.CANCELLED,
         categoryId: accCat!,
         relatedSystemId: email?.id,
-        createdAt: new Date("2026-02-25T08:30:00Z"),
+        createdAt: new Date("2026-02-25T11:20:00Z"),
       },
       {
         ticketNo: "TKT-2026-00014",
-        summary: "Laptop battery draining abnormally fast",
+        summary: "Laptop battery drains rapidly while in sleep mode",
         description: "Battery health indicator reports 65% capacity and device drains from 100% to 10% in under 90 minutes.",
         priority: Priority.P2_MEDIUM,
         status: TicketStatus.IN_PROGRESS,
@@ -294,7 +368,7 @@ async function main() {
         update: {
           summary: t.summary,
           description: t.description,
-          priority: t.priority,
+          requestedPriority: t.priority,
           status: t.status,
           categoryId: t.categoryId,
           relatedSystemId: t.relatedSystemId,
@@ -305,7 +379,7 @@ async function main() {
           ticketNo: t.ticketNo,
           summary: t.summary,
           description: t.description,
-          priority: t.priority,
+          requestedPriority: t.priority,
           status: t.status,
           categoryId: t.categoryId,
           relatedSystemId: t.relatedSystemId,
@@ -318,11 +392,17 @@ async function main() {
   }
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await getPrisma().$disconnect();
-  });
+async function main() {
+  await seedDatabase();
+}
+
+if (process.argv[1]?.endsWith("seed.ts")) {
+  main()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await getPrisma().$disconnect();
+    });
+}

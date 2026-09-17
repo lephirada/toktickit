@@ -28,14 +28,21 @@
 
 ### 2.1 Backend Migration & Seed Verification Tests
 * **Target Command:** `npm --prefix server run test -- tests/lab-03/migration-verification.test.ts`
-* **Test Log Output Placeholder:**
+* **Test Log Output:**
 ```text
-[PLACEHOLDER: Paste Vitest output showing 100% pass rate for migration assertions:
- - 5 legacy RequesterUser records successfully migrated to User table with IDs 1..5 preserved
- - 16 realistic tickets for Jennifer Anderson preserved with requesterId 3
- - 7 attachments preserved with uploadedById intact
- - Seed idempotency verified across consecutive runs]
+ RUN  v2.1.9 /Users/peta/Downloads/toktickit/server
+
+ ✓ tests/lab-03/migration-verification.test.ts (3)
+   ✓ Issue 11 — Database Schema, Migration & Seed Verification (migration.test.ts) (3)
+     ✓ verifies the physical migration SQL file exists and is non-empty
+     ✓ executes the exact migration SQL file on a populated Lab 2 baseline and verifies zero data loss
+     ✓ verifies seed idempotency and credential protection on repeated runs
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Duration  4.37s
 ```
+
 
 ### 2.2 Backend Supertest API Integration Test Suites
 * **Target Command:** `npm --prefix server run test -- tests/lab-03/*.api.test.ts`

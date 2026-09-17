@@ -50,8 +50,8 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 app.get("/api/requesters", async (_req: Request, res: Response) => {
   try {
-    const requesters = await getPrisma().requesterUser.findMany({
-      where: { isActive: true },
+    const requesters = await getPrisma().user.findMany({
+      where: { isActive: true, role: "REQUESTER" },
       select: {
         id: true,
         email: true,
@@ -144,7 +144,7 @@ app.get(
 
       const validPriorities = ["P0_URGENT", "P1_HIGH", "P2_MEDIUM", "P3_LOW"];
       if (typeof priority === "string" && validPriorities.includes(priority.toUpperCase())) {
-        where.priority = priority.toUpperCase() as Priority;
+        where.requestedPriority = priority.toUpperCase() as Priority;
       }
 
       const validStatuses = ["NEW", "IN_PROGRESS", "RESOLVED", "CLOSED", "REJECTED"];
@@ -157,7 +157,8 @@ app.get(
         createdat: "createdAt",
         updatedat: "updatedAt",
         ticketno: "ticketNo",
-        priority: "priority",
+        priority: "requestedPriority",
+        requestedpriority: "requestedPriority",
         status: "status",
         summary: "summary",
       };
@@ -185,7 +186,8 @@ app.get(
             ticketNo: true,
             summary: true,
             description: true,
-            priority: true,
+            requestedPriority: true,
+            itPriority: true,
             status: true,
             categoryId: true,
             relatedSystemId: true,
@@ -230,6 +232,7 @@ app.get(
 
       const formattedTickets = tickets.map((t) => ({
         ...t,
+        priority: t.requestedPriority,
         attachmentCount: t.attachments.length,
       }));
 
@@ -324,11 +327,14 @@ app.post(
       const {
         categoryId,
         relatedSystemId,
-        priority,
+        priority: rawPriority,
+        requestedPriority: rawRequestedPriority,
         summary,
         description,
         attachmentIds,
       } = req.body || {};
+
+      const priority = rawRequestedPriority || rawPriority;
 
       const fieldErrors: FieldError[] = [];
 
@@ -501,7 +507,7 @@ app.post(
             ticketNo,
             summary: summary.trim(),
             description: description.trim(),
-            priority,
+            requestedPriority: priority,
             status: "NEW",
             requesterId,
             categoryId,
@@ -583,7 +589,14 @@ app.post(
         });
       });
 
-      res.status(201).json({ data: createdTicket });
+      const responseData = createdTicket
+        ? {
+            ...createdTicket,
+            priority: createdTicket.requestedPriority,
+          }
+        : null;
+
+      res.status(201).json({ data: responseData });
     } catch (error) {
       res
         .status(500)
@@ -904,7 +917,9 @@ app.get(
           ticketNo: ticket.ticketNo,
           summary: ticket.summary,
           description: ticket.description,
-          priority: ticket.priority,
+          priority: ticket.requestedPriority,
+          requestedPriority: ticket.requestedPriority,
+          itPriority: ticket.itPriority,
           status: ticket.status,
           requesterId: ticket.requesterId,
           requester: {

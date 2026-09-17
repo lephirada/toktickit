@@ -17,11 +17,11 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
 
   beforeAll(async () => {
     // Retrieve seeded data for tests
-    const activeRequester = await prisma.requesterUser.findFirst({
-      where: { isActive: true },
+    const activeRequester = await prisma.user.findFirst({
+      where: { isActive: true, role: "REQUESTER" },
     });
-    const inactiveRequester = await prisma.requesterUser.findFirst({
-      where: { isActive: false },
+    const inactiveRequester = await prisma.user.findFirst({
+      where: { isActive: false, role: "REQUESTER" },
     });
     const hardwareCategory = await prisma.category.findUnique({
       where: { name: "Hardware" },
@@ -383,8 +383,8 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       );
 
       // 2. Attachment owned by another requester
-      const otherRequester = await prisma.requesterUser.findFirst({
-        where: { isActive: true, id: { not: activeRequesterId } },
+      const otherRequester = await prisma.user.findFirst({
+        where: { isActive: true, role: "REQUESTER", id: { not: activeRequesterId } },
       });
 
       if (otherRequester) {

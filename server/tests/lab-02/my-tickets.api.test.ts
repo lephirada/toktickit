@@ -22,13 +22,13 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
 
   beforeAll(async () => {
     // 1. Retrieve seeded requesters
-    const sarah = await prisma.requesterUser.findFirstOrThrow({
+    const sarah = await prisma.user.findFirstOrThrow({
       where: { email: "sarah.connor@toktickit.com" },
     });
-    const john = await prisma.requesterUser.findFirstOrThrow({
+    const john = await prisma.user.findFirstOrThrow({
       where: { email: "john.doe@toktickit.com" },
     });
-    const kyle = await prisma.requesterUser.findFirstOrThrow({
+    const kyle = await prisma.user.findFirstOrThrow({
       where: { email: "kyle.reese@toktickit.com" },
     });
 
@@ -66,7 +66,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00001",
         summary: "MacBook Pro keyboard key sticking",
         description: "The spacebar and T key are intermittently unresponsive.",
-        priority: Priority.P0_URGENT,
+        requestedPriority: Priority.P0_URGENT,
         status: TicketStatus.NEW,
         categoryId: hardwareCatId,
         relatedSystemId: laptopSystemId,
@@ -77,7 +77,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00002",
         summary: "VPN Client timeout error on home network",
         description: "Cannot connect to VPN Gateway after updating macOS.",
-        priority: Priority.P1_HIGH,
+        requestedPriority: Priority.P1_HIGH,
         status: TicketStatus.IN_PROGRESS,
         categoryId: networkCatId,
         relatedSystemId: vpnSystemId,
@@ -88,7 +88,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00003",
         summary: "Leb2 application portal session expired",
         description: "Session constantly logs out every 2 minutes.",
-        priority: Priority.P2_MEDIUM,
+        requestedPriority: Priority.P2_MEDIUM,
         status: TicketStatus.RESOLVED,
         categoryId: softwareCatId,
         relatedSystemId: null,
@@ -99,7 +99,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00004",
         summary: "Laptop battery drains rapidly",
         description: "Battery health reported as poor in diagnostic settings.",
-        priority: Priority.P3_LOW,
+        requestedPriority: Priority.P3_LOW,
         status: TicketStatus.CLOSED,
         categoryId: hardwareCatId,
         relatedSystemId: laptopSystemId,
@@ -110,7 +110,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00005",
         summary: "Campus Wi-Fi connectivity drops in Engineering lab",
         description: "Signal frequently drops when moving between desks.",
-        priority: Priority.P2_MEDIUM,
+        requestedPriority: Priority.P2_MEDIUM,
         status: TicketStatus.NEW,
         categoryId: networkCatId,
         relatedSystemId: null,
@@ -126,7 +126,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: `TEST-TKT-A-${numPadded}`,
         summary: `Automated issue ticket sequence number ${i}`,
         description: `Detailed description for pagination test ticket ${i}.`,
-        priority: i % 2 === 0 ? Priority.P1_HIGH : Priority.P2_MEDIUM,
+        requestedPriority: i % 2 === 0 ? Priority.P1_HIGH : Priority.P2_MEDIUM,
         status: i > 12 ? TicketStatus.RESOLVED : TicketStatus.NEW,
         categoryId: hardwareCatId,
         relatedSystemId: laptopSystemId,
@@ -146,7 +146,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-B-00001",
         summary: "Finance billing export tool crashes on launch",
         description: "Error 500 thrown when attempting to generate monthly ledger.",
-        priority: Priority.P0_URGENT,
+        requestedPriority: Priority.P0_URGENT,
         status: TicketStatus.NEW,
         categoryId: softwareCatId,
         relatedSystemId: null,
@@ -157,7 +157,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-B-00002",
         summary: "Finance team VPN access request",
         description: "Need remote access privileges enabled for new payroll intern.",
-        priority: Priority.P1_HIGH,
+        requestedPriority: Priority.P1_HIGH,
         status: TicketStatus.RESOLVED,
         categoryId: networkCatId,
         relatedSystemId: vpnSystemId,

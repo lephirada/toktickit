@@ -8,9 +8,9 @@ describe("Issue 6 — Backend API Tests (Requester Context & Taxonomy)", () => {
     it("verifies the seed created exactly 5 total requesters (4 active, 1 inactive), 4 categories, and 6 related systems", async () => {
       const prisma = getPrisma();
 
-      const totalRequesters = await prisma.requesterUser.count();
-      const activeRequesters = await prisma.requesterUser.count({ where: { isActive: true } });
-      const inactiveRequesters = await prisma.requesterUser.count({ where: { isActive: false } });
+      const totalRequesters = await prisma.user.count({ where: { role: "REQUESTER" } });
+      const activeRequesters = await prisma.user.count({ where: { isActive: true, role: "REQUESTER" } });
+      const inactiveRequesters = await prisma.user.count({ where: { isActive: false, role: "REQUESTER" } });
       const categoriesCount = await prisma.category.count();
       const systemsCount = await prisma.relatedSystem.count();
 
