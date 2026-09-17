@@ -246,13 +246,34 @@ describe("Issue 11 — Database Schema, Migration & Seed Verification (migration
     expect(postUsers.length).toBe(5);
     expect(postUsers[0].id).toBe(1);
     expect(postUsers[0].email).toBe("sarah.connor@toktickit.com");
-    expect(postUsers[0].role).toBe("REQUESTER");
+    expect(postUsers[0].mustChangePassword).toBe(true); // Sarah Connor flagged for password change
     expect(postUsers[1].id).toBe(2);
+    expect(postUsers[1].mustChangePassword).toBe(false); // Preserved legacy user
     expect(postUsers[2].id).toBe(3);
     expect(postUsers[2].email).toBe("jennifer.anderson@toktickit.com");
+    expect(postUsers[2].mustChangePassword).toBe(false); // Preserved legacy user
     expect(postUsers[4].id).toBe(5);
     expect(postUsers[4].email).toBe("kyle.reese@toktickit.com");
     expect(postUsers[4].isActive).toBe(false); // Preserved inactive state
+    expect(postUsers[4].mustChangePassword).toBe(false); // Preserved legacy user
+
+    // Verify column default for mustChangePassword is true in PostgreSQL
+    const colDefault = await testPrisma.$queryRaw<[{ column_default: string }]>`
+      SELECT column_default 
+      FROM information_schema.columns 
+      WHERE table_name = 'User' AND column_name = 'mustChangePassword'
+    `;
+    expect(colDefault[0].column_default).toBe("true");
+
+    // Verify new user creation without specifying mustChangePassword defaults to true
+    const brandNewUser = await testPrisma.user.create({
+      data: {
+        email: "brandnew.user@toktickit.com",
+        fullName: "Brand New User",
+      },
+    });
+    expect(brandNewUser.mustChangePassword).toBe(true);
+    await testPrisma.user.delete({ where: { id: brandNewUser.id } });
 
     const postTickets = await testPrisma.ticket.findMany({ orderBy: { id: "asc" } });
     expect(postTickets.length).toBe(16);
@@ -285,63 +306,29 @@ describe("Issue 11 — Database Schema, Migration & Seed Verification (migration
     expect(fkResults.some((f) => f.conname === "Attachment_uploadedById_fkey" && f.confrelid === '"User"')).toBe(true);
   });
 
-  it("verifies seed idempotency and credential protection on repeated runs", async () => {
-    // 1. Perform initial seed on test database
-    const categories = ["Account and Access", "Hardware", "Software", "Network"];
-    for (const name of categories) {
-      await testPrisma.category.upsert({
-        where: { name },
-        update: {},
-        create: { name },
+  it("verifies real seed script idempotency and credential protection on repeated runs (AC-11-05 & AC-11-08)", async () => {
+    const serverDir = path.resolve(__dirname, "../..");
+    const seedEnv = {
+      ...process.env,
+      DATABASE_URL: `postgresql://toktickit:toktickit@localhost:5432/${TEST_DB_NAME}?schema=public`,
+    };
+
+    // Helper to execute the actual physical server/prisma/seed.ts script
+    function executeRealSeed() {
+      execSync("npx tsx prisma/seed.ts", {
+        cwd: serverDir,
+        env: seedEnv,
+        stdio: "pipe",
       });
     }
 
-    const defaultHash = "$2b$10$epR.zIe6lO2vE9tK4x8GkOCsM4.W1YI2fT1J2V9q8J5B9X9b1w7y2";
-    const adminHash = "$2b$10$ZpI3K7v2Y5n.u0e1G3h5QOKsR3.X1YI2fT1J2V9q8J5B9X9b1w7y2";
-
-    const seedUsersData = [
-      { email: "sarah.connor@toktickit.com", fullName: "Sarah Connor", department: "Engineering", role: UserRole.REQUESTER, isActive: true, passwordHash: defaultHash, mustChangePassword: true },
-      { email: "john.doe@toktickit.com", fullName: "John Doe", department: "Finance", role: UserRole.REQUESTER, isActive: true, passwordHash: defaultHash, mustChangePassword: false },
-      { email: "jennifer.anderson@toktickit.com", fullName: "Jennifer Anderson", department: "Engineering", role: UserRole.REQUESTER, isActive: true, passwordHash: defaultHash, mustChangePassword: false },
-      { email: "michael.brown@toktickit.com", fullName: "Michael Brown", department: "Marketing", role: UserRole.REQUESTER, isActive: true, passwordHash: defaultHash, mustChangePassword: false },
-      { email: "kyle.reese@toktickit.com", fullName: "Kyle Reese", department: "Operations", role: UserRole.REQUESTER, isActive: false, passwordHash: defaultHash, mustChangePassword: false },
-      { email: "david.lee@toktickit.com", fullName: "David Lee", department: "IT Support", role: UserRole.IT_STAFF, isActive: true, passwordHash: defaultHash, mustChangePassword: false },
-      { email: "alex.morgan@toktickit.com", fullName: "Alex Morgan", department: "Infrastructure", role: UserRole.IT_STAFF, isActive: true, passwordHash: defaultHash, mustChangePassword: false },
-      { email: "chris.taylor@toktickit.com", fullName: "Chris Taylor", department: "IT Support", role: UserRole.IT_STAFF, isActive: true, passwordHash: defaultHash, mustChangePassword: false },
-      { email: "kevin.patel@toktickit.com", fullName: "Kevin Patel", department: "Helpdesk", role: UserRole.IT_STAFF, isActive: false, passwordHash: defaultHash, mustChangePassword: false },
-      { email: "admin@toktickit.com", fullName: "System Admin", department: "IT Administration", role: UserRole.ADMINISTRATOR, isActive: true, passwordHash: adminHash, mustChangePassword: true },
-    ];
-
-    async function runSeed() {
-      for (const u of seedUsersData) {
-        await testPrisma.user.upsert({
-          where: { email: u.email },
-          update: {
-            fullName: u.fullName,
-            department: u.department,
-            role: u.role,
-            isActive: u.isActive,
-          },
-          create: {
-            email: u.email,
-            fullName: u.fullName,
-            department: u.department,
-            role: u.role,
-            isActive: u.isActive,
-            passwordHash: u.passwordHash,
-            mustChangePassword: u.mustChangePassword,
-          },
-        });
-      }
-    }
-
-    // Run seed 1st time
-    await runSeed();
+    // 1. Run the real seed script the 1st time
+    executeRealSeed();
 
     const allUsers = await testPrisma.user.findMany({ orderBy: { id: "asc" } });
     expect(allUsers.length).toBe(10);
 
-    // Verify Kevin Patel is inactive IT Staff
+    // Verify Kevin Patel is inactive IT Staff (AC-11-06 & AC-15-05)
     const kevin = allUsers.find((u) => u.email === "kevin.patel@toktickit.com");
     expect(kevin).toBeDefined();
     expect(kevin?.role).toBe("IT_STAFF");
@@ -362,6 +349,12 @@ describe("Issue 11 — Database Schema, Migration & Seed Verification (migration
       expect(u.passwordHash).toMatch(bcryptRegex);
     }
 
+    // Verify Categories and RelatedSystems count
+    const catCount = await testPrisma.category.count();
+    const sysCount = await testPrisma.relatedSystem.count();
+    expect(catCount).toBe(4);
+    expect(sysCount).toBe(6);
+
     // 2. Manually mutate John Doe's password credentials with valid bcrypt format
     const modifiedHash = "$2b$10$customModifiedHashForIdempotencyTest123456789012345";
     await testPrisma.user.update({
@@ -372,18 +365,20 @@ describe("Issue 11 — Database Schema, Migration & Seed Verification (migration
       },
     });
 
-    // 3. Re-run seed 2nd time
-    await runSeed();
+    // 3. Re-run the real seed script the 2nd time (AC-11-05 idempotency)
+    executeRealSeed();
 
-    // 4. Verify modified password credentials were NOT overwritten
+    // 4. Verify modified password credentials were NOT overwritten (AC-11-08)
     const johnAfterReSeed = await testPrisma.user.findUnique({
       where: { email: "john.doe@toktickit.com" },
     });
     expect(johnAfterReSeed?.passwordHash).toBe(modifiedHash);
     expect(johnAfterReSeed?.mustChangePassword).toBe(true);
 
-    // Verify total users remained exactly 10 with no duplicates
+    // Verify total records remained exactly consistent with zero duplication
     const totalUsersAfterReSeed = await testPrisma.user.count();
     expect(totalUsersAfterReSeed).toBe(10);
+    expect(await testPrisma.category.count()).toBe(4);
+    expect(await testPrisma.relatedSystem.count()).toBe(6);
   });
 });

@@ -9,8 +9,8 @@ ALTER INDEX "RequesterUser_isActive_idx" RENAME TO "User_isActive_idx";
 CREATE TYPE "UserRole" AS ENUM ('REQUESTER', 'IT_STAFF', 'ADMINISTRATOR');
 ALTER TABLE "User" ADD COLUMN "role" "UserRole" NOT NULL DEFAULT 'REQUESTER';
 ALTER TABLE "User" ADD COLUMN "passwordHash" TEXT NOT NULL DEFAULT '$2b$10$epR.zIe6lO2vE9tK4x8GkOCsM4.W1YI2fT1J2V9q8J5B9X9b1w7y2';
-ALTER TABLE "User" ADD COLUMN "mustChangePassword" BOOLEAN NOT NULL DEFAULT false;
-UPDATE "User" SET "mustChangePassword" = true WHERE "email" = 'sarah.connor@toktickit.com';
+ALTER TABLE "User" ADD COLUMN "mustChangePassword" BOOLEAN NOT NULL DEFAULT true;
+UPDATE "User" SET "mustChangePassword" = false WHERE "email" != 'sarah.connor@toktickit.com';
 ALTER TABLE "User" ALTER COLUMN "department" DROP NOT NULL;
 
 -- Step 3: TicketStatus Recreate-and-Cast (Safe inside single transaction on PostgreSQL 16)

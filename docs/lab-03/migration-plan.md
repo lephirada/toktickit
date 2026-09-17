@@ -64,11 +64,11 @@ To ensure 100% data preservation and avoid dropping existing records, the `"Requ
      -- Initial hash for 'Password123!' ($2b$10$wE1...):
      ALTER TABLE "User" ADD COLUMN "passwordHash" TEXT NOT NULL DEFAULT '$2b$10$epR.zIe6lO2vE9tK4x8GkOCsM4.W1YI2fT1J2V9q8J5B9X9b1w7y2';
      ```
-   * Add `mustChangePassword` boolean:
+   * Add `mustChangePassword` boolean (defaults to `true` for all new users; legacy users updated to `false` except Sarah Connor):
      ```sql
-     ALTER TABLE "User" ADD COLUMN "mustChangePassword" BOOLEAN NOT NULL DEFAULT false;
-     -- Sarah Connor set to true to test forced change-password flow:
-     UPDATE "User" SET "mustChangePassword" = true WHERE "email" = 'sarah.connor@toktickit.com';
+     ALTER TABLE "User" ADD COLUMN "mustChangePassword" BOOLEAN NOT NULL DEFAULT true;
+     -- Preserve legacy users who don't need initial password change as false, while keeping Sarah Connor as true:
+     UPDATE "User" SET "mustChangePassword" = false WHERE "email" != 'sarah.connor@toktickit.com';
      ```
    * Alter `department` to be optional:
      ```sql

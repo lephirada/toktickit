@@ -7,16 +7,16 @@
 
 ## Pull Requests I authored (reviewed by my partner)
 
-| PR                      | Branch                                    | Reviewer verdict |
-| :---------------------- | :---------------------------------------- | :--------------- |
-| `[PR #32]`              | `feature/10-lab3-documentation`           | `[Approved]`     |
-| `[PR #... Placeholder]` | `feature/11-database-migration`           | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/12-authentication-authorization` | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/13-client-auth-shell`            | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/14-staff-queue`                  | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/15-staff-ticket-operations`      | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/16-user-management`              | `[Pending]`      |
-| `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Pending]`      |
+| PR                      | Branch                                    | Reviewer verdict    |
+| :---------------------- | :---------------------------------------- | :------------------ |
+| `[PR #32]`              | `feature/10-lab3-documentation`           | `[Approved]`        |
+| `[PR #33]`              | `feature/11-database-migration`           | `[Request Changes]` |
+| `[PR #... Placeholder]` | `feature/12-authentication-authorization` | `[Pending]`         |
+| `[PR #... Placeholder]` | `feature/13-client-auth-shell`            | `[Pending]`         |
+| `[PR #... Placeholder]` | `feature/14-staff-queue`                  | `[Pending]`         |
+| `[PR #... Placeholder]` | `feature/15-staff-ticket-operations`      | `[Pending]`         |
+| `[PR #... Placeholder]` | `feature/16-user-management`              | `[Pending]`         |
+| `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Pending]`         |
 
 ---
 
@@ -37,10 +37,15 @@
 - **Branch:** `feature/11-database-migration`
 - **Reviewer comment I received:**
 
-  > `[Placeholder: Partner review comments for Issue 11 PR]`
+  > Request Changes
+  > I found two issues that should be fixed before approval:
+  >
+  > 1. mustChangePassword is set to false by default in both schema.prisma and the migration, but the acceptance criteria require the default to be true.
+  > 2. migration.test.ts tests a locally duplicated runSeed() implementation instead of executing the actual server/prisma/seed.ts. Therefore, it does not fully verify the real seed script's idempotency and password-state preservation required by AC-11-05 and AC-11-08.
+  >    Please fix these issues and update the migration tests accordingly.
 
 - **How I responded:**
-  > `[Placeholder: Author response to partner feedback]`
+  > Thank you for the feedback Ka. I have reviewed and addressed both concerns. Please check the PR again.
 
 ---
 

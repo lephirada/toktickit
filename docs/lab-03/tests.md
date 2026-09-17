@@ -126,7 +126,7 @@ TokTickIT enforces a rigorous multi-tiered automated testing pyramid ensuring st
 * **Schema Evolution Assertions:**
   - Verifies table name is `users` and sequence is `users_id_seq`.
   - Verifies `role` column defaults to `REQUESTER`.
-  - Verifies `mustChangePassword` defaults to `false`.
+  - Verifies `mustChangePassword` defaults to `true` (with legacy users preserved as `false` and Sarah Connor flagged as `true`).
   - Verifies legacy `priority` column is renamed to `requestedPriority`, and new `itPriority` column defaults to `null`.
   - Verifies `resolutionIndicated` column defaults to `false`.
   - Verifies legacy `REJECTED` ticket status successfully converted to `CANCELLED`.
