@@ -260,7 +260,7 @@ The ticket lifecycle strictly enforces permitted operational transitions across 
 * **Secret Configuration:** Read from `JWT_SECRET`. Production terminates immediately if missing or weak. Development falls back safely with a logged warning.
 * **Cookie Handling:** Stored in `toktickit_session` with `httpOnly: true`, `sameSite: 'lax'`, `secure: true` (in production), `path: '/'`. The frontend never stores the token in `localStorage`, `sessionStorage`, or URL parameters.
 * **Active Verification:** On every request, `requireAuth` verifies the token signature and queries database active status. Deactivated users immediately receive `401 Unauthorized` (`ACCOUNT_DEACTIVATED`).
-* **Stateless Logout Limitation:** Logout clears the client session cookie. The documentation transparently acknowledges that clearing the cookie does not revoke a copied stateless token held externally before expiration.
+* **Stateless Logout Limitation & Idempotency:** Logout clears the client session cookie. The endpoint (`POST /api/auth/logout`) is non-failing and idempotent; it clears the session cookie and returns `200 OK` even if the session was already expired or unauthenticated, preventing trapped client states. The documentation transparently acknowledges that clearing the cookie does not revoke a copied stateless token held externally before expiration.
 
 ---
 

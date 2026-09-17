@@ -140,7 +140,7 @@ TokTickIT enforces a rigorous multi-tiered automated testing pyramid ensuring st
 * `POST /api/auth/change-password`: Weak password fails with 422 `VALIDATION_ERROR` and specific field error details.
 * `POST /api/auth/change-password`: Mismatched confirmation fails with 422.
 * `POST /api/auth/change-password`: Correct new password updates hash, clears `mustChangePassword`, and returns 200.
-* `POST /api/auth/logout`: Clears session cookie and drops authentication.
+* `POST /api/auth/logout`: Clears session cookie and drops authentication (idempotently returns 200 OK with clearing cookie header even when unauthenticated or expired).
 * Immediate Session Invalidation: Deactivating an account in the database causes subsequent requests from that session cookie to fail with 401.
 
 #### 2. Authorization & Ownership Suite (`authorization.api.test.ts`)

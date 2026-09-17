@@ -123,9 +123,13 @@ For input validation failures, `details.fieldErrors` maps specific invalid input
 ### 2.2 Logout
 * **Method:** `POST`
 * **Route:** `/api/auth/logout`
-* **Authentication:** Authenticated (safe to call even if session already expired)
+* **Authentication Contract & Idempotency:**
+  - **Idempotent / Permissive Authentication:** The logout endpoint does **not** return `401 Unauthorized` if the session is expired, missing, or malformed.
+  - Calling `/api/auth/logout` when authenticated, when holding an expired token, or when unauthenticated always succeeds and returns **`200 OK`**.
+  - In all cases, the server issues a clearing `Set-Cookie` header with `Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0` to ensure the client browser clears `toktickit_session`.
+  - This design guarantees that user logout is fully idempotent and will never fail or leave the user trapped in an un-clearable session state due to an unexpected 401 error.
 * **Success Response (`200 OK`):**
-  - **Header:** `Set-Cookie: toktickit_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax`
+  - **Header:** `Set-Cookie: toktickit_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly; SameSite=Lax`
   - **Body:**
     ```json
     {
@@ -134,6 +138,7 @@ For input validation failures, `details.fieldErrors` maps specific invalid input
       }
     }
     ```
+* **Error Responses:** None. The logout endpoint is universally non-failing (`200 OK`).
 
 ### 2.3 Current User State
 * **Method:** `GET`
