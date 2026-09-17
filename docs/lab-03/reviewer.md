@@ -206,10 +206,11 @@
 
 - **My comment:**
 
-  > `[Placeholder: My review comment for partner's Issue 12 PR]`
+  > Reviewed the latest updates against the acceptance criteria. The mock requester selector has been removed, authentication state and route guards are implemented, mandatory password change is handled, and role-based navigation and logout are working as required.
+  > Approved.
 
 - **Partner's response:**
-  > `[Placeholder: Partner's response]`
+  > Thank you so much @lephirada for reviewing and approving PR #44! All acceptance criteria and tests have been confirmed. You can go ahead and merge this PR into lab3-staging whenever you're ready.
 
 ---
 
