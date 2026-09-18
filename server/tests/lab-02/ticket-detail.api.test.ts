@@ -7,6 +7,7 @@ import * as appModule from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { UPLOAD_DIR } from "../../src/middleware/upload.js";
 import { Priority, TicketStatus } from "@prisma/client";
+import { createTestSessionCookie } from "../helpers/auth.js";
 
 describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.api.test.ts)", () => {
   const prisma = getPrisma();
@@ -14,6 +15,9 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
   let requesterAId: number;
   let requesterBId: number;
   let inactiveRequesterId: number;
+  let cookieA: string;
+  let cookieB: string;
+  let inactiveCookie: string;
 
   let categoryId: number;
   let systemId: number;
@@ -46,6 +50,15 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
     requesterAId = sarah.id;
     requesterBId = john.id;
     inactiveRequesterId = kyle.id;
+
+    cookieA = createTestSessionCookie({ id: sarah.id, email: sarah.email, role: "REQUESTER" });
+    cookieB = createTestSessionCookie({ id: john.id, email: john.email, role: "REQUESTER" });
+    inactiveCookie = createTestSessionCookie({ id: kyle.id, email: kyle.email, role: "REQUESTER" });
+
+    await prisma.user.update({
+      where: { id: requesterAId },
+      data: { mustChangePassword: false },
+    });
 
     // 2. Retrieve Category & System
     const hardware = await prisma.category.findFirstOrThrow({
@@ -166,6 +179,13 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
   });
 
   afterAll(async () => {
+    if (requesterAId) {
+      await prisma.user.update({
+        where: { id: requesterAId },
+        data: { mustChangePassword: true },
+      }).catch(() => {});
+    }
+
     // Clean up test files from disk
     const filesToClean = [
       activeAttachmentStorageKey,
@@ -204,7 +224,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
     it("returns 200 OK with complete ticket details, category, attachments, and timeline for owner", async () => {
       const res = await request(app)
         .get(`/api/tickets/${ticketAId}`)
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
@@ -268,21 +288,21 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
       expect(removalEvent.message).toContain("system_dump.txt");
     });
 
-    it("returns 403 Forbidden when requester attempts to view another user's ticket (Requester Isolation)", async () => {
+    it("returns 404 Not Found when requester attempts to view another user's ticket (Requester Isolation)", async () => {
       const res = await request(app)
         .get(`/api/tickets/${ticketAId}`)
-        .set("X-Requester-Id", String(requesterBId));
+        .set("Cookie", cookieB);
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
-      expect(res.body.error.code).toBe("FORBIDDEN_RESOURCE");
+      expect(res.body.error.code).toBe("TICKET_NOT_FOUND");
       expect(res.body.data).toBeUndefined();
     });
 
     it("returns 404 Not Found when ticket ID does not exist", async () => {
       const res = await request(app)
         .get("/api/tickets/999999")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
@@ -292,20 +312,22 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
     it("returns 404 Not Found for non-integer ticket ID", async () => {
       const res = await request(app)
         .get("/api/tickets/not-a-number")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe("TICKET_NOT_FOUND");
     });
 
-    it("returns 403 Forbidden if X-Requester-Id is missing or inactive", async () => {
+    it("returns 401 Unauthorized if session cookie is missing or inactive", async () => {
       const noHeaderRes = await request(app).get(`/api/tickets/${ticketAId}`);
-      expect(noHeaderRes.status).toBe(403);
+      expect(noHeaderRes.status).toBe(401);
+      expect(noHeaderRes.body.error.code).toBe("UNAUTHORIZED");
 
       const inactiveRes = await request(app)
         .get(`/api/tickets/${ticketAId}`)
-        .set("X-Requester-Id", String(inactiveRequesterId));
-      expect(inactiveRes.status).toBe(403);
+        .set("Cookie", inactiveCookie);
+      expect(inactiveRes.status).toBe(401);
+      expect(inactiveRes.body.error.code).toBe("ACCOUNT_DEACTIVATED");
     });
   });
 
@@ -316,7 +338,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
     it("returns 200 OK and streams binary file content with appropriate headers for active attachment", async () => {
       const res = await request(app)
         .get(`/api/attachments/${activeAttachmentAId}/download`)
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.headers["content-type"]).toContain("image/png");
@@ -329,7 +351,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
     it("returns HTTP 410 Gone when attachment status is REMOVED / soft-deleted", async () => {
       const res = await request(app)
         .get(`/api/attachments/${softDeletedAttachmentAId}/download`)
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(410);
       expect(res.body.error).toBe("Attachment has been removed");
@@ -337,30 +359,31 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
       expect(res.body.removedAt).toBeDefined();
     });
 
-    it("returns 403 Forbidden when cross-requester attempts to download attachment", async () => {
+    it("returns 404 Not Found when cross-requester attempts to download attachment", async () => {
       const res = await request(app)
         .get(`/api/attachments/${activeAttachmentAId}/download`)
-        .set("X-Requester-Id", String(requesterBId));
+        .set("Cookie", cookieB);
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
       expect(res.body.error).toBeDefined();
-      expect(res.body.error.code).toBe("FORBIDDEN_RESOURCE");
+      expect(res.body.error.code).toBe("ATTACHMENT_NOT_FOUND");
     });
 
     it("returns 404 Not Found when attachment ID does not exist", async () => {
       const res = await request(app)
         .get("/api/attachments/999999/download")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe("ATTACHMENT_NOT_FOUND");
     });
 
-    it("returns 403 Forbidden when X-Requester-Id is missing", async () => {
+    it("returns 401 Unauthorized when session cookie is missing", async () => {
       const res = await request(app).get(
         `/api/attachments/${activeAttachmentAId}/download`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("UNAUTHORIZED");
     });
   });
 
@@ -371,7 +394,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
     it("successfully soft-removes attachment with valid preset reason (POST /api/attachments/:id/remove)", async () => {
       const res = await request(app)
         .post(`/api/attachments/${presetRemovalAttachmentId}/remove`)
-        .set("X-Requester-Id", String(requesterAId))
+        .set("Cookie", cookieA)
         .send({
           reason: "Duplicate file",
         });
@@ -395,7 +418,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
       // Verify that subsequent download returns 410 Gone
       const downloadRes = await request(app)
         .get(`/api/attachments/${presetRemovalAttachmentId}/download`)
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
       expect(downloadRes.status).toBe(410);
       expect(downloadRes.body.error).toBe("Attachment has been removed");
     });
@@ -403,7 +426,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
     it("successfully soft-removes attachment with valid custom reason (>= 5 chars) when preset is 'Other'", async () => {
       const res = await request(app)
         .post(`/api/attachments/${customRemovalAttachmentId}/remove`)
-        .set("X-Requester-Id", String(requesterAId))
+        .set("Cookie", cookieA)
         .send({
           reason: "Other",
           customReason: "Accidentally uploaded confidential government passport scan",
@@ -441,7 +464,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
 
       const res = await request(app)
         .post(`/api/attachments/${tempAtt.id}/remove`)
-        .set("X-Requester-Id", String(requesterAId))
+        .set("Cookie", cookieA)
         .send({
           reason: "Other",
           customReason: "bad",
@@ -475,7 +498,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
 
       const res = await request(app)
         .post(`/api/attachments/${tempAtt.id}/remove`)
-        .set("X-Requester-Id", String(requesterAId))
+        .set("Cookie", cookieA)
         .send({
           reason: "InvalidPresetNotAllowed",
         });
@@ -489,7 +512,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
     it("returns 400 Bad Request when attachment is already removed", async () => {
       const res = await request(app)
         .post(`/api/attachments/${presetRemovalAttachmentId}/remove`)
-        .set("X-Requester-Id", String(requesterAId))
+        .set("Cookie", cookieA)
         .send({
           reason: "Duplicate file",
         });
@@ -513,13 +536,13 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
 
       const res = await request(app)
         .post(`/api/attachments/${tempAtt.id}/remove`)
-        .set("X-Requester-Id", String(requesterBId))
+        .set("Cookie", cookieB)
         .send({
-          reason: "Duplicate file",
+          reason: "Contains sensitive or confidential data",
         });
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("FORBIDDEN_RESOURCE");
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("ATTACHMENT_NOT_FOUND");
 
       await prisma.attachment.delete({ where: { id: tempAtt.id } });
     });
@@ -539,7 +562,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
 
       const res = await request(app)
         .delete(`/api/attachments/${tempAtt.id}`)
-        .set("X-Requester-Id", String(requesterAId))
+        .set("Cookie", cookieA)
         .send({
           reason: "Contains sensitive or confidential data",
         });
@@ -554,7 +577,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
     it("appends audit entry to ticket activity timeline after soft-removal", async () => {
       const res = await request(app)
         .get(`/api/tickets/${ticketAId}`)
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       const timeline = res.body.data.activityTimeline || res.body.data.timeline;
@@ -596,7 +619,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
 
       const res = await request(app)
         .post(`/api/attachments/${tempAtt.id}/remove`)
-        .set("X-Requester-Id", String(requesterAId))
+        .set("Cookie", cookieA)
         .send({
           reason: "Other",
           customReason: "Accidentally uploaded draft document that needs redaction",
@@ -620,7 +643,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
       // Verify in activity timeline
       const ticketRes = await request(app)
         .get(`/api/tickets/${ticketAId}`)
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
       const timeline = ticketRes.body.data.activityTimeline;
       const otherAudit = timeline.find(
         (t: { type: string; message: string; reason?: string }) =>
@@ -659,7 +682,7 @@ describe("Issue 9 — Ticket Details & Attachments Lifecycle API (ticket-detail.
 
       const res = await request(app)
         .post(`/api/attachments/${tempAtt.id}/remove`)
-        .set("X-Requester-Id", String(requesterAId))
+        .set("Cookie", cookieA)
         .send({
           reason: "Duplicate file",
         });

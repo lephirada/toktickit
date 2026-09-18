@@ -5,7 +5,23 @@ import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import { getPrisma } from "./prisma.js";
 import { Prisma, Priority, TicketStatus } from "@prisma/client";
-import { requireRequesterAuth, AuthenticatedRequest } from "./middleware/auth.js";
+import {
+  requireAuth,
+  requirePasswordChanged,
+  requireRole,
+  AuthenticatedRequest,
+} from "./middleware/auth.js";
+import {
+  signSessionToken,
+  COOKIE_NAME,
+  getSessionCookieOptions,
+  getClearCookieOptions,
+} from "./utils/jwt.js";
+import {
+  verifyPassword,
+  hashPassword,
+  validatePasswordPolicy,
+} from "./utils/password.js";
 import {
   handlePreUploadMiddleware,
   handleTicketAttachmentUpload,
@@ -15,7 +31,13 @@ import { createErrorEnvelope, FieldError } from "./utils/errors.js";
 
 export const app = express();
 
-app.use(cors());
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+app.use(
+  cors({
+    origin: CLIENT_ORIGIN,
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
@@ -27,6 +49,175 @@ app.get("/api/health", (_req: Request, res: Response) => {
     service: "TokTickIT API",
   });
 });
+
+// ===========================================================================
+// Issue 12 — Authentication Endpoints
+// ===========================================================================
+
+// POST /api/auth/login
+app.post("/api/auth/login", async (req: Request, res: Response): Promise<void> => {
+  const { email, password } = req.body || {};
+
+  if (!email || typeof email !== "string" || !password || typeof password !== "string") {
+    res
+      .status(400)
+      .json(createErrorEnvelope("VALIDATION_ERROR", "Email and password are required."));
+    return;
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  try {
+    const user = await getPrisma().user.findUnique({
+      where: { email: cleanEmail },
+    });
+
+    if (!user || !user.isActive) {
+      res
+        .status(401)
+        .json(createErrorEnvelope("INVALID_CREDENTIALS", "Invalid email or password."));
+      return;
+    }
+
+    const isMatch = await verifyPassword(password, user.passwordHash);
+    if (!isMatch) {
+      res
+        .status(401)
+        .json(createErrorEnvelope("INVALID_CREDENTIALS", "Invalid email or password."));
+      return;
+    }
+
+    const token = signSessionToken({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    res.cookie(COOKIE_NAME, token, getSessionCookieOptions());
+
+    res.status(200).json({
+      data: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        mustChangePassword: user.mustChangePassword,
+      },
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Login failed."));
+  }
+});
+
+// POST /api/auth/logout (Idempotent & Permissive)
+app.post("/api/auth/logout", (_req: Request, res: Response): void => {
+  res.cookie(COOKIE_NAME, "", getClearCookieOptions());
+  res.status(200).json({
+    data: {
+      message: "Successfully logged out",
+    },
+  });
+});
+
+// GET /api/auth/me (Exempt from password-change gate)
+app.get("/api/auth/me", requireAuth, (req: AuthenticatedRequest, res: Response): void => {
+  const user = req.user!;
+  res.status(200).json({
+    data: {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      mustChangePassword: user.mustChangePassword,
+    },
+  });
+});
+
+// POST /api/auth/change-password (Exempt from password-change gate)
+app.post(
+  "/api/auth/change-password",
+  requireAuth,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const { currentPassword, newPassword, confirmPassword } = req.body || {};
+    const user = req.user!;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      res
+        .status(400)
+        .json(
+          createErrorEnvelope(
+            "VALIDATION_ERROR",
+            "Current password, new password, and confirmation are required."
+          )
+        );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      res
+        .status(422)
+        .json(createErrorEnvelope("VALIDATION_ERROR", "New password and confirmation do not match."));
+      return;
+    }
+
+    if (newPassword === currentPassword) {
+      res
+        .status(422)
+        .json(
+          createErrorEnvelope(
+            "VALIDATION_ERROR",
+            "New password must be different from current password."
+          )
+        );
+      return;
+    }
+
+    const policyResult = validatePasswordPolicy(newPassword);
+    if (!policyResult.isValid) {
+      res
+        .status(422)
+        .json(
+          createErrorEnvelope(
+            "VALIDATION_ERROR",
+            policyResult.reason || "Password does not meet complexity requirements."
+          )
+        );
+      return;
+    }
+
+    const isCurrentValid = await verifyPassword(currentPassword, user.passwordHash);
+    if (!isCurrentValid) {
+      res
+        .status(400)
+        .json(createErrorEnvelope("INVALID_CURRENT_PASSWORD", "Incorrect current password."));
+      return;
+    }
+
+    try {
+      const newHash = await hashPassword(newPassword);
+      await getPrisma().user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: newHash,
+          mustChangePassword: false,
+        },
+      });
+
+      res.status(200).json({
+        data: {
+          message: "Password changed successfully",
+          mustChangePassword: false,
+        },
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to update password."));
+    }
+  }
+);
 
 // ---------------------------------------------------------------------------
 // Issue 4 — Category list
@@ -96,7 +287,9 @@ app.get("/api/related-systems", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 app.get(
   "/api/tickets",
-  requireRequesterAuth,
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("REQUESTER"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const requesterId = req.requesterId!;
@@ -263,7 +456,8 @@ app.get(
 // ---------------------------------------------------------------------------
 app.post(
   "/api/attachments/pre-upload",
-  requireRequesterAuth,
+  requireAuth,
+  requirePasswordChanged,
   handlePreUploadMiddleware,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -320,7 +514,9 @@ app.post(
 // ---------------------------------------------------------------------------
 app.post(
   "/api/tickets",
-  requireRequesterAuth,
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("REQUESTER"),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const requesterId = req.requesterId!;
@@ -702,7 +898,8 @@ export const auditService = {
 // ---------------------------------------------------------------------------
 app.get(
   "/api/tickets/:id",
-  requireRequesterAuth,
+  requireAuth,
+  requirePasswordChanged,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const requesterId = req.requesterId!;
@@ -761,6 +958,19 @@ app.get(
           activities: {
             orderBy: { createdAt: "asc" },
           },
+          comments: {
+            where: { isInternal: false },
+            orderBy: { createdAt: "asc" },
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  role: true,
+                },
+              },
+            },
+          },
         },
       });
 
@@ -776,14 +986,14 @@ app.get(
         return;
       }
 
-      // Requester Isolation: Never leak tickets across requesters
-      if (ticket.requesterId !== requesterId) {
+      // Requester Isolation (AC-12-12): Anti-leakage returns 404 for unowned tickets
+      if (req.user!.role === "REQUESTER" && ticket.requesterId !== requesterId) {
         res
-          .status(403)
+          .status(404)
           .json(
             createErrorEnvelope(
-              "FORBIDDEN_RESOURCE",
-              "You are not authorized to view or access this ticket."
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
             )
           );
         return;
@@ -911,6 +1121,17 @@ app.get(
         createdAt: att.createdAt,
       }));
 
+      const formattedComments = (ticket.comments || []).map((c: any) => ({
+        id: c.id,
+        ticketId: c.ticketId,
+        authorId: c.authorId,
+        authorName: c.author.fullName,
+        authorRole: c.author.role,
+        content: c.body,
+        body: c.body,
+        createdAt: c.createdAt,
+      }));
+
       res.status(200).json({
         data: {
           id: ticket.id,
@@ -940,6 +1161,7 @@ app.get(
               }
             : null,
           attachments: formattedAttachments,
+          comments: formattedComments,
           activityTimeline: timeline,
           timeline,
           activityHistory: timeline,
@@ -961,12 +1183,408 @@ app.get(
 );
 
 // ---------------------------------------------------------------------------
+// Issue 12 / Section 3.4 — Confirm Problem Appears Resolved
+// POST /api/tickets/:id/confirm-resolved
+// ---------------------------------------------------------------------------
+app.post(
+  "/api/tickets/:id/confirm-resolved",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("REQUESTER"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const requesterId = req.requesterId!;
+      const ticketId = parseInt(req.params.id, 10);
+
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Ownership enforcement: Only ticket owner can confirm resolved (anti-leakage 404)
+      if (ticket.requesterId !== requesterId) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Precondition 1: Duplicate check (AC-15-12 / Section 3.4)
+      if (ticket.resolutionIndicated) {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "ALREADY_INDICATED_RESOLVED",
+              "Ticket resolution has already been confirmed by the requester."
+            )
+          );
+        return;
+      }
+
+      // Precondition 2: Must be IN_PROGRESS or WAITING_FOR_REQUESTER
+      const eligibleStatuses = ["IN_PROGRESS", "WAITING_FOR_REQUESTER"];
+      if (!eligibleStatuses.includes(ticket.status)) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              `Cannot confirm resolution for ticket in status ${ticket.status}. Must be IN_PROGRESS or WAITING_FOR_REQUESTER.`
+            )
+          );
+        return;
+      }
+
+      // If WAITING_FOR_REQUESTER, transition to IN_PROGRESS. Otherwise remain IN_PROGRESS.
+      // NOTE: NEVER set status to RESOLVED! (BR-05)
+      const nextStatus = "IN_PROGRESS";
+
+      const feedbackCommentText = req.body?.feedbackComment
+        ? `[Resolution Feedback] The requester indicated that the reported issue appears resolved. Feedback: ${String(req.body.feedbackComment).trim()}`
+        : "[Resolution Feedback] The requester indicated that the reported issue appears resolved.";
+
+      const updated = await getPrisma().$transaction(async (tx) => {
+        const updatedTicket = await tx.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            resolutionIndicated: true,
+            status: nextStatus,
+          },
+        });
+
+        // Add automated public comment
+        await tx.comment.create({
+          data: {
+            ticketId: ticket.id,
+            authorId: requesterId,
+            body: feedbackCommentText,
+            isInternal: false,
+          },
+        });
+
+        // Add activity record
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: ticket.id,
+            type: "INDICATE_RESOLVED",
+            action: "Problem indicated resolved",
+            message: "Requester indicated that the problem appears resolved.",
+            actorId: requesterId,
+            actorName: req.requester?.fullName || "Requester",
+          },
+        });
+
+        return updatedTicket;
+      });
+
+      res.status(200).json({
+        data: {
+          id: updated.id,
+          ticketNo: updated.ticketNo,
+          status: updated.status,
+          resolutionIndicated: true,
+          message: "Resolution confirmation recorded successfully.",
+        },
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to confirm ticket resolution."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Issue 12 / Section 4.1 — List Public Comments
+// GET /api/tickets/:id/comments
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/tickets/:id/comments",
+  requireAuth,
+  requirePasswordChanged,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Authorization: Requesters can only access comments on their own tickets (anti-leakage 404)
+      if (req.user!.role === "REQUESTER" && ticket.requesterId !== req.user!.id) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // IT_STAFF, ADMINISTRATOR, or ticket's Requester can list public comments
+      const comments = await getPrisma().comment.findMany({
+        where: {
+          ticketId,
+          isInternal: false,
+        },
+        orderBy: { createdAt: "asc" },
+        include: {
+          author: {
+            select: {
+              id: true,
+              fullName: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      const formatted = comments.map((c) => ({
+        id: c.id,
+        ticketId: c.ticketId,
+        authorId: c.authorId,
+        authorName: c.author.fullName,
+        authorRole: c.author.role,
+        content: c.body,
+        body: c.body,
+        createdAt: c.createdAt,
+      }));
+
+      res.status(200).json({ data: formatted });
+    } catch (error) {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to fetch ticket comments."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Issue 12 / Section 4.2 — Post Public Comment
+// POST /api/tickets/:id/comments
+// ---------------------------------------------------------------------------
+app.post(
+  "/api/tickets/:id/comments",
+  requireAuth,
+  requirePasswordChanged,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Authorization: Requesters can only post comments on their own tickets (anti-leakage 404)
+      if (req.user!.role === "REQUESTER" && ticket.requesterId !== req.user!.id) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const rawContent = req.body?.content ?? req.body?.body;
+      if (
+        typeof rawContent !== "string" ||
+        rawContent.trim().length < 1 ||
+        rawContent.trim().length > 2000
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Comment content must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      const commentContent = rawContent.trim();
+      const author = req.user!;
+
+      // Side Effect: If ticket is in WAITING_FOR_REQUESTER and author is ticket's requester,
+      // transition status to IN_PROGRESS (AC-15-12 / Section 4.2)
+      const shouldTransition =
+        ticket.status === "WAITING_FOR_REQUESTER" && ticket.requesterId === author.id;
+
+      const result = await getPrisma().$transaction(async (tx) => {
+        if (shouldTransition) {
+          await tx.ticket.update({
+            where: { id: ticket.id },
+            data: { status: "IN_PROGRESS" },
+          });
+
+          await tx.ticketActivity.create({
+            data: {
+              ticketId: ticket.id,
+              type: "STATUS_CHANGED",
+              action: "Status updated",
+              message:
+                "Ticket status automatically transitioned from WAITING_FOR_REQUESTER to IN_PROGRESS upon requester reply.",
+              actorId: author.id,
+              actorName: author.fullName,
+            },
+          });
+        }
+
+        const comment = await tx.comment.create({
+          data: {
+            ticketId: ticket.id,
+            authorId: author.id,
+            body: commentContent,
+            isInternal: false,
+          },
+          include: {
+            author: {
+              select: {
+                id: true,
+                fullName: true,
+                role: true,
+              },
+            },
+          },
+        });
+
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: ticket.id,
+            type: "COMMENT_ADDED",
+            action: "Public comment added",
+            message: `Public comment posted by ${author.fullName}.`,
+            actorId: author.id,
+            actorName: author.fullName,
+          },
+        });
+
+        return comment;
+      });
+
+      res.status(201).json({
+        data: {
+          id: result.id,
+          ticketId: result.ticketId,
+          authorId: result.authorId,
+          authorName: result.author.fullName,
+          authorRole: result.author.role,
+          content: result.body,
+          body: result.body,
+          createdAt: result.createdAt,
+        },
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to post comment."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Section 14 Part 8 — Add Attachment to Existing Ticket
 // POST /api/tickets/:id/attachments
 // ---------------------------------------------------------------------------
 app.post(
   "/api/tickets/:id/attachments",
-  requireRequesterAuth,
+  requireAuth,
+  requirePasswordChanged,
   handleTicketAttachmentUpload,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -1009,14 +1627,14 @@ app.post(
         return;
       }
 
-      // Check ownership
-      if (ticket.requesterId !== requesterId) {
+      // Check ownership (AC-12-12 anti-leakage: 404 for non-owning requester)
+      if (req.user!.role === "REQUESTER" && ticket.requesterId !== requesterId) {
         res
-          .status(403)
+          .status(404)
           .json(
             createErrorEnvelope(
-              "FORBIDDEN_RESOURCE",
-              "You are not authorized to modify attachments for this ticket."
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
             )
           );
         return;
@@ -1128,7 +1746,8 @@ app.post(
 // ---------------------------------------------------------------------------
 app.get(
   "/api/attachments/:id/download",
-  requireRequesterAuth,
+  requireAuth,
+  requirePasswordChanged,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const requesterId = req.requesterId!;
@@ -1175,13 +1794,14 @@ app.get(
         ? attachment.ticket.requesterId
         : attachment.uploadedById;
 
-      if (ownerId !== requesterId) {
+      // AC-12-12 anti-leakage: Return 404 for unauthorized requesters
+      if (req.user!.role === "REQUESTER" && ownerId !== requesterId) {
         res
-          .status(403)
+          .status(404)
           .json(
             createErrorEnvelope(
-              "FORBIDDEN_RESOURCE",
-              "You do not have permission to download this attachment."
+              "ATTACHMENT_NOT_FOUND",
+              "The requested attachment does not exist."
             )
           );
         return;
@@ -1311,18 +1931,18 @@ async function handleAttachmentRemoval(
       return;
     }
 
-    // Ownership check
+    // Ownership check (AC-12-12 anti-leakage: 404 for unauthorized requester)
     const ownerId = attachment.ticket
       ? attachment.ticket.requesterId
       : attachment.uploadedById;
 
-    if (ownerId !== requesterId) {
+    if (req.user!.role === "REQUESTER" && ownerId !== requesterId) {
       res
-        .status(403)
+        .status(404)
         .json(
           createErrorEnvelope(
-            "FORBIDDEN_RESOURCE",
-            "You do not have permission to remove this attachment."
+            "ATTACHMENT_NOT_FOUND",
+            "The requested attachment does not exist."
           )
         );
       return;
@@ -1460,17 +2080,20 @@ async function handleAttachmentRemoval(
 
 app.post(
   "/api/attachments/:id/remove",
-  requireRequesterAuth,
+  requireAuth,
+  requirePasswordChanged,
   handleAttachmentRemoval
 );
 app.patch(
   "/api/attachments/:id/remove",
-  requireRequesterAuth,
+  requireAuth,
+  requirePasswordChanged,
   handleAttachmentRemoval
 );
 app.delete(
   "/api/attachments/:id",
-  requireRequesterAuth,
+  requireAuth,
+  requirePasswordChanged,
   handleAttachmentRemoval
 );
 
