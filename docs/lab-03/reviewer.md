@@ -11,7 +11,7 @@
 | :---------------------- | :---------------------------------------- | :------------------------------ |
 | `[PR #32]`              | `feature/10-lab3-documentation`           | `[Approved]`                    |
 | `[PR #33]`              | `feature/11-database-migration`           | `[Request Changes -> Approved]` |
-| `[PR #... Placeholder]` | `feature/12-authentication-authorization` | `[Pending]`                     |
+| `[PR #34]`              | `feature/12-authentication-authorization` | `[Request Changes -> Approved]` |
 | `[PR #... Placeholder]` | `feature/13-client-auth-shell`            | `[Pending]`                     |
 | `[PR #... Placeholder]` | `feature/14-staff-queue`                  | `[Pending]`                     |
 | `[PR #... Placeholder]` | `feature/15-staff-ticket-operations`      | `[Pending]`                     |
@@ -68,10 +68,33 @@
 - **Branch:** `feature/12-authentication-authorization`
 - **Reviewer comment I received:**
 
-  > `[Placeholder: Partner review comments for Issue 12 PR]`
+  > I found two issues that should be fixed before approval:
+  >
+  > JWT verification does not require iat and exp
+  > verifySessionToken() only validates sub, email, and role.
+  > A correctly signed token without iat/exp could still pass verification, which does not fully match the required JWT contract and could allow a token without expiration.
+  >
+  > JWT_SECRET is not validated at application startup
+  > getJwtSecret() exits the process for a missing/weak secret only when the function is called.
+  > The server can therefore start in production without a valid JWT_SECRET, contrary to the requirement that production must fail to start when the secret is missing or weak.
+  >
+  > Please fix these two issues before approval.
 
 - **How I responded:**
-  > `[Placeholder: Author response to partner feedback]`
+
+  > Thanks for pointing these out. Both issues have been fixed
+
+- **Reviewer comment I received:**
+
+  > Reviewed the latest changes against the Issue 12 acceptance criteria. All required authentication, JWT/session handling, role-based authorization, requester ownership isolation, password-change gate, discussion endpoints, CORS configuration, and test coverage are implemented as required.
+  >
+  > The two issues from the previous review have also been addressed:
+  >
+  > iat and exp are now required during JWT verification.
+  > JWT_SECRET is now validated at application startup in production.
+  > No blocking issues found.
+
+  > Approve.
 
 ---
 
@@ -218,7 +241,17 @@
 
 - **My comment:**
 
-  > `[Placeholder: My review comment for partner's Issue 13 PR]`
+  > I reviewed the latest changes against the acceptance criteria.
+
+  > The backend implementation is generally well structured, and the role restriction, query support, pagination metadata, and error handling are covered. The CI check is also passing.
+
+  > Before approval, I found two items that should be addressed:
+
+  > Requested Priority filter is missing from the UI. The API supports requestedPriority, but StaffTicketQueue.tsx currently exposes filters for status, category, IT priority, and owner only. Please add Requested Priority to both the desktop filter bar and mobile filter modal, including reset handling, active filter count, and the API request.
+
+  > Responsive table may still require horizontal scrolling. The desktop table uses minWidth: "1190px" together with overflowX: "auto", while it is displayed from the md breakpoint. This may cause horizontal scrolling on tablet-sized viewports, which does not match the requirement for a responsive layout without horizontal scroll. Please adjust the breakpoint or layout so the tablet view remains usable without horizontal scrolling.
+
+  > Once these two points are fixed and the relevant tests still pass, I can review the PR again.
 
 - **Partner's response:**
   > `[Placeholder: Partner's response]`

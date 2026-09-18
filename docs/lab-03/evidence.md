@@ -11,16 +11,16 @@
 
 ## 1. GitHub Issues & Pull Requests Registry
 
-| Issue ID     | Branch Name                               | Issue Description                         | Pull Request Link       | Review Status | Merge Commit      |
-| :----------- | :---------------------------------------- | :---------------------------------------- | :---------------------- | :------------ | :---------------- |
-| **Issue 10** | `feature/10-lab3-documentation`           | Documentation & Engineering Contract      | `[PR #32]`              | `[Approved]`  | `[Merge]`         |
-| **Issue 11** | `feature/11-database-migration`           | Database Migration & Idempotent Seed      | `[PR #33]`              | `[Approved]`  | `[Merged]`        |
-| **Issue 12** | `feature/12-authentication-authorization` | Auth Foundation, Session & Discussion API | `[PR #34]`              | `[Pending]`   | `[Pending Merge]` |
-| **Issue 13** | `feature/13-client-auth-shell`            | Client Auth Shell & Requester Discussion  | `[PR #... Placeholder]` | `[Pending]`   | `[Pending]`       |
-| **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #... Placeholder]` | `[Pending]`   | `[Pending]`       |
-| **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #... Placeholder]` | `[Pending]`   | `[Pending]`       |
-| **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #... Placeholder]` | `[Pending]`   | `[Pending]`       |
-| **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #... Placeholder]` | `[Pending]`   | `[Pending]`       |
+| Issue ID     | Branch Name                               | Issue Description                         | Pull Request Link       | Review Status                   | Merge Commit |
+| :----------- | :---------------------------------------- | :---------------------------------------- | :---------------------- | :------------------------------ | :----------- |
+| **Issue 10** | `feature/10-lab3-documentation`           | Documentation & Engineering Contract      | `[PR #32]`              | `[Approved]`                    | `[Merge]`    |
+| **Issue 11** | `feature/11-database-migration`           | Database Migration & Idempotent Seed      | `[PR #33]`              | `[Approved]`                    | `[Merged]`   |
+| **Issue 12** | `feature/12-authentication-authorization` | Auth Foundation, Session & Discussion API | `[PR #34]`              | `[Request Changes -> Approved]` | `[Merge]`    |
+| **Issue 13** | `feature/13-client-auth-shell`            | Client Auth Shell & Requester Discussion  | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 
 ---
 
