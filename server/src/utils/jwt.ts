@@ -9,21 +9,34 @@ export interface JWTSessionPayload {
   sub: number;
   email: string;
   role: string;
-  iat?: number;
-  exp?: number;
+  iat: number;
+  exp: number;
 }
 
-export function getJwtSecret(): string {
+/**
+ * Validates JWT_SECRET configuration at application startup.
+ * Production fails fast with process.exit(1) if missing or < 32 characters.
+ */
+export function validateJwtSecretAtStartup(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret || secret.trim().length < 32) {
     if (process.env.NODE_ENV === "production") {
-      console.error("FATAL: JWT_SECRET environment variable is missing or shorter than 32 characters in production.");
+      console.error(
+        "FATAL: JWT_SECRET environment variable is missing or shorter than 32 characters in production."
+      );
       process.exit(1);
     }
     // Safe developer & test default
     return "toktickit_dev_secret_key_at_least_32_characters_long_2026!";
   }
   return secret.trim();
+}
+
+// Immediate validation at module startup
+validateJwtSecretAtStartup();
+
+export function getJwtSecret(): string {
+  return validateJwtSecretAtStartup();
 }
 
 /**
@@ -48,7 +61,9 @@ export function signSessionToken(payload: { sub: number; email: string; role: st
 }
 
 /**
- * Verifies and decodes a session JWT. Returns decoded payload or null if invalid or expired.
+ * Verifies and decodes a session JWT.
+ * Enforces HS256 algorithm, valid signature, sub, email, role, and mandatory iat and exp claims.
+ * Returns decoded payload or null if invalid or expired.
  */
 export function verifySessionToken(token: string): JWTSessionPayload | null {
   try {
@@ -57,7 +72,17 @@ export function verifySessionToken(token: string): JWTSessionPayload | null {
       algorithms: ["HS256"],
     }) as unknown as JWTSessionPayload;
 
-    if (!decoded || typeof decoded.sub !== "number" || !decoded.email || !decoded.role) {
+    if (
+      !decoded ||
+      typeof decoded.sub !== "number" ||
+      typeof decoded.email !== "string" ||
+      !decoded.email.trim() ||
+      typeof decoded.role !== "string" ||
+      !decoded.role.trim() ||
+      typeof decoded.iat !== "number" ||
+      typeof decoded.exp !== "number" ||
+      decoded.exp <= decoded.iat
+    ) {
       return null;
     }
     return decoded;
@@ -107,7 +132,7 @@ export function getSessionCookieOptions(): CookieOptions {
 }
 
 /**
- * Clearing cookie configuration for logout (Max-Age=0, expired date).
+ * Cookie options for clearing session on logout.
  */
 export function getClearCookieOptions(): CookieOptions {
   const isProduction = process.env.NODE_ENV === "production";
@@ -116,7 +141,7 @@ export function getClearCookieOptions(): CookieOptions {
     sameSite: "lax",
     secure: isProduction,
     path: "/",
-    expires: new Date(0),
     maxAge: 0,
+    expires: new Date(0),
   };
 }

@@ -1,10 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import jwt from "jsonwebtoken";
 import {
   signSessionToken,
   verifySessionToken,
   extractTokenFromRequest,
   getSessionCookieOptions,
   getClearCookieOptions,
+  validateJwtSecretAtStartup,
   COOKIE_NAME,
   TOKEN_EXPIRY_SECONDS,
 } from "../../src/utils/jwt.js";
@@ -34,7 +36,61 @@ describe("Issue 12 — Core Security Utilities (JWT & Password)", () => {
       expect(decoded?.sub).toBe(42);
       expect(decoded?.email).toBe("alice@toktickit.com");
       expect(decoded?.role).toBe("IT_STAFF");
+      expect(typeof decoded?.iat).toBe("number");
+      expect(typeof decoded?.exp).toBe("number");
       expect(decoded?.exp! - decoded?.iat!).toBe(TOKEN_EXPIRY_SECONDS); // Exactly 8 hours (28,800s)
+    });
+
+    it("rejects tokens missing mandatory iat or exp claims or invalid expiration", () => {
+      const secret = "toktickit_dev_secret_key_at_least_32_characters_long_2026!";
+
+      // Token signed without expiration (no exp, no iat)
+      const tokenNoExp = jwt.sign(
+        { sub: 1, email: "noexp@test.com", role: "REQUESTER" },
+        secret,
+        { algorithm: "HS256", noTimestamp: true }
+      );
+      expect(verifySessionToken(tokenNoExp)).toBeNull();
+
+      // Token with invalid exp <= iat
+      const tokenBadTimes = jwt.sign(
+        { sub: 1, email: "badtimes@test.com", role: "REQUESTER", iat: 2000, exp: 1000 },
+        secret,
+        { algorithm: "HS256" }
+      );
+      expect(verifySessionToken(tokenBadTimes)).toBeNull();
+    });
+
+    it("validates JWT_SECRET at startup and exits in production if missing or weak", () => {
+      const origEnv = process.env.NODE_ENV;
+      const origSecret = process.env.JWT_SECRET;
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {}) as any);
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      try {
+        process.env.NODE_ENV = "production";
+        delete process.env.JWT_SECRET;
+
+        validateJwtSecretAtStartup();
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        expect(errorSpy).toHaveBeenCalledWith(
+          expect.stringContaining("FATAL: JWT_SECRET environment variable is missing or shorter than 32 characters in production.")
+        );
+
+        // Weak secret (< 32 characters)
+        process.env.JWT_SECRET = "short_secret_less_than_32";
+        validateJwtSecretAtStartup();
+        expect(exitSpy).toHaveBeenCalledWith(1);
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        if (origSecret !== undefined) {
+          process.env.JWT_SECRET = origSecret;
+        } else {
+          delete process.env.JWT_SECRET;
+        }
+        exitSpy.mockRestore();
+        errorSpy.mockRestore();
+      }
     });
 
     it("rejects tampered and invalid tokens according to AC-12-05", () => {
