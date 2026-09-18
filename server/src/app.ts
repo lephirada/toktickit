@@ -31,7 +31,13 @@ import { createErrorEnvelope, FieldError } from "./utils/errors.js";
 
 export const app = express();
 
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const rawClientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+if (rawClientOrigin === "*") {
+  throw new Error(
+    "CORS configuration error: Wildcard origin '*' is strictly prohibited when credentials are true."
+  );
+}
+const CLIENT_ORIGIN = rawClientOrigin;
 app.use(
   cors({
     origin: CLIENT_ORIGIN,
@@ -231,7 +237,7 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
     });
     res.status(200).json(categories);
   } catch {
-    res.status(500).json({ error: "Failed to fetch categories" });
+    res.status(500).json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to fetch categories"));
   }
 });
 
@@ -254,7 +260,7 @@ app.get("/api/requesters", async (_req: Request, res: Response) => {
     });
     res.status(200).json({ data: requesters });
   } catch {
-    res.status(500).json({ error: "Failed to fetch requesters" });
+    res.status(500).json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to fetch requesters"));
   }
 });
 
@@ -277,7 +283,7 @@ app.get("/api/related-systems", async (req: Request, res: Response) => {
     });
     res.status(200).json(systems);
   } catch {
-    res.status(500).json({ error: "Failed to fetch related systems" });
+    res.status(500).json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to fetch related systems"));
   }
 });
 
