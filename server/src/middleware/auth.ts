@@ -14,7 +14,6 @@ export interface AuthenticatedRequest extends Request {
     department: string;
     isActive: boolean;
   };
-  isLegacyRequesterHeader?: boolean;
 }
 
 /**
@@ -22,8 +21,7 @@ export interface AuthenticatedRequest extends Request {
  * 1. Extracts signed JWT from 'toktickit_session' cookie.
  * 2. Verifies signature, expiration, and validates claims (sub, email, role).
  * 3. Queries database liveness (User.isActive === true).
- * 4. Fallback: Supports X-Requester-Id header for Lab 02 client & E2E regression tests prior to Issue 13.
- * 5. Aborts with 401 Unauthorized if missing/invalid (UNAUTHORIZED) or inactive (ACCOUNT_DEACTIVATED).
+ * 4. Aborts with 401 Unauthorized if missing/invalid (UNAUTHORIZED) or inactive (ACCOUNT_DEACTIVATED).
  */
 export async function requireAuth(
   req: AuthenticatedRequest,
@@ -33,37 +31,6 @@ export async function requireAuth(
   try {
     const token = extractTokenFromRequest(req);
     if (!token) {
-      // Legacy header fallback for Lab 02 frontend & Playwright E2E regression
-      const legacyHeader = req.headers["x-requester-id"];
-      if (legacyHeader && !Array.isArray(legacyHeader)) {
-        const reqId = parseInt(legacyHeader, 10);
-        if (!isNaN(reqId) && reqId > 0 && String(reqId) === legacyHeader.trim()) {
-          const user = await getPrisma().user.findUnique({
-            where: { id: reqId },
-          });
-
-          if (!user || !user.isActive) {
-            res
-              .status(401)
-              .json(createErrorEnvelope("ACCOUNT_DEACTIVATED", "Account has been deactivated."));
-            return;
-          }
-
-          req.user = user;
-          req.requesterId = user.id;
-          req.requester = {
-            id: user.id,
-            email: user.email,
-            fullName: user.fullName,
-            department: user.department ?? "",
-            isActive: user.isActive,
-          };
-          req.isLegacyRequesterHeader = true;
-          next();
-          return;
-        }
-      }
-
       res
         .status(401)
         .json(createErrorEnvelope("UNAUTHORIZED", "Authentication required. Please log in."));
@@ -123,12 +90,6 @@ export function requirePasswordChanged(
   res: Response,
   next: NextFunction
 ): void {
-  // Bypass password change gate if authenticated through legacy dev header (Lab 02 client without password UI)
-  if (req.isLegacyRequesterHeader) {
-    next();
-    return;
-  }
-
   if (req.user?.mustChangePassword) {
     res
       .status(403)
