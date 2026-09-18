@@ -355,30 +355,42 @@ describe("Issue 11 — Database Schema, Migration & Seed Verification (migration
     expect(catCount).toBe(4);
     expect(sysCount).toBe(6);
 
-    // 2. Manually mutate John Doe's password credentials with valid bcrypt format
-    const modifiedHash = "$2b$10$customModifiedHashForIdempotencyTest123456789012345";
-    await testPrisma.user.update({
-      where: { email: "john.doe@toktickit.com" },
-      data: {
-        passwordHash: modifiedHash,
-        mustChangePassword: true,
-      },
-    });
+    const DEFAULT_USER_PASSWORD_HASH = "$2b$10$epR.zIe6lO2vE9tK4x8GkOCsM4.W1YI2fT1J2V9q8J5B9X9b1w7y2";
+    try {
+      // 2. Manually mutate John Doe's password credentials with valid bcrypt format
+      const modifiedHash = "$2b$10$customModifiedHashForIdempotencyTest123456789012345";
+      await testPrisma.user.update({
+        where: { email: "john.doe@toktickit.com" },
+        data: {
+          passwordHash: modifiedHash,
+          mustChangePassword: true,
+        },
+      });
 
-    // 3. Re-run the real seed script the 2nd time (AC-11-05 idempotency)
-    executeRealSeed();
+      // 3. Re-run the real seed script the 2nd time (AC-11-05 idempotency)
+      executeRealSeed();
 
-    // 4. Verify modified password credentials were NOT overwritten (AC-11-08)
-    const johnAfterReSeed = await testPrisma.user.findUnique({
-      where: { email: "john.doe@toktickit.com" },
-    });
-    expect(johnAfterReSeed?.passwordHash).toBe(modifiedHash);
-    expect(johnAfterReSeed?.mustChangePassword).toBe(true);
+      // 4. Verify modified password credentials were NOT overwritten (AC-11-08)
+      const johnAfterReSeed = await testPrisma.user.findUnique({
+        where: { email: "john.doe@toktickit.com" },
+      });
+      expect(johnAfterReSeed?.passwordHash).toBe(modifiedHash);
+      expect(johnAfterReSeed?.mustChangePassword).toBe(true);
 
-    // Verify total records remained exactly consistent with zero duplication
-    const totalUsersAfterReSeed = await testPrisma.user.count();
-    expect(totalUsersAfterReSeed).toBe(10);
-    expect(await testPrisma.category.count()).toBe(4);
-    expect(await testPrisma.relatedSystem.count()).toBe(6);
+      // Verify total records remained exactly consistent with zero duplication
+      const totalUsersAfterReSeed = await testPrisma.user.count();
+      expect(totalUsersAfterReSeed).toBe(10);
+      expect(await testPrisma.category.count()).toBe(4);
+      expect(await testPrisma.relatedSystem.count()).toBe(6);
+    } finally {
+      // Restore John Doe credentials to original seed state to prevent cross-test interference
+      await testPrisma.user.update({
+        where: { email: "john.doe@toktickit.com" },
+        data: {
+          passwordHash: DEFAULT_USER_PASSWORD_HASH,
+          mustChangePassword: false,
+        },
+      }).catch(() => {});
+    }
   });
 });

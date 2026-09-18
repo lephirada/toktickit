@@ -73,6 +73,30 @@
 
 ---
 
+## Lab 3: Users, Roles, IT Staff Ticketing, and Admin Screens
+
+### 1. Database Migration & RBAC Foundation (Issue 11)
+
+- **Non-Destructive Schema Migration:** Extends data model to support `User`, `Ticket`, `Comment`, and `TicketActivity` with zero data loss for legacy records.
+- **Role-Based Users:** Supports `REQUESTER`, `IT_STAFF`, and `ADMINISTRATOR` roles with bcrypt hashed credentials.
+- **Idempotent Seed:** Seeds 10 baseline users (5 Requesters, 4 IT Staff, 1 Administrator) preserving credentials across repeated runs.
+
+### 2. Authentication & Session Management (Issue 12)
+
+- **HTTP-Only Session Cookies:** Secure JWT stored in `toktickit_session` (`SameSite=Lax`, `HttpOnly`, `Secure` in production).
+- **Zero-Trust Identity Authority:** Server strictly derives identity from signed session token; client-supplied identity headers are rejected (`401 Unauthorized`).
+- **Database Liveness Check:** Validates `User.isActive === true` on every authenticated request, invalidating deactivated sessions immediately.
+- **Forced First-Login Password Change:** `requirePasswordChanged` middleware blocks operational endpoints with `403 PASSWORD_CHANGE_REQUIRED` until password is reset.
+- **Idempotent Logout:** `POST /api/auth/logout` clears the session cookie safely.
+
+### 3. Role Authorization & Discussion Lifecycle (Issue 12)
+
+- **Ownership Isolation:** Requesters accessing unowned tickets or attachments receive `404 Not Found` (anti-enumeration / anti-leakage).
+- **Public Discussion Thread:** Append-only public comments with role-aware privacy (internal notes hidden from requesters).
+- **Resolution Confirmation:** `POST /api/tickets/:id/confirm-resolved` allows requesters to indicate resolution, transitioning tickets from `WAITING_FOR_REQUESTER` to `IN_PROGRESS` and generating audit trails without prematurely setting `RESOLVED`.
+
+---
+
 ## Repository Structure
 
 ```text
@@ -167,6 +191,18 @@ toktickit/
 | `GET`    | `/api/attachments/:id/download` | Download active attachment file (`410 Gone` if soft-deleted)                         |
 | `DELETE` | `/api/attachments/:id`          | Soft-remove attachment with mandatory deletion reason                                |
 
+### Lab 3 Authentication & Discussion API
+
+| Method   | Endpoint                            | Description                                                                              | Access / Role               |
+| :------- | :---------------------------------- | :--------------------------------------------------------------------------------------- | :-------------------------- |
+| `POST`   | `/api/auth/login`                   | Authenticate user with email and password, issue `toktickit_session` cookie              | Public                      |
+| `GET`    | `/api/auth/me`                      | Get current authenticated user profile and role                                          | Authenticated               |
+| `POST`   | `/api/auth/change-password`         | Change password, update bcrypt hash, and clear `mustChangePassword` flag                 | Authenticated               |
+| `POST`   | `/api/auth/logout`                  | Clear session cookie and invalidate local session (idempotent)                           | Public / Authenticated      |
+| `GET`    | `/api/tickets/:id/comments`         | Fetch public comments for a ticket (internal notes filtered out for requesters)          | Authenticated (Owner/Staff) |
+| `POST`   | `/api/tickets/:id/comments`         | Append a new public comment to the discussion thread (1–2000 chars)                      | Authenticated (Owner/Staff) |
+| `POST`   | `/api/tickets/:id/confirm-resolved` | Requester confirms issue appears resolved (sets flag, transitions status, logs activity) | Requester (Owner only)      |
+
 ---
 
 ## Setup & Running Locally
@@ -202,11 +238,16 @@ npx prisma migrate dev
 npm run prisma:seed
 ```
 
-> **Seed Data Includes:**
+> **Seed Data Includes (Lab 2 Baseline):**
 >
 > - 4 Active Requesters (Alex Morgan, Samira Khan, Liam Davis, Chloe Bennet) & 1 Inactive Requester
 > - 4 Categories (Account & Access, Hardware, Software, Network)
 > - 6 Related Systems (VPN, Email, ERP, Laptop Fleet, HR Portal, Wi-Fi Infrastructure)
+>
+> **Lab 3 Seed Dataset:**
+>
+> - 10 Users across 3 Roles: 5 Requesters (Sarah Connor, John Doe, Jennifer Anderson, Michael Brown, Kyle Reese), 4 IT Staff (David Lee, Alex Morgan, Chris Taylor, Kevin Patel), 1 Administrator (`admin@toktickit.com`)
+> - Bcrypt hashed credentials: Default password `Password123!` (Admin: `Admin123!`)
 
 ---
 

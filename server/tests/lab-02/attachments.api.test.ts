@@ -6,12 +6,15 @@ import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { UPLOAD_DIR } from "../../src/middleware/upload.js";
 import { Priority, TicketStatus } from "@prisma/client";
+import { createTestSessionCookie } from "../helpers/auth.js";
 
 describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.ts)", () => {
   const prisma = getPrisma();
 
   let requester1Id: number;
   let requester2Id: number;
+  let cookie1: string;
+  let cookie2: string;
   let ticketId: number;
 
   let attachmentId: number;
@@ -29,6 +32,15 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
 
     requester1Id = sarah.id;
     requester2Id = john.id;
+
+    cookie1 = createTestSessionCookie({ id: sarah.id, email: sarah.email, role: "REQUESTER" });
+    cookie2 = createTestSessionCookie({ id: john.id, email: john.email, role: "REQUESTER" });
+
+    // Ensure requester1 has mustChangePassword = false during tests
+    await prisma.user.update({
+      where: { id: requester1Id },
+      data: { mustChangePassword: false },
+    });
 
     // 2. Retrieve Category
     const category = await prisma.category.findFirstOrThrow();
@@ -71,6 +83,13 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
   });
 
   afterAll(async () => {
+    if (requester1Id) {
+      await prisma.user.update({
+        where: { id: requester1Id },
+        data: { mustChangePassword: true },
+      }).catch(() => {});
+    }
+
     if (attachmentStorageKey) {
       const p = path.join(UPLOAD_DIR, attachmentStorageKey);
       if (fs.existsSync(p)) {
@@ -90,7 +109,7 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
   it("API-09: Attachment Stream Download returns 200 OK binary stream with correct Content-Type and Content-Disposition", async () => {
     const res = await request(app)
       .get(`/api/attachments/${attachmentId}/download`)
-      .set("X-Requester-Id", String(requester1Id));
+      .set("Cookie", cookie1);
 
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toContain("image/png");
@@ -101,14 +120,14 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
   });
 
   // API-08B: Attachment Download Ownership Guard
-  it("API-08B: Attachment Download Ownership Guard returns 403 Forbidden for cross-requester download attempt", async () => {
+  it("API-08B: Attachment Download Ownership Guard returns 404 Not Found for cross-requester download attempt", async () => {
     const res = await request(app)
       .get(`/api/attachments/${attachmentId}/download`)
-      .set("X-Requester-Id", String(requester2Id));
+      .set("Cookie", cookie2);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     expect(res.body.error).toBeDefined();
-    expect(res.body.error.code).toBe("FORBIDDEN_RESOURCE");
+    expect(res.body.error.code).toBe("ATTACHMENT_NOT_FOUND");
   });
 
   // API-10: Attachment Soft-Removal & 410 Guard
@@ -116,7 +135,7 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
     // 1. Send DELETE /api/attachments/:id with reason "Wrong file"
     const deleteRes = await request(app)
       .delete(`/api/attachments/${attachmentId}`)
-      .set("X-Requester-Id", String(requester1Id))
+      .set("Cookie", cookie1)
       .send({ reason: "Wrong file" });
 
     expect(deleteRes.status).toBe(200);
@@ -126,7 +145,7 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
     // 2. Send GET /api/attachments/:id/download
     const downloadRes = await request(app)
       .get(`/api/attachments/${attachmentId}/download`)
-      .set("X-Requester-Id", String(requester1Id));
+      .set("Cookie", cookie1);
 
     expect(downloadRes.status).toBe(410);
     expect(downloadRes.body.error).toBe("Attachment has been removed");
@@ -139,7 +158,7 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
     const newFileBuf = Buffer.from("New Attachment Content For Ticket");
     const res = await request(app)
       .post(`/api/tickets/${ticketId}/attachments`)
-      .set("X-Requester-Id", String(requester1Id))
+      .set("Cookie", cookie1)
       .attach("file", newFileBuf, "diagnostics_log.pdf");
 
     expect(res.status).toBe(201);
@@ -151,7 +170,7 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
     // Verify it appears in GET /api/tickets/:id
     const ticketRes = await request(app)
       .get(`/api/tickets/${ticketId}`)
-      .set("X-Requester-Id", String(requester1Id));
+      .set("Cookie", cookie1);
 
     expect(ticketRes.status).toBe(200);
     const addedAtt = ticketRes.body.data.attachments.find(
@@ -168,16 +187,16 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
   });
 
   // API-12: Add Attachment Ownership Guard
-  it("API-12: Add Attachment Ownership Guard returns 403 Forbidden for unauthorized requester", async () => {
+  it("API-12: Add Attachment Ownership Guard returns 404 Not Found for unauthorized requester", async () => {
     const fileBuf = Buffer.from("Hacker Payload");
     const res = await request(app)
       .post(`/api/tickets/${ticketId}/attachments`)
-      .set("X-Requester-Id", String(requester2Id))
+      .set("Cookie", cookie2)
       .attach("file", fileBuf, "exploit.pdf");
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     expect(res.body.error).toBeDefined();
-    expect(res.body.error.code).toBe("FORBIDDEN_RESOURCE");
+    expect(res.body.error.code).toBe("TICKET_NOT_FOUND");
   });
 
   // API-13: Add Attachment Active Limit Guard (Max 5 active attachments)
@@ -188,7 +207,7 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
       const buf = Buffer.from(`Attachment content ${i}`);
       const r = await request(app)
         .post(`/api/tickets/${ticketId}/attachments`)
-        .set("X-Requester-Id", String(requester1Id))
+        .set("Cookie", cookie1)
         .attach("file", buf, `extra_doc_${i}.png`);
       expect(r.status).toBe(201);
     }
@@ -197,7 +216,7 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
     const extraBuf = Buffer.from("Sixth active attachment");
     const failRes = await request(app)
       .post(`/api/tickets/${ticketId}/attachments`)
-      .set("X-Requester-Id", String(requester1Id))
+      .set("Cookie", cookie1)
       .attach("file", extraBuf, "overflow_doc.png");
 
     expect(failRes.status).toBe(400);
@@ -210,7 +229,7 @@ describe("Issue 9 — Attachments Lifecycle Integration Tests (attachments.test.
     const exeBuf = Buffer.from("malicious binary content");
     const res = await request(app)
       .post(`/api/tickets/${ticketId}/attachments`)
-      .set("X-Requester-Id", String(requester1Id))
+      .set("Cookie", cookie1)
       .attach("file", exeBuf, "malware.exe");
 
     expect(res.status).toBe(415);

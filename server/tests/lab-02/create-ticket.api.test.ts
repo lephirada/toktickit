@@ -5,11 +5,14 @@ import path from "node:path";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { UPLOAD_DIR } from "../../src/middleware/upload.js";
+import { createTestSessionCookie } from "../helpers/auth.js";
 
 describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integration Tests", () => {
   const prisma = getPrisma();
   let activeRequesterId: number;
   let inactiveRequesterId: number;
+  let activeCookie: string;
+  let inactiveCookie: string;
   let hardwareCategoryId: number;
   let networkCategoryId: number;
   let corporateLaptopSystemId: number;
@@ -17,11 +20,11 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
 
   beforeAll(async () => {
     // Retrieve seeded data for tests
-    const activeRequester = await prisma.user.findFirst({
-      where: { isActive: true, role: "REQUESTER" },
+    const activeRequester = await prisma.user.findFirstOrThrow({
+      where: { email: "sarah.connor@toktickit.com" },
     });
-    const inactiveRequester = await prisma.user.findFirst({
-      where: { isActive: false, role: "REQUESTER" },
+    const inactiveRequester = await prisma.user.findFirstOrThrow({
+      where: { email: "kyle.reese@toktickit.com" },
     });
     const hardwareCategory = await prisma.category.findUnique({
       where: { name: "Hardware" },
@@ -53,84 +56,102 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
     networkCategoryId = networkCategory.id;
     corporateLaptopSystemId = laptopSystem.id;
     vpnSystemId = vpnSystem.id;
+
+    // Ensure activeRequester has mustChangePassword = false
+    await prisma.user.update({
+      where: { id: activeRequesterId },
+      data: { mustChangePassword: false },
+    });
+
+    activeCookie = createTestSessionCookie({
+      id: activeRequester.id,
+      email: activeRequester.email,
+      role: "REQUESTER",
+    });
+    inactiveCookie = createTestSessionCookie({
+      id: inactiveRequester.id,
+      email: inactiveRequester.email,
+      role: "REQUESTER",
+    });
   });
 
   afterAll(async () => {
-    // Cleanup any created tickets and attachments from tests
-    await prisma.attachment.deleteMany({
-      where: {
-        originalName: {
-          in: [
-            "test_screenshot.png",
-            "document.pdf",
-            "image.webp",
-            "notes.txt",
-            "log.txt",
-            "large_file.png",
-            "malicious.exe",
-            "archive.zip",
-            "sample.png",
-          ],
+    try {
+      // Cleanup any created tickets and attachments from tests
+      await prisma.attachment.deleteMany({
+        where: {
+          originalName: {
+            in: [
+              "test_screenshot.png",
+              "document.pdf",
+              "image.webp",
+              "notes.txt",
+              "log.txt",
+              "large_file.png",
+              "malicious.exe",
+              "archive.zip",
+              "sample.png",
+            ],
+          },
         },
-      },
-    });
-    await prisma.ticket.deleteMany({
-      where: {
-        summary: {
-          startsWith: "Test Ticket",
+      });
+      await prisma.ticket.deleteMany({
+        where: {
+          summary: {
+            startsWith: "Test Ticket",
+          },
         },
-      },
-    });
+      });
+    } finally {
+      if (activeRequesterId) {
+        await prisma.user.update({
+          where: { id: activeRequesterId },
+          data: { mustChangePassword: true },
+        }).catch(() => {});
+      }
+    }
   });
 
   // -------------------------------------------------------------------------
   // 1. POST /api/attachments/pre-upload
   // -------------------------------------------------------------------------
   describe("POST /api/attachments/pre-upload", () => {
-    it("returns 403 Forbidden if X-Requester-Id header is missing", async () => {
+    it("returns 401 Unauthorized if session cookie is missing", async () => {
       const res = await request(app)
         .post("/api/attachments/pre-upload")
         .attach("files", Buffer.from("image content"), "test_screenshot.png");
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(401);
       expect(res.body).toHaveProperty("error");
-      expect(res.body.error.code).toBe("FORBIDDEN_REQUESTER");
+      expect(res.body.error.code).toBe("UNAUTHORIZED");
       expect(res.body.error).toHaveProperty("correlationId");
     });
 
-    it("returns 403 Forbidden if X-Requester-Id belongs to an inactive requester", async () => {
+    it("returns 401 Unauthorized if session cookie belongs to an inactive requester", async () => {
       const res = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", String(inactiveRequesterId))
+        .set("Cookie", inactiveCookie)
         .attach("files", Buffer.from("image content"), "test_screenshot.png");
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(401);
       expect(res.body).toHaveProperty("error");
-      expect(res.body.error.code).toBe("FORBIDDEN_REQUESTER");
+      expect(res.body.error.code).toBe("ACCOUNT_DEACTIVATED");
     });
 
-    it("returns 403 Forbidden if X-Requester-Id is non-existent or invalid integer", async () => {
-      const res = await request(app)
+    it("returns 401 Unauthorized if session cookie is invalid or tampered", async () => {
+      const invalidRes = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", "999999")
+        .set("Cookie", "toktickit_session=invalid_tampered_token")
         .attach("files", Buffer.from("image content"), "test_screenshot.png");
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("FORBIDDEN_REQUESTER");
-
-      const invalidStrRes = await request(app)
-        .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", "invalid-id")
-        .attach("files", Buffer.from("image content"), "test_screenshot.png");
-
-      expect(invalidStrRes.status).toBe(403);
-      expect(invalidStrRes.body.error.code).toBe("FORBIDDEN_REQUESTER");
+      expect(invalidRes.status).toBe(401);
+      expect(invalidRes.body.error.code).toBe("UNAUTHORIZED");
     });
 
     it("returns 400 Bad Request if no files are attached", async () => {
       const res = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", String(activeRequesterId));
+        .set("Cookie", activeCookie);
 
       expect(res.status).toBe(400);
       expect(res.body).toHaveProperty("error");
@@ -140,7 +161,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
     it("returns 415 Unsupported Media Type for disallowed file types (.exe, .zip)", async () => {
       const exeRes = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .attach("files", Buffer.from("binary"), {
           filename: "malicious.exe",
           contentType: "application/x-msdownload",
@@ -152,7 +173,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
 
       const zipRes = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .attach("files", Buffer.from("zip-bytes"), {
           filename: "archive.zip",
           contentType: "application/zip",
@@ -165,7 +186,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
     it("returns 415 Unsupported Media Type when uploading a .txt file", async () => {
       const txtRes = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .attach("files", Buffer.from("plain text content"), {
           filename: "notes.txt",
           contentType: "text/plain",
@@ -181,7 +202,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
 
       const res = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .attach("files", largeBuffer, {
           filename: "large_file.png",
           contentType: "image/png",
@@ -195,7 +216,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
     it("returns 413 Payload Too Large when more than 5 files are attached", async () => {
       const res = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .attach("files", Buffer.from("file 1"), { filename: "f1.png", contentType: "image/png" })
         .attach("files", Buffer.from("file 2"), { filename: "f2.png", contentType: "image/png" })
         .attach("files", Buffer.from("file 3"), { filename: "f3.png", contentType: "image/png" })
@@ -214,7 +235,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
 
       const res = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .attach("files", pngBuffer, { filename: "test_screenshot.png", contentType: "image/png" })
         .attach("files", pdfBuffer, { filename: "document.pdf", contentType: "application/pdf" })
         .attach("files", webpBuffer, { filename: "image.webp", contentType: "image/webp" });
@@ -260,7 +281,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
   // 2. POST /api/tickets
   // -------------------------------------------------------------------------
   describe("POST /api/tickets", () => {
-    it("returns 403 Forbidden if X-Requester-Id header is missing or inactive", async () => {
+    it("returns 401 Unauthorized if session cookie is missing or inactive", async () => {
       const payload = {
         summary: "Test Ticket VPN issue",
         description: "Cannot connect to VPN from home network.",
@@ -269,22 +290,22 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       };
 
       const missingRes = await request(app).post("/api/tickets").send(payload);
-      expect(missingRes.status).toBe(403);
-      expect(missingRes.body.error.code).toBe("FORBIDDEN_REQUESTER");
+      expect(missingRes.status).toBe(401);
+      expect(missingRes.body.error.code).toBe("UNAUTHORIZED");
 
       const inactiveRes = await request(app)
         .post("/api/tickets")
-        .set("X-Requester-Id", String(inactiveRequesterId))
+        .set("Cookie", inactiveCookie)
         .send(payload);
-      expect(inactiveRes.status).toBe(403);
-      expect(inactiveRes.body.error.code).toBe("FORBIDDEN_REQUESTER");
+      expect(inactiveRes.status).toBe(401);
+      expect(inactiveRes.body.error.code).toBe("ACCOUNT_DEACTIVATED");
     });
 
     it("returns 422 Unprocessable Entity with exact fieldErrors for invalid summary, description, category, and system mismatch", async () => {
       // 1. Short summary (< 5 chars) & short description (< 10 chars)
       const shortRes = await request(app)
         .post("/api/tickets")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .send({
           summary: "VPN",
           description: "broken",
@@ -305,7 +326,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       const longSummary = "A".repeat(101);
       const longSumRes = await request(app)
         .post("/api/tickets")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .send({
           summary: longSummary,
           description: "This is a valid long description for the test ticket.",
@@ -323,7 +344,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       // 3. Invalid / Non-existent categoryId
       const invalidCatRes = await request(app)
         .post("/api/tickets")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .send({
           summary: "Test Ticket Category",
           description: "Valid description for testing category validation.",
@@ -342,7 +363,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       // Corporate Laptop belongs to Hardware, but Network category is passed
       const mismatchRes = await request(app)
         .post("/api/tickets")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .send({
           summary: "Test Ticket Mismatch",
           description: "Testing related system category mismatch validation.",
@@ -366,7 +387,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       // 1. Non-existent attachment ID
       const invalidAttRes = await request(app)
         .post("/api/tickets")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .send({
           summary: "Test Ticket Invalid Attachment",
           description: "Valid description testing attachment validation.",
@@ -400,7 +421,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
 
         const foreignAttRes = await request(app)
           .post("/api/tickets")
-          .set("X-Requester-Id", String(activeRequesterId))
+          .set("Cookie", activeCookie)
           .send({
             summary: "Test Ticket Foreign Attachment",
             description: "Valid description testing foreign attachment ownership.",
@@ -422,7 +443,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       // 1. Pre-upload an attachment
       const uploadRes = await request(app)
         .post("/api/attachments/pre-upload")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .attach("files", Buffer.from("pdf binary content"), {
           filename: "document.pdf",
           contentType: "application/pdf",
@@ -435,7 +456,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       const currentYear = new Date().getFullYear();
       const createRes = await request(app)
         .post("/api/tickets")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .send({
           summary: "Test Ticket VPN Gateway Connection Issue",
           description: "Getting error code 0x80070005 when trying to connect to VPN Gateway.",
@@ -484,7 +505,7 @@ describe("Issue 7 — Ticket Creation & Pre-upload Attachments Backend Integrati
       // 3. Create second ticket to verify sequential numbering increment
       const createRes2 = await request(app)
         .post("/api/tickets")
-        .set("X-Requester-Id", String(activeRequesterId))
+        .set("Cookie", activeCookie)
         .send({
           summary: "Test Ticket Second Issue for Sequence Verification",
           description: "Checking that sequential ticket number increments properly.",
