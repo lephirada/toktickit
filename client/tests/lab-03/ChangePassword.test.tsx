@@ -40,14 +40,16 @@ describe("Issue 13 — ChangePasswordScreen Component Tests", () => {
     expect(screen.getByTestId("rule-passwords-match")).toHaveClass("text-muted");
     expect(submitBtn).toBeDisabled();
 
-    // 3. Confirm password mismatch
+    // 3. Confirm password mismatch -> explicit mismatch error and disabled submit
     fireEvent.change(confirmPassInput, { target: { value: "Mismatch123!" } });
     expect(screen.getByTestId("rule-passwords-match")).toHaveClass("text-muted");
+    expect(screen.getByTestId("password-mismatch-error")).toHaveTextContent("Passwords do not match.");
     expect(submitBtn).toBeDisabled();
 
-    // 4. Confirm password matches
+    // 4. Confirm password matches -> error cleared
     fireEvent.change(confirmPassInput, { target: { value: "Abcdef1!" } });
     expect(screen.getByTestId("rule-passwords-match")).toHaveClass("text-success");
+    expect(screen.queryByTestId("password-mismatch-error")).not.toBeInTheDocument();
 
     // Still disabled because current password is empty
     expect(submitBtn).toBeDisabled();

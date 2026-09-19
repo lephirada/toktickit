@@ -298,6 +298,11 @@ export default function ChangePasswordScreen({ onSuccess, onNavigate }: ChangePa
                 testId="toggle-confirm-password-visibility"
               />
             </div>
+            {confirmPassword.length > 0 && !rules.passwordsMatch && (
+              <div className="text-danger small mt-1" data-testid="password-mismatch-error">
+                Passwords do not match.
+              </div>
+            )}
           </div>
 
           {/* Real-time Checklist */}

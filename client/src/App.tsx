@@ -106,6 +106,16 @@ export function AppContent() {
 
   // Sync active view and enforce role authorization on user or route changes
   useEffect(() => {
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      if (window.location.pathname !== "/login") {
+        window.history.replaceState({}, "", "/login");
+      }
+      setActiveView("login");
+      return;
+    }
+
     if (!user || mustChangePassword) return;
 
     const path = window.location.pathname;
@@ -117,7 +127,7 @@ export function AppContent() {
       window.history.replaceState({}, "", resolved.path);
     }
     setActiveView(resolved.view);
-  }, [user, mustChangePassword]);
+  }, [user, isLoading, isAuthenticated, mustChangePassword]);
 
   // Sync active view with browser popstate
   useEffect(() => {

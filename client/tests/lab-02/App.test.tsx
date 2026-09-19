@@ -205,4 +205,19 @@ describe("Issue 8 / Issue 13 — App Integration Tests", () => {
     expect(screen.queryByTestId("admin-users-section")).not.toBeInTheDocument();
     expect(window.location.pathname).toBe("/staff/queue");
   });
+
+  it("redirects unauthenticated user accessing /create-ticket to /login and normalizes URL", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockRejectedValue(
+      new api.ApiError("Authentication required", "UNAUTHENTICATED", undefined, 401)
+    );
+
+    window.history.pushState({}, "", "/create-ticket");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("login-screen")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/login");
+    });
+  });
 });
