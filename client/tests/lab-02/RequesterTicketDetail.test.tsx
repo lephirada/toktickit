@@ -1,26 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import * as api from "../../src/api.js";
-import { RequesterProvider } from "../../src/context/RequesterContext.js";
+import { AuthProvider } from "../../src/context/AuthContext.js";
 import TicketDetailScreen from "../../src/components/TicketDetailScreen.js";
 import App from "../../src/App.js";
 
-const mockRequesters: api.RequesterUser[] = [
-  {
-    id: 1,
-    email: "sarah.connor@toktickit.com",
-    fullName: "Sarah Connor",
-    department: "Engineering",
-    isActive: true,
-  },
-  {
-    id: 2,
-    email: "john.doe@toktickit.com",
-    fullName: "John Doe",
-    department: "Finance",
-    isActive: true,
-  },
-];
+const mockAuthUser: api.AuthUser = {
+  id: 1,
+  fullName: "Sarah Connor",
+  email: "sarah.connor@toktickit.com",
+  role: "REQUESTER",
+  mustChangePassword: false,
+};
 
 const mockTicketDetail: api.TicketDetailItem = {
   id: 42,
@@ -84,19 +75,20 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    localStorage.setItem("toktickit_requester_id", "1");
 
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockAuthUser);
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(mockTicketDetail);
+    vi.spyOn(api, "fetchPublicComments").mockResolvedValue({ data: [] });
+    vi.spyOn(api, "fetchCategories").mockResolvedValue([{ id: 4, name: "Network" }]);
   });
 
-  function renderWithRequester(ui: React.ReactElement) {
-    return render(<RequesterProvider>{ui}</RequesterProvider>);
+  function renderWithAuth(ui: React.ReactElement) {
+    return render(<AuthProvider>{ui}</AuthProvider>);
   }
 
   it("1. Renders ticket details, metadata badges, description, and timeline accurately", async () => {
     const onNavigate = vi.fn();
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={onNavigate} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={onNavigate} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("ticket-number")).toHaveTextContent("TKT-2026-00042");
@@ -133,7 +125,7 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
     );
 
     const onNavigate = vi.fn();
-    renderWithRequester(<TicketDetailScreen ticketId={999} onNavigate={onNavigate} />);
+    renderWithAuth(<TicketDetailScreen ticketId={999} onNavigate={onNavigate} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("ticket-detail-error")).toBeInTheDocument();
@@ -153,7 +145,7 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
 
   it("3. Breadcrumb navigation returns user to My Tickets", async () => {
     const onNavigate = vi.fn();
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={onNavigate} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={onNavigate} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("breadcrumb-tickets-link")).toBeInTheDocument();
@@ -198,7 +190,7 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
       },
     });
 
-    renderWithRequester(<App />);
+    render(<App />);
 
     await waitFor(() => {
       expect(screen.getByTestId("ticket-link-42")).toBeInTheDocument();
@@ -209,6 +201,108 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
     await waitFor(() => {
       expect(screen.getByTestId("ticket-detail-screen")).toBeInTheDocument();
       expect(screen.getByTestId("ticket-number")).toHaveTextContent("TKT-2026-00042");
+    });
+  });
+
+  it("4. Rejects empty/whitespace comments and posts valid public comments", async () => {
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(mockTicketDetail);
+    const postCommentSpy = vi.spyOn(api, "postPublicComment").mockResolvedValue({
+      data: {
+        id: 1,
+        ticketId: 42,
+        authorId: 1,
+        authorName: "Sarah Connor",
+        authorRole: "REQUESTER",
+        content: "Valid comment content",
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+
+    expect(await screen.findByTestId("public-comment-form")).toBeInTheDocument();
+
+    const input = screen.getByTestId("comment-input");
+    const submitBtn = screen.getByTestId("comment-submit-btn");
+
+    // 1. Empty string -> disabled
+    fireEvent.change(input, { target: { value: "" } });
+    expect(submitBtn).toBeDisabled();
+
+    // 2. Whitespace only -> disabled
+    fireEvent.change(input, { target: { value: "    " } });
+    expect(submitBtn).toBeDisabled();
+
+    // 3. Single character (1 char) -> enabled & accepted
+    fireEvent.change(input, { target: { value: "A" } });
+    expect(submitBtn).not.toBeDisabled();
+    fireEvent.click(submitBtn);
+    await waitFor(() => {
+      expect(postCommentSpy).toHaveBeenCalledWith(42, "A");
+    });
+
+    // 4. Exactly 2,000 characters -> accepted
+    const exactly2000Chars = "X".repeat(2000);
+    fireEvent.change(input, { target: { value: exactly2000Chars } });
+    expect(submitBtn).not.toBeDisabled();
+    fireEvent.click(submitBtn);
+    await waitFor(() => {
+      expect(postCommentSpy).toHaveBeenCalledWith(42, exactly2000Chars);
+    });
+
+    // 5. Exceeding 2,000 characters (2,001 chars) -> rejected with validation error
+    const exceedingChars = "Y".repeat(2001);
+    fireEvent.change(input, { target: { value: exceedingChars } });
+    fireEvent.submit(screen.getByTestId("public-comment-form"));
+    expect(await screen.findByTestId("comment-error")).toHaveTextContent("Comment cannot exceed 2,000 characters.");
+  });
+
+  it("5. Hides comment form and shows notice when requester does not own the ticket", async () => {
+    // Ticket owned by requesterId: 999, but logged in user is id: 1
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue({
+      ...mockTicketDetail,
+      requesterId: 999,
+    });
+
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+
+    expect(await screen.findByTestId("comment-permission-notice")).toBeInTheDocument();
+    expect(screen.queryByTestId("public-comment-form")).not.toBeInTheDocument();
+  });
+
+  it("6. Problem Appears Resolved triggers modal and calls confirmation API", async () => {
+    // Ticket in eligible status (IN_PROGRESS) owned by user id: 1
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue({
+      ...mockTicketDetail,
+      status: "IN_PROGRESS",
+      requesterId: 1,
+      resolutionIndicated: false,
+    });
+    const confirmSpy = vi.spyOn(api, "confirmProblemResolved").mockResolvedValue({
+      data: {
+        id: 42,
+        ticketNo: "TKT-2026-00042",
+        status: "RESOLVED",
+        resolutionIndicated: true,
+        message: "Problem resolved",
+      },
+    });
+
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+
+    const resolvedBtn = await screen.findByTestId("confirm-resolved-btn");
+    fireEvent.click(resolvedBtn);
+
+    expect(await screen.findByTestId("confirm-resolved-modal")).toBeInTheDocument();
+
+    const feedbackInput = screen.getByTestId("confirm-resolved-feedback");
+    fireEvent.change(feedbackInput, { target: { value: "Working now, thanks!" } });
+
+    const submitBtn = screen.getByTestId("confirm-resolved-submit-btn");
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith(42, "Working now, thanks!");
     });
   });
 });

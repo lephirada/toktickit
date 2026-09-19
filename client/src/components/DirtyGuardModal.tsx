@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { useRequester } from "../context/RequesterContext.js";
+import { useAuth } from "../context/AuthContext.js";
 
 export interface DirtyGuardModalProps {
   isOpen?: boolean;
@@ -12,7 +12,7 @@ export default function DirtyGuardModal({
   onConfirm,
   onCancel,
 }: DirtyGuardModalProps = {}) {
-  const context = useRequester();
+  const context = useAuth();
   const isModalOpen = isOpen !== undefined ? isOpen : context.isDirtyModalOpen;
   const handleConfirm = onConfirm || context.confirmDiscard;
   const handleCancel = onCancel || context.cancelDiscard;

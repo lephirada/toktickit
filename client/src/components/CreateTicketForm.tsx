@@ -9,7 +9,7 @@ import {
   createTicket,
   ApiError,
 } from "../api.js";
-import { useRequester } from "../context/RequesterContext.js";
+import { useAuth } from "../context/AuthContext.js";
 import {
   BoltIcon,
   AlertTriangleIcon,
@@ -41,7 +41,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFormProps) {
-  const { currentRequester, setFormDirty, reloadTickets } = useRequester();
+  const { user, setFormDirty } = useAuth();
 
   // Taxonomy state
   const [categories, setCategories] = useState<Category[]>([]);
@@ -219,14 +219,14 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
       }
     }
 
-    if (!currentRequester) {
-      setUploadError("Please select an active requester first.");
+    if (!user) {
+      setUploadError("Please log in to upload attachments.");
       return;
     }
 
     setIsUploading(true);
     try {
-      const response = await uploadAttachments(fileArray, currentRequester.id);
+      const response = await uploadAttachments(fileArray);
       const newAttachments = response.data || (response as unknown as AttachmentItem[]);
       setAttachments((prev) => [...prev, ...newAttachments]);
       setFormDirty(true);
@@ -312,8 +312,8 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
       return;
     }
 
-    if (!currentRequester) {
-      setGlobalError("Active requester context is required.");
+    if (!user) {
+      setGlobalError("Active authenticated session is required.");
       return;
     }
 
@@ -328,11 +328,10 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
         attachmentIds: attachments.map((a) => a.id),
       };
 
-      const result = await createTicket(payload, currentRequester.id);
+      const result = await createTicket(payload);
       const createdTicket = result.data || (result as unknown as { ticketNo: string });
 
       setFormDirty(false);
-      await reloadTickets();
 
       if (onSuccess) {
         onSuccess(createdTicket.ticketNo || "");
@@ -364,36 +363,58 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
   ];
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="zg-ticket-form card shadow-sm p-4 border-0 mb-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      className="zg-ticket-form card border shadow-sm p-4 p-md-5 mb-4"
+      style={{
+        maxWidth: 960,
+        margin: "0 auto",
+        borderRadius: "16px",
+        borderColor: "#EAECF0",
+        backgroundColor: "#FFFFFF",
+        boxShadow: "0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04)",
+      }}
+    >
+      <div className="d-flex flex-column align-items-start gap-2 mb-4 pb-3 border-bottom" style={{ borderColor: "#EAECF0" }}>
         <div>
-          <h2 className="h4 fw-bold mb-1" style={{ color: "var(--zg-primary)" }}>
+          <h2 className="h4 fw-bold mb-1" style={{ color: "var(--zg-primary)", letterSpacing: "-0.01em" }}>
             Create New IT Ticket
           </h2>
-          <p className="text-secondary small mb-0">
-            Reporting as: <strong data-testid="form-active-requester">{currentRequester?.fullName || "Loading…"}</strong>
+          <p className="text-secondary small mb-0" style={{ color: "#475467" }}>
+            Provide details below to submit your request to the IT service team.
           </p>
+        </div>
+        <div className="d-inline-flex align-items-center gap-1 px-3 py-1 rounded-3 bg-light border text-nowrap" style={{ fontSize: "0.82rem", borderColor: "#EAECF0" }}>
+          <span className="text-muted me-1">Reporting as:</span>
+          <strong className="text-dark" data-testid="form-active-requester">{user?.fullName || "Loading…"}</strong>
         </div>
       </div>
 
       {/* Global Error Banner */}
       {globalError && (
-        <div className="alert alert-danger d-flex align-items-center mb-4" role="alert">
+        <div className="alert alert-danger d-flex align-items-center mb-4 rounded-3 p-3 shadow-sm" role="alert">
           <AlertTriangleIcon size={18} className="me-2 text-danger flex-shrink-0" />
-          <div>{globalError}</div>
+          <div className="small fw-medium">{globalError}</div>
         </div>
       )}
 
       {/* Taxonomy 2-Column Grid */}
-      <div className="row g-3 mb-3">
+      <div className="row g-3 mb-4">
         {/* Category Selection */}
         <div className="col-12 col-md-6">
-          <label htmlFor="category-select" className="form-label fw-semibold">
+          <label htmlFor="category-select" className="form-label fw-semibold text-dark small mb-1">
             Category <span className="text-danger" aria-hidden="true">*</span>
           </label>
           <select
             id="category-select"
             className={`form-select ${fieldErrors.categoryId ? "is-invalid" : ""}`}
+            style={{
+              height: "44px",
+              borderRadius: "8px",
+              borderColor: fieldErrors.categoryId ? undefined : "#D0D5DD",
+              fontSize: "0.875rem",
+            }}
             value={categoryId}
             onChange={handleCategoryChange}
             disabled={isLoadingCategories}
@@ -410,7 +431,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
             ))}
           </select>
           {fieldErrors.categoryId && (
-            <div id="category-error" className="invalid-feedback d-block" role="alert">
+            <div id="category-error" className="invalid-feedback d-block small" role="alert">
               {fieldErrors.categoryId}
             </div>
           )}
@@ -418,12 +439,18 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
 
         {/* Related System Selection */}
         <div className="col-12 col-md-6">
-          <label htmlFor="related-system-select" className="form-label fw-semibold">
+          <label htmlFor="related-system-select" className="form-label fw-semibold text-dark small mb-1">
             Related System <span className="text-muted fw-normal small">(Optional)</span>
           </label>
           <select
             id="related-system-select"
             className={`form-select ${fieldErrors.relatedSystemId ? "is-invalid" : ""}`}
+            style={{
+              height: "44px",
+              borderRadius: "8px",
+              borderColor: fieldErrors.relatedSystemId ? undefined : "#D0D5DD",
+              fontSize: "0.875rem",
+            }}
             value={relatedSystemId}
             onChange={handleSystemChange}
             disabled={!categoryId || isLoadingSystems}
@@ -440,7 +467,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
             ))}
           </select>
           {fieldErrors.relatedSystemId && (
-            <div id="related-system-error" className="invalid-feedback d-block" role="alert">
+            <div id="related-system-error" className="invalid-feedback d-block small" role="alert">
               {fieldErrors.relatedSystemId}
             </div>
           )}
@@ -448,8 +475,8 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
       </div>
 
       {/* Priority Selection */}
-      <div className="mb-3">
-        <label className="form-label fw-semibold d-block">
+      <div className="mb-4">
+        <label className="form-label fw-semibold text-dark small d-block mb-2">
           Priority <span className="text-danger" aria-hidden="true">*</span>
         </label>
         <div
@@ -468,7 +495,13 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
                 onClick={() => handlePrioritySelect(opt.value)}
                 className={`zg-priority-pill btn btn-sm d-flex align-items-center gap-1 px-3 py-2 ${
                   opt.badgeClass
-                } ${isSelected ? "selected" : ""}`}
+                } ${isSelected ? "selected shadow-sm" : ""}`}
+                style={{
+                  borderRadius: "9999px",
+                  fontSize: "0.82rem",
+                  fontWeight: isSelected ? 700 : 500,
+                  transition: "all 0.15s ease-in-out",
+                }}
               >
                 <span aria-hidden="true">{opt.icon}</span>
                 <span>{opt.label}</span>
@@ -479,18 +512,19 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
       </div>
 
       {/* Summary Input */}
-      <div className="mb-3">
-        <div className="d-flex justify-content-between align-items-center">
-          <label htmlFor="summary-input" className="form-label fw-semibold">
+      <div className="mb-4">
+        <div className="d-flex justify-content-between align-items-center mb-1">
+          <label htmlFor="summary-input" className="form-label fw-semibold text-dark small mb-0">
             Summary <span className="text-danger" aria-hidden="true">*</span>
           </label>
           <span
             id="summary-counter"
-            className={`small ${
+            className={`small fw-medium ${
               summary.length > 100 || (summary.length > 0 && summary.length < 5)
                 ? "text-danger"
                 : "text-muted"
             }`}
+            style={{ fontSize: "0.75rem" }}
           >
             {summary.length}/100
           </span>
@@ -499,7 +533,13 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
           type="text"
           id="summary-input"
           className={`form-control ${fieldErrors.summary ? "is-invalid" : ""}`}
-          placeholder="Brief description of the issue"
+          style={{
+            height: "44px",
+            borderRadius: "8px",
+            borderColor: fieldErrors.summary ? undefined : "#D0D5DD",
+            fontSize: "0.875rem",
+          }}
+          placeholder="Brief summary of the issue (e.g., Cannot connect to VPN from home)"
           value={summary}
           onChange={handleSummaryChange}
           required
@@ -508,7 +548,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
           aria-describedby={`summary-counter ${fieldErrors.summary ? "summary-error" : ""}`}
         />
         {fieldErrors.summary && (
-          <div id="summary-error" className="invalid-feedback d-block" role="alert">
+          <div id="summary-error" className="invalid-feedback d-block small mt-1" role="alert">
             {fieldErrors.summary}
           </div>
         )}
@@ -516,17 +556,18 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
 
       {/* Description Textarea */}
       <div className="mb-4">
-        <div className="d-flex justify-content-between align-items-center">
-          <label htmlFor="description-textarea" className="form-label fw-semibold">
+        <div className="d-flex justify-content-between align-items-center mb-1">
+          <label htmlFor="description-textarea" className="form-label fw-semibold text-dark small mb-0">
             Description <span className="text-danger" aria-hidden="true">*</span>
           </label>
           <span
             id="description-counter"
-            className={`small ${
+            className={`small fw-medium ${
               description.length > 2000 || (description.length > 0 && description.length < 10)
                 ? "text-danger"
                 : "text-muted"
             }`}
+            style={{ fontSize: "0.75rem" }}
           >
             {description.length}/2000
           </span>
@@ -535,7 +576,13 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
           id="description-textarea"
           rows={5}
           className={`form-control ${fieldErrors.description ? "is-invalid" : ""}`}
-          placeholder="Detailed explanation of the issue, error messages, or steps to reproduce..."
+          style={{
+            borderRadius: "8px",
+            borderColor: fieldErrors.description ? undefined : "#D0D5DD",
+            fontSize: "0.875rem",
+            lineHeight: 1.5,
+          }}
+          placeholder="Provide detailed explanation of the issue, error codes, steps to reproduce, or urgency..."
           value={description}
           onChange={handleDescriptionChange}
           required
@@ -544,7 +591,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
           aria-describedby={`description-counter ${fieldErrors.description ? "description-error" : ""}`}
         />
         {fieldErrors.description && (
-          <div id="description-error" className="invalid-feedback d-block" role="alert">
+          <div id="description-error" className="invalid-feedback d-block small mt-1" role="alert">
             {fieldErrors.description}
           </div>
         )}
@@ -552,15 +599,21 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
 
       {/* Pre-upload Attachment Dropzone */}
       <div className="mb-4">
-        <label className="form-label fw-semibold d-block mb-1">
-          Attachments <span className="text-muted fw-normal small">Allowed formats: JPEG, PNG, WEBP, PDF (Max 5MB per file)</span>
+        <label className="form-label fw-semibold text-dark small d-block mb-1">
+          Attachments <span className="text-muted fw-normal small">(Optional — JPEG, PNG, WEBP, PDF up to 5MB)</span>
         </label>
 
         {/* Dropzone Container */}
         <div
-          className={`zg-dropzone p-4 text-center border-dashed rounded-3 ${
+          className={`zg-dropzone p-4 text-center rounded-3 ${
             isDragging ? "active" : ""
           }`}
+          style={{
+            border: "2px dashed #006B3C",
+            backgroundColor: isDragging ? "var(--zg-pale)" : "#FAFCFB",
+            borderRadius: "12px",
+            transition: "all 0.15s ease-in-out",
+          }}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -576,20 +629,20 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
             onChange={handleFileInputChange}
             disabled={isUploading || attachments.length >= 5}
           />
-          <div className="mb-2">
-            <FolderIcon size={32} color="#006B3C" />
+          <div className="mb-2 d-inline-flex align-items-center justify-content-center rounded-circle" style={{ width: 48, height: 48, backgroundColor: "var(--zg-pale)" }}>
+            <FolderIcon size={24} color="var(--zg-primary)" />
           </div>
-          <p className="mb-1 text-dark fw-medium">
-            Drag &amp; drop files here or{" "}
+          <p className="mb-1 text-dark fw-medium small">
+            Drag &amp; drop files here, or{" "}
             <label
               htmlFor="file-upload-input"
-              className="text-success text-decoration-underline"
-              style={{ cursor: attachments.length >= 5 || isUploading ? "not-allowed" : "pointer" }}
+              className="text-success text-decoration-underline fw-semibold"
+              style={{ cursor: attachments.length >= 5 || isUploading ? "not-allowed" : "pointer", color: "var(--zg-primary)" }}
             >
-              Browse
+              Browse files
             </label>
           </p>
-          <p className="text-muted small mb-0">
+          <p className="text-muted small mb-0" style={{ fontSize: "0.75rem" }}>
             {attachments.length}/5 files attached
           </p>
 
@@ -609,7 +662,7 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
         )}
 
         {fieldErrors.attachmentIds && (
-          <div className="invalid-feedback d-block mt-2" role="alert">
+          <div className="invalid-feedback d-block mt-2 small" role="alert">
             {fieldErrors.attachmentIds}
           </div>
         )}
@@ -620,21 +673,22 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
             {attachments.map((att) => (
               <div
                 key={att.id}
-                className="zg-attachment-chip d-flex align-items-center gap-2 px-3 py-2 rounded-3 border bg-white shadow-sm"
+                className="zg-attachment-chip d-flex align-items-center gap-2 px-3 py-2 rounded-2 border bg-white shadow-sm"
+                style={{ borderColor: "#EAECF0" }}
                 data-testid={`attachment-chip-${att.id}`}
               >
-                <PaperclipIcon size={16} color="#006B3C" className="flex-shrink-0" />
-                <span className="small fw-medium text-dark text-truncate" style={{ maxWidth: 200 }}>
+                <PaperclipIcon size={15} color="var(--zg-primary)" className="flex-shrink-0" />
+                <span className="small fw-medium text-dark text-truncate" style={{ maxWidth: 200, fontSize: "0.82rem" }}>
                   {att.originalName}
                 </span>
-                <span className="text-muted small">({formatFileSize(att.sizeBytes)})</span>
+                <span className="text-muted small" style={{ fontSize: "0.75rem" }}>({formatFileSize(att.sizeBytes)})</span>
                 <button
                   type="button"
-                  className="btn btn-sm btn-link text-danger p-0 ms-1 d-inline-flex align-items-center"
+                  className="btn btn-sm btn-link text-danger p-0 ms-1 d-inline-flex align-items-center hover-opacity-75"
                   onClick={() => handleRemoveAttachment(att.id)}
                   aria-label={`Remove ${att.originalName}`}
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
@@ -646,11 +700,12 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
       </div>
 
       {/* Form Action Buttons */}
-      <div className="d-flex justify-content-end gap-2 pt-3 border-top">
+      <div className="d-flex justify-content-end gap-2 pt-3 border-top" style={{ borderColor: "#EAECF0" }}>
         {onCancel && (
           <button
             type="button"
-            className="btn btn-outline-secondary px-4"
+            className="btn btn-outline-secondary px-4 py-2 rounded-2 fw-semibold"
+            style={{ fontSize: "0.875rem" }}
             onClick={onCancel}
             disabled={isSubmitting}
           >
@@ -659,7 +714,13 @@ export default function CreateTicketForm({ onSuccess, onCancel }: CreateTicketFo
         )}
         <button
           type="submit"
-          className="btn btn-success px-4 d-flex align-items-center gap-2"
+          className="btn btn-success px-4 py-2 rounded-2 fw-semibold d-flex align-items-center gap-2 shadow-sm"
+          style={{
+            backgroundColor: "var(--zg-primary)",
+            borderColor: "var(--zg-primary)",
+            fontSize: "0.875rem",
+            transition: "all 0.15s ease-in-out",
+          }}
           disabled={isSubmitting}
           data-testid="submit-ticket-btn"
         >

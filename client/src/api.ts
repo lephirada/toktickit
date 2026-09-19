@@ -1,5 +1,15 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
+export type UserRole = "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  mustChangePassword: boolean;
+}
+
 export interface Category {
   id: number;
   name: string;
@@ -9,14 +19,6 @@ export interface RelatedSystem {
   id: number;
   name: string;
   categoryId: number;
-}
-
-export interface RequesterUser {
-  id: number;
-  email: string;
-  fullName: string;
-  department: string;
-  isActive: boolean;
 }
 
 export interface AttachmentItem {
@@ -43,7 +45,10 @@ export interface TicketItem {
   summary: string;
   description?: string;
   priority: string;
+  requestedPriority?: string;
+  itPriority?: string | null;
   status: string;
+  resolutionIndicated?: boolean;
   categoryId: number;
   relatedSystemId?: number | null;
   requesterId: number;
@@ -53,7 +58,13 @@ export interface TicketItem {
   relatedSystem?: { id: number; name: string } | null;
   attachments?: AttachmentItem[];
   attachmentCount?: number;
-  requester?: RequesterUser;
+  requester?: {
+    id: number;
+    email: string;
+    fullName: string;
+    department?: string;
+    isActive?: boolean;
+  };
 }
 
 export interface FieldError {
@@ -95,15 +106,6 @@ export async function checkSystem(): Promise<SystemStatus> {
   return { online: true, categories };
 }
 
-export async function fetchRequesters(): Promise<RequesterUser[]> {
-  const res = await fetch(`${API_URL}/api/requesters`);
-  if (!res.ok) {
-    throw new Error("Unable to fetch requesters");
-  }
-  const body = await res.json();
-  return body.data ?? body;
-}
-
 export async function fetchCategories(): Promise<Category[]> {
   const res = await fetch(`${API_URL}/api/categories`);
   if (!res.ok) {
@@ -124,6 +126,90 @@ export async function fetchRelatedSystems(categoryId?: number): Promise<RelatedS
   const body = await res.json();
   return body.data ?? body;
 }
+
+// ---------------------------------------------------------------------------
+// Authentication & Session Endpoints
+// ---------------------------------------------------------------------------
+
+export async function login(credentials: { email: string; password: string }): Promise<{ data: AuthUser }> {
+  const res = await fetch(`${API_URL}/api/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(credentials),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || "Invalid email or password.",
+      errorObj?.code || "INVALID_CREDENTIALS",
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_URL}/api/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  }).catch(() => {
+    // Permissive logout
+  });
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser | null> {
+  const res = await fetch(`${API_URL}/api/auth/me`, {
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    return null;
+  }
+
+  const body = await res.json().catch(() => null);
+  return body?.data ?? null;
+}
+
+export async function changePassword(payload: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}): Promise<{ data: { message: string; mustChangePassword: boolean } }> {
+  const res = await fetch(`${API_URL}/api/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || "Failed to change password",
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+// ---------------------------------------------------------------------------
+// Tickets & Attachments Endpoints
+// ---------------------------------------------------------------------------
 
 export interface PaginationMeta {
   page: number;
@@ -153,15 +239,7 @@ export interface FetchTicketsResponse {
   pagination: PaginationMeta;
 }
 
-export async function fetchTickets(
-  requesterId?: number,
-  params?: TicketQueryParams
-): Promise<FetchTicketsResponse> {
-  const headers: Record<string, string> = {};
-  if (requesterId) {
-    headers["X-Requester-Id"] = String(requesterId);
-  }
-
+export async function fetchTickets(params?: TicketQueryParams): Promise<FetchTicketsResponse> {
   const query = new URLSearchParams();
   if (params) {
     if (params.search && params.search.trim()) query.set("search", params.search.trim());
@@ -178,11 +256,22 @@ export async function fetchTickets(
   }
 
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  const res = await fetch(`${API_URL}/api/tickets${queryString}`, { headers });
+  const res = await fetch(`${API_URL}/api/tickets${queryString}`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
   if (!res.ok) {
-    throw new Error("Unable to fetch tickets");
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || "Unable to fetch tickets",
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
   }
-  const body = await res.json();
+
   const rawList: TicketItem[] = Array.isArray(body) ? body : body.data || [];
   const pagination: PaginationMeta = body.pagination || {
     page: params?.page || 1,
@@ -201,10 +290,7 @@ export async function fetchTickets(
   };
 }
 
-export async function uploadAttachments(
-  files: File[],
-  requesterId: number
-): Promise<{ data: AttachmentItem[] }> {
+export async function uploadAttachments(files: File[]): Promise<{ data: AttachmentItem[] }> {
   const formData = new FormData();
   for (const file of files) {
     formData.append("files", file);
@@ -212,9 +298,7 @@ export async function uploadAttachments(
 
   const res = await fetch(`${API_URL}/api/attachments/pre-upload`, {
     method: "POST",
-    headers: {
-      "X-Requester-Id": String(requesterId),
-    },
+    credentials: "include",
     body: formData,
   });
 
@@ -225,7 +309,7 @@ export async function uploadAttachments(
     throw new ApiError(
       errorObj?.message || `Upload failed with status ${res.status}`,
       errorObj?.code,
-      errorObj?.fieldErrors,
+      errorObj?.details?.fieldErrors,
       res.status
     );
   }
@@ -233,16 +317,13 @@ export async function uploadAttachments(
   return body;
 }
 
-export async function createTicket(
-  payload: CreateTicketDTO,
-  requesterId: number
-): Promise<{ data: TicketItem }> {
+export async function createTicket(payload: CreateTicketDTO): Promise<{ data: TicketItem }> {
   const res = await fetch(`${API_URL}/api/tickets`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Requester-Id": String(requesterId),
     },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
 
@@ -253,17 +334,13 @@ export async function createTicket(
     throw new ApiError(
       errorObj?.message || `Failed to create ticket with status ${res.status}`,
       errorObj?.code,
-      errorObj?.fieldErrors,
+      errorObj?.details?.fieldErrors,
       res.status
     );
   }
 
   return body;
 }
-
-// ---------------------------------------------------------------------------
-// Issue 9 — Ticket Detail & Attachment Lifecycle API
-// ---------------------------------------------------------------------------
 
 export interface TicketDetailAttachment {
   id: number;
@@ -289,13 +366,27 @@ export interface TimelineEvent {
   metadata?: Record<string, unknown>;
 }
 
+export interface PublicCommentItem {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  authorName: string;
+  authorRole: string;
+  content: string;
+  body?: string;
+  createdAt: string;
+}
+
 export interface TicketDetailItem {
   id: number;
   ticketNo: string;
   summary: string;
   description: string;
   priority: string;
+  requestedPriority?: string;
+  itPriority?: string | null;
   status: string;
+  resolutionIndicated?: boolean;
   requesterId: number;
   requester: {
     id: number;
@@ -313,6 +404,7 @@ export interface TicketDetailItem {
     name: string;
   } | null;
   attachments: TicketDetailAttachment[];
+  comments?: PublicCommentItem[];
   activityTimeline: TimelineEvent[];
   timeline?: TimelineEvent[];
   activityHistory?: TimelineEvent[];
@@ -320,14 +412,9 @@ export interface TicketDetailItem {
   updatedAt: string;
 }
 
-export async function fetchTicketDetail(
-  ticketId: number,
-  requesterId: number
-): Promise<TicketDetailItem> {
+export async function fetchTicketDetail(ticketId: number): Promise<TicketDetailItem> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}`, {
-    headers: {
-      "X-Requester-Id": String(requesterId),
-    },
+    credentials: "include",
   });
 
   const body = await res.json().catch(() => null);
@@ -337,7 +424,7 @@ export async function fetchTicketDetail(
     throw new ApiError(
       errorObj?.message || `Failed to fetch ticket with status ${res.status}`,
       errorObj?.code,
-      errorObj?.fieldErrors,
+      errorObj?.details?.fieldErrors,
       res.status
     );
   }
@@ -347,15 +434,14 @@ export async function fetchTicketDetail(
 
 export async function removeAttachment(
   attachmentId: number,
-  payload: { reason: string; customReason?: string },
-  requesterId: number
+  payload: { reason: string; customReason?: string }
 ): Promise<TicketDetailAttachment> {
   const res = await fetch(`${API_URL}/api/attachments/${attachmentId}/remove`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Requester-Id": String(requesterId),
     },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
 
@@ -366,7 +452,7 @@ export async function removeAttachment(
     throw new ApiError(
       errorObj?.message || `Failed to remove attachment with status ${res.status}`,
       errorObj?.code,
-      errorObj?.fieldErrors,
+      errorObj?.details?.fieldErrors,
       res.status
     );
   }
@@ -376,17 +462,14 @@ export async function removeAttachment(
 
 export async function addAttachmentToTicket(
   ticketId: number,
-  file: File,
-  requesterId: number
+  file: File
 ): Promise<TicketDetailAttachment> {
   const formData = new FormData();
   formData.append("file", file);
 
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
     method: "POST",
-    headers: {
-      "X-Requester-Id": String(requesterId),
-    },
+    credentials: "include",
     body: formData,
   });
 
@@ -397,7 +480,7 @@ export async function addAttachmentToTicket(
     throw new ApiError(
       errorObj?.message || `Failed to add attachment with status ${res.status}`,
       errorObj?.code,
-      errorObj?.fieldErrors,
+      errorObj?.details?.fieldErrors,
       res.status
     );
   }
@@ -411,19 +494,16 @@ export function getAttachmentDownloadUrl(attachmentId: number): string {
 
 export async function downloadAttachment(
   attachmentId: number,
-  originalName: string,
-  requesterId: number
+  originalName: string
 ): Promise<void> {
   const res = await fetch(`${API_URL}/api/attachments/${attachmentId}/download`, {
-    headers: {
-      "X-Requester-Id": String(requesterId),
-    },
+    credentials: "include",
   });
 
   if (res.status === 410) {
     const body = await res.json().catch(() => null);
     throw new ApiError(
-      body?.error || body?.message || "Attachment has been removed",
+      body?.error?.message || body?.error || body?.message || "Attachment has been removed",
       "ATTACHMENT_SOFT_DELETED",
       undefined,
       410
@@ -450,3 +530,82 @@ export async function downloadAttachment(
   window.URL.revokeObjectURL(blobUrl);
 }
 
+// ---------------------------------------------------------------------------
+// Discussion & Resolution Confirmation Endpoints
+// ---------------------------------------------------------------------------
+
+export async function fetchPublicComments(ticketId: number): Promise<{ data: PublicCommentItem[] }> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/comments`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch comments with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function postPublicComment(
+  ticketId: number,
+  content: string
+): Promise<{ data: PublicCommentItem }> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/comments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({ content }),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to post comment with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function confirmProblemResolved(
+  ticketId: number,
+  feedbackComment?: string
+): Promise<{ data: { id: number; ticketNo: string; status: string; resolutionIndicated: boolean; message: string } }> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/confirm-resolved`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(feedbackComment ? { feedbackComment } : {}),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to confirm resolution with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}

@@ -18,8 +18,8 @@ const relatedSystems = [
 ];
 
 // Valid bcrypt hashes
-const DEFAULT_USER_PASSWORD_HASH = "$2b$10$epR.zIe6lO2vE9tK4x8GkOCsM4.W1YI2fT1J2V9q8J5B9X9b1w7y2"; // Password123!
-const DEFAULT_ADMIN_PASSWORD_HASH = "$2b$10$ZpI3K7v2Y5n.u0e1G3h5QOKsR3.X1YI2fT1J2V9q8J5B9X9b1w7y2"; // Admin123!
+const DEFAULT_USER_PASSWORD_HASH = "$2b$10$Darja.Q6FT2ivIiXVxb0V.S96Mw20uhnhV.UkhZVw7Jm91AWU5h4q"; // Password123!
+const DEFAULT_ADMIN_PASSWORD_HASH = "$2b$10$hhvJQ/PscgLmJlO7QmjIAeunskBAUnUZt/4.hMQ0FOeGWMmxMww7K"; // Admin123!
 
 const seedUsers = [
   // 5 Preserved Requesters (IDs 1-5)
@@ -157,26 +157,38 @@ export async function seedDatabase() {
   console.log("Successfully seeded related systems:", relatedSystems.map((s) => s.name).join(", "));
 
   // 3. Seed Users idempotently (AC-11-05 & AC-11-08: NEVER overwrite modified password credentials)
+  const LEGACY_HASHES = [
+    "$2b$10$epR.zIe6lO2vE9tK4x8GkOCsM4.W1YI2fT1J2V9q8J5B9X9b1w7y2",
+    "$2b$10$ZpI3K7v2Y5n.u0e1G3h5QOKsR3.X1YI2fT1J2V9q8J5B9X9b1w7y2",
+  ];
+
   for (const u of seedUsers) {
-    await prisma.user.upsert({
-      where: { email: u.email },
-      update: {
-        fullName: u.fullName,
-        department: u.department,
-        role: u.role,
-        isActive: u.isActive,
-        // passwordHash and mustChangePassword are intentionally omitted from update
-      },
-      create: {
-        email: u.email,
-        fullName: u.fullName,
-        department: u.department,
-        role: u.role,
-        isActive: u.isActive,
-        passwordHash: u.passwordHash,
-        mustChangePassword: u.mustChangePassword,
-      },
-    });
+    const existing = await prisma.user.findUnique({ where: { email: u.email } });
+    if (!existing) {
+      await prisma.user.create({
+        data: {
+          email: u.email,
+          fullName: u.fullName,
+          department: u.department,
+          role: u.role,
+          isActive: u.isActive,
+          passwordHash: u.passwordHash,
+          mustChangePassword: u.mustChangePassword,
+        },
+      });
+    } else {
+      const isLegacyHash = LEGACY_HASHES.includes(existing.passwordHash);
+      await prisma.user.update({
+        where: { email: u.email },
+        data: {
+          fullName: u.fullName,
+          department: u.department,
+          role: u.role,
+          isActive: u.isActive,
+          ...(isLegacyHash ? { passwordHash: u.passwordHash } : {}),
+        },
+      });
+    }
   }
   console.log("Successfully seeded 10 users:", seedUsers.map((u) => u.fullName).join(", "));
 
