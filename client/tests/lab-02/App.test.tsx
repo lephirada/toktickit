@@ -117,4 +117,56 @@ describe("Issue 8 / Issue 13 — App Integration Tests", () => {
     fireEvent.click(screen.getByRole("link", { name: /\+ create ticket/i }));
     expect(screen.queryByTestId("success-banner")).not.toBeInTheDocument();
   });
+
+  it("routes IT_STAFF to /staff/queue and renders staff-queue-section without broken screen", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 2,
+      email: "john.doe@toktickit.com",
+      fullName: "John Doe",
+      role: "IT_STAFF",
+      mustChangePassword: false,
+    });
+    window.history.pushState({}, "", "/staff/queue");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("staff-queue-section")).toBeInTheDocument();
+    expect(screen.getByTestId("role-badge-staff")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-staff-queue")).toBeInTheDocument();
+  });
+
+  it("routes ADMINISTRATOR to /admin/users and renders admin-users-section without broken screen", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 3,
+      email: "admin@toktickit.com",
+      fullName: "Admin Alice",
+      role: "ADMINISTRATOR",
+      mustChangePassword: false,
+    });
+
+    render(<App />);
+
+    const userManagementLink = await screen.findByTestId("nav-admin-users");
+    fireEvent.click(userManagementLink);
+
+    expect(await screen.findByTestId("admin-users-section")).toBeInTheDocument();
+  });
+
+  it("restricts REQUESTER from accessing /staff/queue and redirects to /my-tickets", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 1,
+      email: "sarah.connor@toktickit.com",
+      fullName: "Sarah Connor",
+      role: "REQUESTER",
+      mustChangePassword: false,
+    });
+
+    window.history.pushState({}, "", "/staff/queue");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("my-tickets-section")).toBeInTheDocument();
+    expect(screen.queryByTestId("staff-queue-section")).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe("/my-tickets");
+  });
 });

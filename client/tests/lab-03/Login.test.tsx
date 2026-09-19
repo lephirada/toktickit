@@ -122,9 +122,9 @@ describe("Issue 13 — LoginScreen Component & Auth Integration Tests", () => {
     );
   });
 
-  it("displays error banner when inactive account returns authentication error", async () => {
+  it("displays specific error banner when inactive account returns authentication error", async () => {
     vi.spyOn(api, "login").mockRejectedValue(
-      new api.ApiError("Invalid email or password.", "INVALID_CREDENTIALS", undefined, 401)
+      new api.ApiError("Your account is inactive. Please contact your administrator.", "ACCOUNT_INACTIVE", undefined, 401)
     );
 
     render(
@@ -143,7 +143,7 @@ describe("Issue 13 — LoginScreen Component & Auth Integration Tests", () => {
     fireEvent.click(screen.getByTestId("login-submit-btn"));
 
     expect(await screen.findByTestId("login-error-banner")).toHaveTextContent(
-      "Invalid email or password."
+      "Your account is inactive. Please contact your administrator."
     );
   });
 

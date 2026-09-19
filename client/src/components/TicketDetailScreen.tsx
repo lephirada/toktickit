@@ -404,6 +404,13 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
       return;
     }
 
+    const isOwner = user?.id === ticket?.requesterId;
+    const canComment = isOwner || user?.role === "IT_STAFF" || user?.role === "ADMINISTRATOR";
+    if (!canComment) {
+      setCommentError("You are not authorized to post comments to this ticket.");
+      return;
+    }
+
     setIsSubmittingComment(true);
     setCommentError(null);
 
@@ -467,6 +474,7 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
   const isOwner = user?.id === ticket.requesterId;
   const isEligibleStatus = ticket.status === "IN_PROGRESS" || ticket.status === "WAITING_FOR_REQUESTER";
   const canConfirmResolved = isOwner && isEligibleStatus && !ticket.resolutionIndicated;
+  const canComment = isOwner || user?.role === "IT_STAFF" || user?.role === "ADMINISTRATOR";
 
   return (
     <div
@@ -1038,47 +1046,53 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
           </div>
 
           {/* Comment Form */}
-          <form onSubmit={handleCommentSubmit} data-testid="public-comment-form">
-            {commentError && (
-              <div className="alert alert-danger small p-2 mb-2 rounded-2" data-testid="comment-error">
-                {commentError}
+          {canComment ? (
+            <form onSubmit={handleCommentSubmit} data-testid="public-comment-form">
+              {commentError && (
+                <div className="alert alert-danger small p-2 mb-2 rounded-2" data-testid="comment-error">
+                  {commentError}
+                </div>
+              )}
+              <div className="mb-2">
+                <textarea
+                  className="form-control"
+                  rows={3}
+                  style={{
+                    borderRadius: "8px",
+                    borderColor: "#D0D5DD",
+                    fontSize: "0.875rem",
+                  }}
+                  placeholder="Add a public comment to this ticket…"
+                  value={newComment}
+                  maxLength={2000}
+                  onChange={(e) => {
+                    setNewComment(e.target.value);
+                    if (commentError) setCommentError(null);
+                  }}
+                  disabled={isSubmittingComment}
+                  data-testid="comment-input"
+                />
               </div>
-            )}
-            <div className="mb-2">
-              <textarea
-                className="form-control"
-                rows={3}
-                style={{
-                  borderRadius: "8px",
-                  borderColor: "#D0D5DD",
-                  fontSize: "0.875rem",
-                }}
-                placeholder="Add a public comment to this ticket…"
-                value={newComment}
-                maxLength={2000}
-                onChange={(e) => {
-                  setNewComment(e.target.value);
-                  if (commentError) setCommentError(null);
-                }}
-                disabled={isSubmittingComment}
-                data-testid="comment-input"
-              />
+              <div className="d-flex align-items-center justify-content-between">
+                <span className="text-muted small" data-testid="comment-char-counter" style={{ fontSize: "0.75rem" }}>
+                  {newComment.length} / 2,000 characters
+                </span>
+                <button
+                  type="submit"
+                  className="btn btn-success btn-sm fw-semibold px-3 py-1 rounded-2 shadow-sm"
+                  style={{ backgroundColor: "var(--zg-primary)", borderColor: "var(--zg-primary)" }}
+                  disabled={isSubmittingComment || !newComment.trim()}
+                  data-testid="comment-submit-btn"
+                >
+                  {isSubmittingComment ? "Posting…" : "Post Comment"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="alert alert-light border small text-muted p-3 text-center mb-0" data-testid="comment-permission-notice">
+              Only the ticket requester and IT staff can post comments to this discussion.
             </div>
-            <div className="d-flex align-items-center justify-content-between">
-              <span className="text-muted small" data-testid="comment-char-counter" style={{ fontSize: "0.75rem" }}>
-                {newComment.length} / 2,000 characters
-              </span>
-              <button
-                type="submit"
-                className="btn btn-success btn-sm fw-semibold px-3 py-1 rounded-2 shadow-sm"
-                style={{ backgroundColor: "var(--zg-primary)", borderColor: "var(--zg-primary)" }}
-                disabled={isSubmittingComment || !newComment.trim()}
-                data-testid="comment-submit-btn"
-              >
-                {isSubmittingComment ? "Posting…" : "Post Comment"}
-              </button>
-            </div>
-          </form>
+          )}
         </div>
       </div>
 

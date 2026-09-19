@@ -69,7 +69,15 @@ export default function LoginScreen({ onSuccess, onNavigate }: LoginScreenProps)
       }
     } catch (err: unknown) {
       if (err instanceof ApiError) {
-        if (err.status === 401) {
+        if (
+          err.code === "ACCOUNT_INACTIVE" ||
+          err.code === "ACCOUNT_DEACTIVATED" ||
+          err.code === "USER_INACTIVE" ||
+          err.message?.toLowerCase().includes("inactive") ||
+          err.message?.toLowerCase().includes("deactivated")
+        ) {
+          setErrorMessage("Your account is inactive. Please contact your administrator.");
+        } else if (err.status === 401) {
           setErrorMessage(err.message || "Invalid email or password. Please try again.");
         } else {
           setErrorMessage(err.message || "Unable to complete login. Please try again.");

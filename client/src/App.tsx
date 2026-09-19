@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { checkSystem, Category } from "./api.js";
+import { checkSystem, Category, UserRole } from "./api.js";
 import { AuthProvider, useAuth } from "./context/AuthContext.js";
 import Header from "./components/Header.js";
 import DirtyGuardModal from "./components/DirtyGuardModal.js";
@@ -8,10 +8,54 @@ import MyTicketsDashboard from "./components/MyTicketsDashboard.js";
 import TicketDetailScreen from "./components/TicketDetailScreen.js";
 import LoginScreen from "./components/LoginScreen.js";
 import ChangePasswordScreen from "./components/ChangePasswordScreen.js";
-import { CheckCircleIcon } from "./components/icons/index.js";
+import { CheckCircleIcon, TicketIcon, UserIcon } from "./components/icons/index.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
-type ActiveView = "my-tickets" | "create-ticket" | "ticket-detail" | "change-password" | "login";
+export type ActiveView =
+  | "my-tickets"
+  | "create-ticket"
+  | "ticket-detail"
+  | "change-password"
+  | "login"
+  | "staff-queue"
+  | "admin-users";
+
+export function resolveAllowedView(path: string, user?: { role: UserRole } | null): { view: ActiveView; path: string } {
+  if (path.startsWith("/tickets/")) {
+    return { view: "ticket-detail", path };
+  }
+  if (path === "/change-password") {
+    return { view: "change-password", path: "/change-password" };
+  }
+  if (path === "/login") {
+    return { view: "login", path: "/login" };
+  }
+
+  // Role-based restrictions:
+  if (user?.role === "REQUESTER") {
+    if (path === "/create-ticket") return { view: "create-ticket", path: "/create-ticket" };
+    return { view: "my-tickets", path: "/my-tickets" };
+  }
+
+  if (user?.role === "IT_STAFF") {
+    if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
+    if (path === "/my-tickets") return { view: "my-tickets", path: "/my-tickets" };
+    return { view: "staff-queue", path: "/staff/queue" };
+  }
+
+  if (user?.role === "ADMINISTRATOR") {
+    if (path === "/admin/users") return { view: "admin-users", path: "/admin/users" };
+    if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
+    if (path === "/my-tickets") return { view: "my-tickets", path: "/my-tickets" };
+    if (path === "/create-ticket") return { view: "create-ticket", path: "/create-ticket" };
+    return { view: "staff-queue", path: "/staff/queue" };
+  }
+
+  if (path === "/create-ticket") return { view: "create-ticket", path: "/create-ticket" };
+  if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
+  if (path === "/admin/users") return { view: "admin-users", path: "/admin/users" };
+  return { view: "my-tickets", path: "/my-tickets" };
+}
 
 export function AppContent() {
   const {
@@ -29,7 +73,7 @@ export function AppContent() {
 
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string>("" );
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => {
     const match = window.location.pathname.match(/^\/tickets\/(\d+)$/);
     return match ? parseInt(match[1], 10) : null;
@@ -37,11 +81,7 @@ export function AppContent() {
 
   const [activeView, setActiveView] = useState<ActiveView>(() => {
     const path = window.location.pathname;
-    if (path.startsWith("/tickets/")) return "ticket-detail";
-    if (path === "/create-ticket") return "create-ticket";
-    if (path === "/change-password") return "change-password";
-    if (path === "/login") return "login";
-    return "my-tickets";
+    return resolveAllowedView(path, null).view;
   });
 
   const [formKey, setFormKey] = useState<number>(0);
@@ -65,6 +105,21 @@ export function AppContent() {
     }
   }, [activeView]);
 
+  // Sync active view and enforce role authorization on user or route changes
+  useEffect(() => {
+    if (!user || mustChangePassword) return;
+
+    const path = window.location.pathname;
+    const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
+    if (ticketMatch) return;
+
+    const resolved = resolveAllowedView(path, user);
+    if (resolved.path !== path) {
+      window.history.replaceState({}, "", resolved.path);
+    }
+    setActiveView(resolved.view);
+  }, [user, mustChangePassword]);
+
   // Sync active view with browser popstate
   useEffect(() => {
     const handlePopState = () => {
@@ -73,20 +128,18 @@ export function AppContent() {
       if (ticketMatch) {
         setSelectedTicketId(parseInt(ticketMatch[1], 10));
         setActiveView("ticket-detail");
-      } else if (path === "/create-ticket") {
-        setActiveView("create-ticket");
-      } else if (path === "/change-password") {
-        setActiveView("change-password");
-      } else if (path === "/login") {
-        setActiveView("login");
-      } else {
-        setActiveView("my-tickets");
+        return;
       }
+      const resolved = resolveAllowedView(path, user);
+      if (resolved.path !== path) {
+        window.history.replaceState({}, "", resolved.path);
+      }
+      setActiveView(resolved.view);
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+  }, [user]);
 
   const handleNavigate = (targetScreen: string, ticketId?: number) => {
     if (targetScreen !== "my-tickets") {
@@ -97,19 +150,19 @@ export function AppContent() {
       setSelectedTicketId(ticketId);
       window.history.pushState({}, "", `/tickets/${ticketId}`);
       setActiveView("ticket-detail");
-    } else if (targetScreen === "my-tickets") {
-      window.history.pushState({}, "", "/my-tickets");
-      setActiveView("my-tickets");
-    } else if (targetScreen === "create-ticket") {
-      window.history.pushState({}, "", "/create-ticket");
-      setActiveView("create-ticket");
-    } else if (targetScreen === "change-password") {
-      window.history.pushState({}, "", "/change-password");
-      setActiveView("change-password");
-    } else if (targetScreen === "login") {
-      window.history.pushState({}, "", "/login");
-      setActiveView("login");
+      return;
     }
+
+    let targetPath = "/my-tickets";
+    if (targetScreen === "create-ticket") targetPath = "/create-ticket";
+    else if (targetScreen === "change-password") targetPath = "/change-password";
+    else if (targetScreen === "login") targetPath = "/login";
+    else if (targetScreen === "staff-queue") targetPath = "/staff/queue";
+    else if (targetScreen === "admin-users") targetPath = "/admin/users";
+
+    const resolved = resolveAllowedView(targetPath, user);
+    window.history.pushState({}, "", resolved.path);
+    setActiveView(resolved.view);
   };
 
   const handleModalCancel = () => {
@@ -277,6 +330,77 @@ export function AppContent() {
               ticketId={selectedTicketId || 0}
               onNavigate={(view) => handleNavigate(view)}
             />
+          </section>
+        )}
+
+        {/* IT Staff Ticket Queue View (Issue 14 Destination) */}
+        {activeView === "staff-queue" && (
+          <section data-testid="staff-queue-section" className="w-full">
+            <div
+              className="bg-white border shadow-sm p-4 p-md-5 text-center mx-auto"
+              style={{
+                maxWidth: 800,
+                borderRadius: "16px",
+                borderColor: "#EAECF0",
+                boxShadow: "0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04)",
+              }}
+            >
+              <div
+                className="d-inline-flex align-items-center justify-content-center rounded-circle p-3 mb-3"
+                style={{ backgroundColor: "var(--zg-pale)" }}
+              >
+                <TicketIcon size={32} color="var(--zg-primary)" />
+              </div>
+              <h2 className="h4 fw-bold text-dark mb-2">IT Staff Ticket Queue</h2>
+              <p className="text-muted small mb-4" style={{ maxWidth: 500, margin: "0 auto" }}>
+                The shared IT Staff Ticket Queue with search, multi-field filtering, priority assignment, and ticket management is being developed in Issue 14.
+              </p>
+              <div className="d-flex justify-content-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-success btn-sm fw-semibold px-3 py-2 rounded-2"
+                  style={{ color: "var(--zg-primary)", borderColor: "var(--zg-primary)" }}
+                  onClick={() => handleNavigate("my-tickets")}
+                >
+                  View My Tickets
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Administrator User Management View (Issue 16 Destination) */}
+        {activeView === "admin-users" && (
+          <section data-testid="admin-users-section" className="w-full">
+            <div
+              className="bg-white border shadow-sm p-4 p-md-5 text-center mx-auto"
+              style={{
+                maxWidth: 800,
+                borderRadius: "16px",
+                borderColor: "#EAECF0",
+                boxShadow: "0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04)",
+              }}
+            >
+              <div
+                className="d-inline-flex align-items-center justify-content-center rounded-circle p-3 mb-3"
+                style={{ backgroundColor: "#F4EBFF" }}
+              >
+                <UserIcon size={32} color="#5925DC" />
+              </div>
+              <h2 className="h4 fw-bold text-dark mb-2">User Management</h2>
+              <p className="text-muted small mb-4" style={{ maxWidth: 500, margin: "0 auto" }}>
+                User directory, account creation, role assignments, and security guardrails are being developed in Issue 16.
+              </p>
+              <div className="d-flex justify-content-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm fw-semibold px-3 py-2 rounded-2"
+                  onClick={() => handleNavigate("staff-queue")}
+                >
+                  Back to Ticket Queue
+                </button>
+              </div>
+            </div>
           </section>
         )}
 

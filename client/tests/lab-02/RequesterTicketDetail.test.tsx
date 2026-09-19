@@ -203,4 +203,88 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
       expect(screen.getByTestId("ticket-number")).toHaveTextContent("TKT-2026-00042");
     });
   });
+
+  it("4. Rejects empty/whitespace comments and posts valid public comments", async () => {
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(mockTicketDetail);
+    const postCommentSpy = vi.spyOn(api, "postPublicComment").mockResolvedValue({
+      data: {
+        id: 1,
+        ticketId: 42,
+        authorId: 1,
+        authorName: "Sarah Connor",
+        authorRole: "REQUESTER",
+        content: "Valid comment content",
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+
+    expect(await screen.findByTestId("public-comment-form")).toBeInTheDocument();
+
+    // Try posting whitespace
+    const input = screen.getByTestId("comment-input");
+    fireEvent.change(input, { target: { value: "    " } });
+
+    const submitBtn = screen.getByTestId("comment-submit-btn");
+    expect(submitBtn).toBeDisabled();
+
+    // Enter valid comment
+    fireEvent.change(input, { target: { value: "Thank you for looking into this!" } });
+    expect(submitBtn).not.toBeDisabled();
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(postCommentSpy).toHaveBeenCalledWith(42, "Thank you for looking into this!");
+    });
+  });
+
+  it("5. Hides comment form and shows notice when requester does not own the ticket", async () => {
+    // Ticket owned by requesterId: 999, but logged in user is id: 1
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue({
+      ...mockTicketDetail,
+      requesterId: 999,
+    });
+
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+
+    expect(await screen.findByTestId("comment-permission-notice")).toBeInTheDocument();
+    expect(screen.queryByTestId("public-comment-form")).not.toBeInTheDocument();
+  });
+
+  it("6. Problem Appears Resolved triggers modal and calls confirmation API", async () => {
+    // Ticket in eligible status (IN_PROGRESS) owned by user id: 1
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue({
+      ...mockTicketDetail,
+      status: "IN_PROGRESS",
+      requesterId: 1,
+      resolutionIndicated: false,
+    });
+    const confirmSpy = vi.spyOn(api, "confirmProblemResolved").mockResolvedValue({
+      data: {
+        id: 42,
+        ticketNo: "TKT-2026-00042",
+        status: "RESOLVED",
+        resolutionIndicated: true,
+        message: "Problem resolved",
+      },
+    });
+
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+
+    const resolvedBtn = await screen.findByTestId("confirm-resolved-btn");
+    fireEvent.click(resolvedBtn);
+
+    expect(await screen.findByTestId("confirm-resolved-modal")).toBeInTheDocument();
+
+    const feedbackInput = screen.getByTestId("confirm-resolved-feedback");
+    fireEvent.change(feedbackInput, { target: { value: "Working now, thanks!" } });
+
+    const submitBtn = screen.getByTestId("confirm-resolved-submit-btn");
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith(42, "Working now, thanks!");
+    });
+  });
 });
