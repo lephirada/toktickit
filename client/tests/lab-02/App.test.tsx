@@ -169,4 +169,40 @@ describe("Issue 8 / Issue 13 — App Integration Tests", () => {
     expect(screen.queryByTestId("staff-queue-section")).not.toBeInTheDocument();
     expect(window.location.pathname).toBe("/my-tickets");
   });
+
+  it("restricts IT_STAFF from accessing requester route /my-tickets and redirects to /staff/queue", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 2,
+      email: "john.doe@toktickit.com",
+      fullName: "John Doe",
+      role: "IT_STAFF",
+      mustChangePassword: false,
+    });
+
+    window.history.pushState({}, "", "/my-tickets");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("staff-queue-section")).toBeInTheDocument();
+    expect(screen.queryByTestId("my-tickets-section")).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe("/staff/queue");
+  });
+
+  it("restricts IT_STAFF from accessing /admin/users and redirects to /staff/queue", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 2,
+      email: "john.doe@toktickit.com",
+      fullName: "John Doe",
+      role: "IT_STAFF",
+      mustChangePassword: false,
+    });
+
+    window.history.pushState({}, "", "/admin/users");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("staff-queue-section")).toBeInTheDocument();
+    expect(screen.queryByTestId("admin-users-section")).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe("/staff/queue");
+  });
 });

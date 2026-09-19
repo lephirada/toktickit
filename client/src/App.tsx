@@ -39,7 +39,6 @@ export function resolveAllowedView(path: string, user?: { role: UserRole } | nul
 
   if (user?.role === "IT_STAFF") {
     if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
-    if (path === "/my-tickets") return { view: "my-tickets", path: "/my-tickets" };
     return { view: "staff-queue", path: "/staff/queue" };
   }
 

@@ -222,21 +222,39 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
 
     expect(await screen.findByTestId("public-comment-form")).toBeInTheDocument();
 
-    // Try posting whitespace
     const input = screen.getByTestId("comment-input");
-    fireEvent.change(input, { target: { value: "    " } });
-
     const submitBtn = screen.getByTestId("comment-submit-btn");
+
+    // 1. Empty string -> disabled
+    fireEvent.change(input, { target: { value: "" } });
     expect(submitBtn).toBeDisabled();
 
-    // Enter valid comment
-    fireEvent.change(input, { target: { value: "Thank you for looking into this!" } });
+    // 2. Whitespace only -> disabled
+    fireEvent.change(input, { target: { value: "    " } });
+    expect(submitBtn).toBeDisabled();
+
+    // 3. Single character (1 char) -> enabled & accepted
+    fireEvent.change(input, { target: { value: "A" } });
     expect(submitBtn).not.toBeDisabled();
     fireEvent.click(submitBtn);
-
     await waitFor(() => {
-      expect(postCommentSpy).toHaveBeenCalledWith(42, "Thank you for looking into this!");
+      expect(postCommentSpy).toHaveBeenCalledWith(42, "A");
     });
+
+    // 4. Exactly 2,000 characters -> accepted
+    const exactly2000Chars = "X".repeat(2000);
+    fireEvent.change(input, { target: { value: exactly2000Chars } });
+    expect(submitBtn).not.toBeDisabled();
+    fireEvent.click(submitBtn);
+    await waitFor(() => {
+      expect(postCommentSpy).toHaveBeenCalledWith(42, exactly2000Chars);
+    });
+
+    // 5. Exceeding 2,000 characters (2,001 chars) -> rejected with validation error
+    const exceedingChars = "Y".repeat(2001);
+    fireEvent.change(input, { target: { value: exceedingChars } });
+    fireEvent.submit(screen.getByTestId("public-comment-form"));
+    expect(await screen.findByTestId("comment-error")).toHaveTextContent("Comment cannot exceed 2,000 characters.");
   });
 
   it("5. Hides comment form and shows notice when requester does not own the ticket", async () => {
