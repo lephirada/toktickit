@@ -1,52 +1,49 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { checkSystem, Category } from "./api.js";
-import { RequesterProvider, useRequester } from "./context/RequesterContext.js";
+import { AuthProvider, useAuth } from "./context/AuthContext.js";
 import Header from "./components/Header.js";
 import DirtyGuardModal from "./components/DirtyGuardModal.js";
 import CreateTicketForm from "./components/CreateTicketForm.js";
 import MyTicketsDashboard from "./components/MyTicketsDashboard.js";
-import SelectRequesterScreen from "./components/SelectRequesterScreen.js";
 import TicketDetailScreen from "./components/TicketDetailScreen.js";
+import LoginScreen from "./components/LoginScreen.js";
+import ChangePasswordScreen from "./components/ChangePasswordScreen.js";
 import { CheckCircleIcon } from "./components/icons/index.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
-type ActiveView = "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail";
+type ActiveView = "my-tickets" | "create-ticket" | "ticket-detail" | "change-password" | "login";
 
 export function AppContent() {
   const {
-    currentRequester,
+    user,
     isLoading,
+    isAuthenticated,
+    mustChangePassword,
     isFormDirty,
     setFormDirty,
     isDirtyModalOpen,
     confirmDiscard,
     cancelDiscard,
-  } = useRequester();
+    requestNavigationWithGuard,
+  } = useAuth();
+
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string>("" );
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => {
     const match = window.location.pathname.match(/^\/tickets\/(\d+)$/);
     return match ? parseInt(match[1], 10) : null;
   });
+
   const [activeView, setActiveView] = useState<ActiveView>(() => {
-    const hasRequester = !!localStorage.getItem("toktickit_requester_id");
-    if (!hasRequester) {
-      return "select-requester";
-    }
-    if (window.location.pathname.startsWith("/tickets/")) {
-      return "ticket-detail";
-    }
-    if (window.location.pathname === "/select-requester") {
-      return "select-requester";
-    }
-    if (window.location.pathname === "/create-ticket") {
-      return "create-ticket";
-    }
+    const path = window.location.pathname;
+    if (path.startsWith("/tickets/")) return "ticket-detail";
+    if (path === "/create-ticket") return "create-ticket";
+    if (path === "/change-password") return "change-password";
+    if (path === "/login") return "login";
     return "my-tickets";
   });
-  const [pendingScreen, setPendingScreen] = useState<ActiveView | null>(null);
-  const [showUnsavedModal, setShowUnsavedModal] = useState<boolean>(false);
+
   const [formKey, setFormKey] = useState<number>(0);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
@@ -68,42 +65,20 @@ export function AppContent() {
     }
   }, [activeView]);
 
-  // Dismiss success banner on requester switch
-  const prevRequesterIdRef = useRef<number | undefined>(currentRequester?.id);
-  useEffect(() => {
-    if (prevRequesterIdRef.current !== undefined && prevRequesterIdRef.current !== currentRequester?.id) {
-      setSuccessBanner(null);
-    }
-    prevRequesterIdRef.current = currentRequester?.id;
-  }, [currentRequester?.id]);
-
-  // Route guard: if no active requester in context or localStorage, force select-requester screen
-  useEffect(() => {
-    const hasRequester = !!currentRequester || !!localStorage.getItem("toktickit_requester_id");
-    if (!isLoading && !hasRequester) {
-      if (activeView !== "select-requester") {
-        setActiveView("select-requester");
-        window.history.replaceState({}, "", "/select-requester");
-      }
-    }
-  }, [isLoading, currentRequester, activeView]);
-
+  // Sync active view with browser popstate
   useEffect(() => {
     const handlePopState = () => {
-      const hasRequester = !!currentRequester || !!localStorage.getItem("toktickit_requester_id");
-      if (!hasRequester) {
-        setActiveView("select-requester");
-        return;
-      }
       const path = window.location.pathname;
       const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
       if (ticketMatch) {
         setSelectedTicketId(parseInt(ticketMatch[1], 10));
         setActiveView("ticket-detail");
-      } else if (path === "/select-requester") {
-        setActiveView("select-requester");
       } else if (path === "/create-ticket") {
         setActiveView("create-ticket");
+      } else if (path === "/change-password") {
+        setActiveView("change-password");
+      } else if (path === "/login") {
+        setActiveView("login");
       } else {
         setActiveView("my-tickets");
       }
@@ -111,63 +86,39 @@ export function AppContent() {
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [currentRequester]);
+  }, []);
 
   const handleNavigate = (targetScreen: string, ticketId?: number) => {
-    const hasRequester = !!currentRequester || !!localStorage.getItem("toktickit_requester_id");
-    if (!hasRequester && targetScreen !== "select-requester") {
-      setActiveView("select-requester");
-      window.history.pushState({}, "", "/select-requester");
-      return;
-    }
-
     if (targetScreen !== "my-tickets") {
       setSuccessBanner(null);
-    }
-
-    if (targetScreen === activeView && !ticketId) {
-      return;
-    }
-
-    if (isFormDirty && activeView === "create-ticket") {
-      setPendingScreen(targetScreen as ActiveView);
-      setShowUnsavedModal(true);
-      return; // BLOCK navigation immediately
     }
 
     if (targetScreen === "ticket-detail" && ticketId) {
       setSelectedTicketId(ticketId);
       window.history.pushState({}, "", `/tickets/${ticketId}`);
+      setActiveView("ticket-detail");
     } else if (targetScreen === "my-tickets") {
       window.history.pushState({}, "", "/my-tickets");
+      setActiveView("my-tickets");
     } else if (targetScreen === "create-ticket") {
       window.history.pushState({}, "", "/create-ticket");
-    } else if (targetScreen === "select-requester") {
-      window.history.pushState({}, "", "/select-requester");
+      setActiveView("create-ticket");
+    } else if (targetScreen === "change-password") {
+      window.history.pushState({}, "", "/change-password");
+      setActiveView("change-password");
+    } else if (targetScreen === "login") {
+      window.history.pushState({}, "", "/login");
+      setActiveView("login");
     }
-
-    setActiveView(targetScreen as ActiveView);
   };
 
   const handleModalCancel = () => {
-    setShowUnsavedModal(false);
-    setPendingScreen(null);
     cancelDiscard();
   };
 
   const handleModalConfirmDiscard = () => {
     setFormDirty(false);
-    setShowUnsavedModal(false);
     confirmDiscard();
-    if (pendingScreen) {
-      if (pendingScreen === "my-tickets") {
-        window.history.pushState({}, "", "/my-tickets");
-      } else if (pendingScreen === "select-requester") {
-        window.history.pushState({}, "", "/select-requester");
-      }
-      setActiveView(pendingScreen);
-      setPendingScreen(null);
-    }
     setFormKey((prev) => prev + 1);
   };
 
@@ -200,11 +151,59 @@ export function AppContent() {
     setSuccessBanner(null);
   }, []);
 
+  // 1. Loading Authentication State
+  if (isLoading) {
+    return (
+      <div
+        className="d-flex align-items-center justify-content-center min-vh-100"
+        data-testid="app-loading"
+        style={{ backgroundColor: "var(--zg-bg)" }}
+      >
+        <div className="text-center">
+          <div className="spinner-border text-success" role="status" style={{ width: "3rem", height: "3rem" }}>
+            <span className="visually-hidden">Loading application…</span>
+          </div>
+          <p className="mt-3 text-muted fw-medium">Loading TokTickIT…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated State -> Force Login Screen
+  if (!isAuthenticated) {
+    return (
+      <LoginScreen
+        onSuccess={() => {
+          // Handled inside LoginScreen via onNavigate or history
+        }}
+        onNavigate={(screen) => handleNavigate(screen)}
+      />
+    );
+  }
+
+  // 3. Authenticated but Must Change Password -> Force Change Password Screen
+  if (mustChangePassword) {
+    return (
+      <div className="min-vh-100 d-flex flex-column" style={{ backgroundColor: "var(--zg-bg)" }}>
+        <Header activeView="change-password" onNavigate={handleNavigate} />
+        <main className="container py-4 flex-grow-1">
+          <ChangePasswordScreen
+            onSuccess={() => {
+              handleNavigate("my-tickets");
+            }}
+            onNavigate={(screen) => handleNavigate(screen)}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  // 4. Authenticated Normal Application Shell
   return (
-    <div className="min-vh-100 d-flex flex-column">
+    <div className="min-vh-100 d-flex flex-column" style={{ backgroundColor: "var(--zg-bg)" }}>
       <Header activeView={activeView} currentScreen={activeView} onNavigate={handleNavigate} />
       <DirtyGuardModal
-        isOpen={showUnsavedModal || isDirtyModalOpen}
+        isOpen={isDirtyModalOpen}
         onConfirm={handleModalConfirmDiscard}
         onCancel={handleModalCancel}
       />
@@ -215,8 +214,6 @@ export function AppContent() {
           maxWidth:
             activeView === "my-tickets" || activeView === "ticket-detail"
               ? 1380
-              : activeView === "select-requester"
-              ? 1200
               : 800,
           margin: "0 auto",
           width: "100%",
@@ -242,15 +239,11 @@ export function AppContent() {
           </div>
         )}
 
-        {/* Select Requester Screen */}
-        {activeView === "select-requester" && (
-          <SelectRequesterScreen
-            onContinue={() => handleNavigate("my-tickets")}
-            onCancel={() => {
-              if (currentRequester || localStorage.getItem("toktickit_requester_id")) {
-                handleNavigate("my-tickets");
-              }
-            }}
+        {/* Change Password View (voluntary change from header menu) */}
+        {activeView === "change-password" && (
+          <ChangePasswordScreen
+            onSuccess={() => handleNavigate("my-tickets")}
+            onNavigate={(screen) => handleNavigate(screen)}
           />
         )}
 
@@ -266,7 +259,7 @@ export function AppContent() {
         )}
 
         {/* My Tickets Dashboard */}
-        {activeView === "my-tickets" && (currentRequester || localStorage.getItem("toktickit_requester_id")) && (
+        {activeView === "my-tickets" && (
           <section data-testid="my-tickets-section">
             <MyTicketsDashboard
               onCreateTicket={() => handleNavigate("create-ticket")}
@@ -319,8 +312,8 @@ export function AppContent() {
 
 export default function App() {
   return (
-    <RequesterProvider>
+    <AuthProvider>
       <AppContent />
-    </RequesterProvider>
+    </AuthProvider>
   );
 }

@@ -2,19 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../src/api.js";
-import { RequesterProvider } from "../../src/context/RequesterContext.js";
+import { AuthProvider } from "../../src/context/AuthContext.js";
 import TicketDetailScreen from "../../src/components/TicketDetailScreen.js";
 import AttachmentRemovalModal from "../../src/components/AttachmentRemovalModal.js";
 
-const mockRequesters: api.RequesterUser[] = [
-  {
-    id: 1,
-    email: "sarah.connor@toktickit.com",
-    fullName: "Sarah Connor",
-    department: "Engineering",
-    isActive: true,
-  },
-];
+const mockAuthUser: api.AuthUser = {
+  id: 1,
+  fullName: "Sarah Connor",
+  email: "sarah.connor@toktickit.com",
+  role: "REQUESTER",
+  mustChangePassword: false,
+};
 
 const mockTicketDetail: api.TicketDetailItem = {
   id: 42,
@@ -66,10 +64,10 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    localStorage.setItem("toktickit_requester_id", "1");
 
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockAuthUser);
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(mockTicketDetail);
+    vi.spyOn(api, "fetchPublicComments").mockResolvedValue({ data: [] });
     vi.spyOn(api, "downloadAttachment").mockResolvedValue();
     vi.spyOn(api, "addAttachmentToTicket").mockResolvedValue({
       id: 883,
@@ -93,12 +91,12 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
     });
   });
 
-  function renderWithRequester(ui: React.ReactElement) {
-    return render(<RequesterProvider>{ui}</RequesterProvider>);
+  function renderWithAuth(ui: React.ReactElement) {
+    return render(<AuthProvider>{ui}</AuthProvider>);
   }
 
   it("1. Renders active and soft-removed attachments with correct status styles", async () => {
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("attachments-card")).toBeInTheDocument();
@@ -120,7 +118,7 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
   });
 
   it("2. Clicking 'Remove' on active attachment opens AttachmentRemovalModal", async () => {
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("remove-btn-881")).toBeInTheDocument();
@@ -139,7 +137,7 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
 
   it("3. Submitting removal modal with preset reason calls removeAttachment API", async () => {
     const user = userEvent.setup();
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("remove-btn-881")).toBeInTheDocument();
@@ -159,11 +157,9 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
     await user.click(confirmBtn);
 
     await waitFor(() => {
-      expect(api.removeAttachment).toHaveBeenCalledWith(
-        881,
-        { reason: "Uploaded incorrect document / file" },
-        1
-      );
+      expect(api.removeAttachment).toHaveBeenCalledWith(881, {
+        reason: "Uploaded incorrect document / file",
+      });
     });
   });
 
@@ -181,7 +177,6 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
           isSoftDeleted: false,
           createdAt: "2026-08-22T16:25:00.000Z",
         }}
-        requesterId={1}
         onClose={vi.fn()}
         onSuccess={vi.fn()}
       />
@@ -203,7 +198,7 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
 
   it("4B. Submitting removal modal with 'Other' and valid customReason calls removeAttachment API", async () => {
     const user = userEvent.setup();
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("remove-btn-881")).toBeInTheDocument();
@@ -226,19 +221,15 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
     await user.click(confirmBtn);
 
     await waitFor(() => {
-      expect(api.removeAttachment).toHaveBeenCalledWith(
-        881,
-        {
-          reason: "Other",
-          customReason: "Confidential client credentials exposed in logs",
-        },
-        1
-      );
+      expect(api.removeAttachment).toHaveBeenCalledWith(881, {
+        reason: "Other",
+        customReason: "Confidential client credentials exposed in logs",
+      });
     });
   });
 
   it("5. Download active attachment calls downloadAttachment API", async () => {
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("download-btn-881")).toBeInTheDocument();
@@ -249,8 +240,7 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
     await waitFor(() => {
       expect(api.downloadAttachment).toHaveBeenCalledWith(
         881,
-        "error_screenshot.png",
-        1
+        "error_screenshot.png"
       );
     });
   });
@@ -260,7 +250,7 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
       new api.ApiError("Attachment has been removed", "ATTACHMENT_SOFT_DELETED", undefined, 410)
     );
 
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("download-btn-881")).toBeInTheDocument();
@@ -277,7 +267,7 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
   });
 
   it("7. '+ Add Attachment' button triggers file upload and calls addAttachmentToTicket API", async () => {
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("add-attachment-button")).toBeInTheDocument();
@@ -291,7 +281,7 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
     fireEvent.change(fileInput, { target: { files: [testFile] } });
 
     await waitFor(() => {
-      expect(api.addAttachmentToTicket).toHaveBeenCalledWith(42, testFile, 1);
+      expect(api.addAttachmentToTicket).toHaveBeenCalledWith(42, testFile);
     });
   });
 
@@ -311,7 +301,7 @@ describe("Section 12 / Issue 9 — Attachment Section & Lifecycle Component Test
 
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValueOnce(fiveActiveTicket);
 
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("max-attachments-badge")).toBeInTheDocument();

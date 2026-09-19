@@ -1,26 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import * as api from "../../src/api.js";
-import { RequesterProvider } from "../../src/context/RequesterContext.js";
+import { AuthProvider } from "../../src/context/AuthContext.js";
 import TicketDetailScreen from "../../src/components/TicketDetailScreen.js";
 import App from "../../src/App.js";
 
-const mockRequesters: api.RequesterUser[] = [
-  {
-    id: 1,
-    email: "sarah.connor@toktickit.com",
-    fullName: "Sarah Connor",
-    department: "Engineering",
-    isActive: true,
-  },
-  {
-    id: 2,
-    email: "john.doe@toktickit.com",
-    fullName: "John Doe",
-    department: "Finance",
-    isActive: true,
-  },
-];
+const mockAuthUser: api.AuthUser = {
+  id: 1,
+  fullName: "Sarah Connor",
+  email: "sarah.connor@toktickit.com",
+  role: "REQUESTER",
+  mustChangePassword: false,
+};
 
 const mockTicketDetail: api.TicketDetailItem = {
   id: 42,
@@ -84,19 +75,20 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    localStorage.setItem("toktickit_requester_id", "1");
 
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockAuthUser);
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue(mockTicketDetail);
+    vi.spyOn(api, "fetchPublicComments").mockResolvedValue({ data: [] });
+    vi.spyOn(api, "fetchCategories").mockResolvedValue([{ id: 4, name: "Network" }]);
   });
 
-  function renderWithRequester(ui: React.ReactElement) {
-    return render(<RequesterProvider>{ui}</RequesterProvider>);
+  function renderWithAuth(ui: React.ReactElement) {
+    return render(<AuthProvider>{ui}</AuthProvider>);
   }
 
   it("1. Renders ticket details, metadata badges, description, and timeline accurately", async () => {
     const onNavigate = vi.fn();
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={onNavigate} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={onNavigate} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("ticket-number")).toHaveTextContent("TKT-2026-00042");
@@ -133,7 +125,7 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
     );
 
     const onNavigate = vi.fn();
-    renderWithRequester(<TicketDetailScreen ticketId={999} onNavigate={onNavigate} />);
+    renderWithAuth(<TicketDetailScreen ticketId={999} onNavigate={onNavigate} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("ticket-detail-error")).toBeInTheDocument();
@@ -153,7 +145,7 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
 
   it("3. Breadcrumb navigation returns user to My Tickets", async () => {
     const onNavigate = vi.fn();
-    renderWithRequester(<TicketDetailScreen ticketId={42} onNavigate={onNavigate} />);
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={onNavigate} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("breadcrumb-tickets-link")).toBeInTheDocument();
@@ -198,7 +190,7 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
       },
     });
 
-    renderWithRequester(<App />);
+    render(<App />);
 
     await waitFor(() => {
       expect(screen.getByTestId("ticket-link-42")).toBeInTheDocument();

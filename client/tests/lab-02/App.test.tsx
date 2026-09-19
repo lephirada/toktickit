@@ -3,35 +3,26 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import * as api from "../../src/api.js";
 import App from "../../src/App.js";
 
-const mockRequesters: api.RequesterUser[] = [
-  {
-    id: 1,
-    email: "sarah.connor@toktickit.com",
-    fullName: "Sarah Connor",
-    department: "Engineering",
-    isActive: true,
-  },
-  {
-    id: 2,
-    email: "john.doe@toktickit.com",
-    fullName: "John Doe",
-    department: "Finance",
-    isActive: true,
-  },
-];
+const mockAuthUser: api.AuthUser = {
+  id: 1,
+  email: "sarah.connor@toktickit.com",
+  fullName: "Sarah Connor",
+  role: "REQUESTER",
+  mustChangePassword: false,
+};
 
 const mockCategories: api.Category[] = [
   { id: 1, name: "Hardware" },
   { id: 2, name: "Network" },
 ];
 
-describe("Issue 8 — App Integration Tests", () => {
+describe("Issue 8 / Issue 13 — App Integration Tests", () => {
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem("toktickit_requester_id", "1");
+    sessionStorage.clear();
     window.history.pushState({}, "", "/my-tickets");
     vi.restoreAllMocks();
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockAuthUser);
     vi.spyOn(api, "fetchCategories").mockResolvedValue(mockCategories);
     vi.spyOn(api, "fetchTickets").mockResolvedValue({
       data: [],
@@ -46,71 +37,26 @@ describe("Issue 8 — App Integration Tests", () => {
     });
   });
 
-  it("renders SelectRequesterScreen when the Profile button is clicked in the header", async () => {
-    render(<App />);
-
-    // 1. Locate the Profile button in the header
-    const profileBtn =
-      (await screen.findByRole("button", { name: /profile/i })) ||
-      screen.getByTestId("header-profile-btn");
-    expect(profileBtn).toBeInTheDocument();
-
-    // 2. Click the Profile button
-    fireEvent.click(profileBtn);
-
-    // 3. Verify that SelectRequesterScreen content is now visible in the DOM
-    expect(
-      await screen.findByRole("heading", { name: /select development requester/i })
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("requester-dropdown")).toBeInTheDocument();
-  });
-
-  it("renders SelectRequesterScreen on launch when localStorage has no active requester", async () => {
-    localStorage.clear();
-    window.history.pushState({}, "", "/my-tickets");
+  it("renders LoginScreen on launch when user is unauthenticated", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(null);
+    window.history.pushState({}, "", "/login");
 
     render(<App />);
 
-    expect(
-      await screen.findByRole("heading", { name: /select development requester/i })
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("select-requester-screen")).toBeInTheDocument();
+    expect(await screen.findByTestId("login-screen")).toBeInTheDocument();
     expect(screen.queryByTestId("my-tickets-section")).not.toBeInTheDocument();
-
-    // Verify navigation links and profile button are hidden when no requester is active
-    expect(screen.queryByRole("link", { name: /my tickets/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /\+ create ticket/i })).not.toBeInTheDocument();
-    expect(screen.queryByTestId("header-profile-button")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /toktickit home/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("header-brand-link")).not.toBeInTheDocument();
   });
 
-  it("selecting a requester and clicking Continue saves requester to localStorage and transitions to MyTicketsDashboard", async () => {
-    localStorage.clear();
-    window.history.pushState({}, "", "/my-tickets");
-
+  it("renders authenticated application shell and user profile in header when logged in", async () => {
     render(<App />);
 
-    await screen.findByRole("heading", { name: /select development requester/i });
-
-    // Initially hidden
-    expect(screen.queryByRole("link", { name: /my tickets/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /\+ create ticket/i })).not.toBeInTheDocument();
-    expect(screen.queryByTestId("header-profile-button")).not.toBeInTheDocument();
-
-    const select = screen.getByTestId("requester-dropdown");
-    fireEvent.change(select, { target: { value: "1" } });
-
-    const continueBtn = screen.getByTestId("continue-button");
-    fireEvent.click(continueBtn);
-
-    expect(localStorage.getItem("toktickit_requester_id")).toBe("1");
     expect(await screen.findByTestId("my-tickets-section")).toBeInTheDocument();
-    expect(screen.queryByTestId("select-requester-screen")).not.toBeInTheDocument();
-
-    // Now navigation links and profile button are visible
-    expect(await screen.findByRole("link", { name: /my tickets/i })).toBeInTheDocument();
+    expect(screen.getByTestId("header-brand-link")).toBeInTheDocument();
+    expect(screen.getByTestId("header-profile-name")).toHaveTextContent("Sarah Connor");
+    expect(screen.getByTestId("role-badge-requester")).toHaveTextContent("Requester");
+    expect(screen.getByRole("link", { name: /my tickets/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /\+ create ticket/i })).toBeInTheDocument();
-    expect(screen.getByTestId("header-profile-button")).toBeInTheDocument();
   });
 
   it("clears success banner on manual dismissal and when navigating away from My Tickets", async () => {

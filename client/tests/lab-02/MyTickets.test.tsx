@@ -2,26 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../src/api.js";
-import { RequesterProvider, useRequester } from "../../src/context/RequesterContext.js";
+import { AuthProvider } from "../../src/context/AuthContext.js";
 import MyTicketsDashboard from "../../src/components/MyTicketsDashboard.js";
-import SelectRequesterScreen from "../../src/components/SelectRequesterScreen.js";
 
-const mockRequesters: api.RequesterUser[] = [
-  {
-    id: 1,
-    email: "sarah.connor@toktickit.com",
-    fullName: "Sarah Connor",
-    department: "Engineering",
-    isActive: true,
-  },
-  {
-    id: 2,
-    email: "john.doe@toktickit.com",
-    fullName: "John Doe",
-    department: "Finance",
-    isActive: true,
-  },
-];
+const mockAuthUser: api.AuthUser = {
+  id: 1,
+  email: "sarah.connor@toktickit.com",
+  fullName: "Sarah Connor",
+  role: "REQUESTER",
+  mustChangePassword: false,
+};
 
 const mockCategories: api.Category[] = [
   { id: 1, name: "Hardware" },
@@ -83,12 +73,12 @@ const mockTicketList: api.TicketItem[] = [
   },
 ];
 
-describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests", () => {
+describe("Issue 8 — Frontend My Tickets Dashboard Tests", () => {
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem("toktickit_requester_id", "1");
+    sessionStorage.clear();
     vi.restoreAllMocks();
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockAuthUser);
     vi.spyOn(api, "fetchCategories").mockResolvedValue(mockCategories);
     vi.spyOn(api, "fetchTickets").mockResolvedValue({
       data: mockTicketList,
@@ -110,9 +100,9 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
   // ---------------------------------------------------------------------------
   it("1. Renders ticket table on desktop and responsive card list on mobile", async () => {
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     // Desktop table checks
@@ -147,9 +137,9 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     await screen.findByTestId("ticket-search-input");
@@ -160,7 +150,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
 
     // Before 300ms debounce timeout, search param is not called yet
     expect(fetchTicketsSpy).not.toHaveBeenCalledWith(
-      1,
       expect.objectContaining({ search: "MacBook" })
     );
 
@@ -168,7 +157,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     await waitFor(
       () => {
         expect(fetchTicketsSpy).toHaveBeenCalledWith(
-          1,
           expect.objectContaining({ search: "MacBook", page: 1 })
         );
       },
@@ -184,9 +172,9 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     await screen.findByTestId("category-filter-select");
@@ -197,7 +185,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
 
     await waitFor(() => {
       expect(fetchTicketsSpy).toHaveBeenCalledWith(
-        1,
         expect.objectContaining({ categoryId: 1, page: 1 })
       );
     });
@@ -208,7 +195,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
 
     await waitFor(() => {
       expect(fetchTicketsSpy).toHaveBeenCalledWith(
-        1,
         expect.objectContaining({ categoryId: 1, priority: "P0_URGENT" })
       );
     });
@@ -219,7 +205,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
 
     await waitFor(() => {
       expect(fetchTicketsSpy).toHaveBeenCalledWith(
-        1,
         expect.objectContaining({
           categoryId: 1,
           priority: "P0_URGENT",
@@ -237,9 +222,9 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     await screen.findByTestId("category-filter-select");
@@ -259,7 +244,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
       expect(statusSelect).toHaveValue("ALL");
       expect(screen.getByTestId("ticket-search-input")).toHaveValue("");
       expect(fetchTicketsSpy).toHaveBeenLastCalledWith(
-        1,
         expect.not.objectContaining({ status: "RESOLVED" })
       );
     });
@@ -269,7 +253,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
   // 5. Pagination & Page Size
   // ---------------------------------------------------------------------------
   it("5. Pagination interactions request updated page and pageSize parameters", async () => {
-    // Mock multi-page data (e.g. 25 total items, 3 pages)
     vi.spyOn(api, "fetchTickets").mockResolvedValue({
       data: mockTicketList,
       pagination: {
@@ -288,9 +271,9 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     // Check pagination counter text
@@ -306,7 +289,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
 
     await waitFor(() => {
       expect(fetchTicketsSpy).toHaveBeenCalledWith(
-        1,
         expect.objectContaining({ page: 2, pageSize: 10 })
       );
     });
@@ -317,7 +299,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
 
     await waitFor(() => {
       expect(fetchTicketsSpy).toHaveBeenCalledWith(
-        1,
         expect.objectContaining({ page: 1, pageSize: 20 })
       );
     });
@@ -327,7 +308,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
   // 6. Empty State & No-Results State
   // ---------------------------------------------------------------------------
   it("6. Renders Empty State when no tickets exist, and No-Results State when filters match nothing", async () => {
-    // Mock empty response
     vi.spyOn(api, "fetchTickets").mockResolvedValue({
       data: [],
       pagination: {
@@ -343,10 +323,10 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     });
 
     const user = userEvent.setup();
-    const { rerender } = render(
-      <RequesterProvider>
+    render(
+      <AuthProvider>
         <MyTicketsDashboard />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     // Initial Empty State (no active filters)
@@ -374,39 +354,23 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
   });
 
   // ---------------------------------------------------------------------------
-  // 7. SelectRequesterScreen Component
+  // 7. Error State & Separation from Empty State
   // ---------------------------------------------------------------------------
-  it("7. SelectRequesterScreen renders active users, allows selection, updates localStorage, and calls onContinue", async () => {
-    const onContinueMock = vi.fn();
-    const onCancelMock = vi.fn();
-    const user = userEvent.setup();
+  it("7. Displays error alert with Retry button on API failure without showing empty state", async () => {
+    vi.spyOn(api, "fetchTickets").mockRejectedValue(new Error("Unable to fetch tickets"));
 
     render(
-      <RequesterProvider>
-        <SelectRequesterScreen onContinue={onContinueMock} onCancel={onCancelMock} />
-      </RequesterProvider>
+      <AuthProvider>
+        <MyTicketsDashboard />
+      </AuthProvider>
     );
 
-    // Verify Screen Elements matching Mockup 8.1
-    await screen.findByRole("heading", { name: /Select Development Requester/i });
-    expect(screen.getByText(/Choose a development requester to simulate the current requester context/i)).toBeInTheDocument();
-    expect(screen.getByText(/Authentication coming in Lab 3/i)).toBeInTheDocument();
-    expect(screen.getByText(/Only active development requesters are shown/i)).toBeInTheDocument();
+    expect(await screen.findByTestId("tickets-error-alert")).toBeInTheDocument();
+    expect(screen.getByText("Failed to load tickets. Please try again.")).toBeInTheDocument();
+    expect(screen.getByTestId("retry-tickets-btn")).toBeInTheDocument();
 
-    // Verify Dropdown with active requesters
-    const select = screen.getByTestId("requester-dropdown");
-    expect(screen.getByText(/Sarah Connor \(Engineering\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/John Doe \(Finance\)/i)).toBeInTheDocument();
-
-    // Switch to John Doe (id: 2)
-    await user.selectOptions(select, "2");
-
-    // Click Continue
-    const continueBtn = screen.getByTestId("continue-button");
-    await user.click(continueBtn);
-
-    expect(localStorage.getItem("toktickit_requester_id")).toBe("2");
-    expect(onContinueMock).toHaveBeenCalled();
+    // MUST NOT display empty-tickets-state when in error state
+    expect(screen.queryByTestId("empty-tickets-state")).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -417,103 +381,58 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard onViewTicket={onViewTicketMock} />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
-    // Wait for table to render
-    await screen.findByTestId("ticket-row-101");
+    await screen.findByTestId("ticket-link-101");
 
-    // 1. Verify clicking ticket number (ticketNo) link navigates to /tickets/101
-    const ticketLink = screen.getByTestId("ticket-link-101");
-    await user.click(ticketLink);
+    // Click Ticket No link
+    const link101 = screen.getByTestId("ticket-link-101");
+    await user.click(link101);
 
-    expect(window.location.pathname).toBe("/tickets/101");
     expect(onViewTicketMock).toHaveBeenCalledWith(101);
 
-    // Reset pathname
-    window.history.pushState({}, "", "/my-tickets");
+    // Click row 102
+    const row102 = screen.getByTestId("ticket-row-102");
+    await user.click(row102);
 
-    // 2. Verify clicking ticket row navigates to /tickets/102
-    const ticketRow = screen.getByTestId("ticket-row-102");
-    await user.click(ticketRow);
-
-    expect(window.location.pathname).toBe("/tickets/102");
     expect(onViewTicketMock).toHaveBeenCalledWith(102);
   });
 
   // ---------------------------------------------------------------------------
-  // 9. Clear Previous Requester Tickets Immediately
+  // 9. Sorting by Column
   // ---------------------------------------------------------------------------
-  it("9. Immediately clears tickets when switching requester so old tickets never linger", async () => {
-    let resolveSecondCall: (val: any) => void;
-    const secondCallPromise = new Promise((resolve) => {
-      resolveSecondCall = resolve;
-    });
-
-    vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
-      if (reqId === 1) {
-        return {
-          data: mockTicketList,
-          pagination: { page: 1, pageSize: 10, totalItems: 3, totalPages: 1, hasNext: false, hasPrev: false },
-        };
-      }
-      // Delay response for Requester 2
-      await secondCallPromise;
-      return {
-        data: [
-          {
-            id: 201,
-            ticketNo: "TKT-2026-99999",
-            summary: "Requester 2 ticket",
-            priority: "P2_MEDIUM",
-            status: "NEW",
-            categoryId: 1,
-            requesterId: 2,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            attachments: [],
-          },
-        ],
-        pagination: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1, hasNext: false, hasPrev: false },
-      };
-    });
-
+  it("9. Clicking column headers toggles sort order and triggers sorted fetchTickets", async () => {
+    const fetchTicketsSpy = vi.spyOn(api, "fetchTickets");
     const user = userEvent.setup();
 
-    function SwitcherTestComponent() {
-      const { switchRequester } = useRequester();
-      return (
-        <div>
-          <button data-testid="switch-to-2-btn" onClick={() => switchRequester(2)}>
-            Switch to 2
-          </button>
-          <MyTicketsDashboard />
-        </div>
-      );
-    }
-
     render(
-      <RequesterProvider>
-        <SwitcherTestComponent />
-      </RequesterProvider>
+      <AuthProvider>
+        <MyTicketsDashboard />
+      </AuthProvider>
     );
 
-    // Initial tickets for Requester 1 are shown
-    await screen.findByTestId("ticket-row-101");
-    expect(screen.getAllByText("TKT-2026-00001").length).toBeGreaterThan(0);
+    await screen.findByTestId("sort-ticket-no-btn");
 
-    // Switch requester
-    await user.click(screen.getByTestId("switch-to-2-btn"));
+    // Click sort by ticketNo
+    await user.click(screen.getByTestId("sort-ticket-no-btn"));
 
-    // Immediately, old tickets must be cleared (ticket-row-101 must NOT be in DOM)
-    expect(screen.queryByTestId("ticket-row-101")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchTicketsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ sortBy: "ticketNo", sortOrder: "desc" })
+      );
+    });
 
-    // Now resolve the second API call
-    resolveSecondCall!({});
-    await screen.findByTestId("ticket-row-201");
-    expect(screen.getAllByText("TKT-2026-99999").length).toBeGreaterThan(0);
+    // Click again to toggle asc
+    await user.click(screen.getByTestId("sort-ticket-no-btn"));
+
+    await waitFor(() => {
+      expect(fetchTicketsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ sortBy: "ticketNo", sortOrder: "asc" })
+      );
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -523,18 +442,17 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     vi.useFakeTimers();
     const onClearBanner = vi.fn();
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard
           successBanner="Ticket TKT-2026-00001 created successfully!"
           onClearBanner={onClearBanner}
         />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     expect(screen.getByTestId("success-banner")).toBeInTheDocument();
     expect(screen.getByText("Ticket TKT-2026-00001 created successfully!")).toBeInTheDocument();
 
-    // Advance timer by 5000ms
     act(() => {
       vi.advanceTimersByTime(5000);
     });
@@ -550,12 +468,12 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
   it("11. Success banner dismisses on user clicking close button", async () => {
     const onClearBanner = vi.fn();
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard
           successBanner="Ticket TKT-2026-00001 created successfully!"
           onClearBanner={onClearBanner}
         />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     expect(screen.getByTestId("success-banner")).toBeInTheDocument();
@@ -572,12 +490,12 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
   it("12. Success banner dismisses immediately on search input, filter change, or clear filters", async () => {
     const onClearBanner = vi.fn();
     const { rerender } = render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard
           successBanner="Ticket TKT-2026-00001 created successfully!"
           onClearBanner={onClearBanner}
         />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     expect(screen.getByTestId("success-banner")).toBeInTheDocument();
@@ -592,12 +510,12 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     // 2. Changing category dropdown dismisses banner
     onClearBanner.mockClear();
     rerender(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard
           successBanner="Ticket TKT-2026-00002 created successfully!"
           onClearBanner={onClearBanner}
         />
-      </RequesterProvider>
+      </AuthProvider>
     );
     expect(screen.getByTestId("success-banner")).toBeInTheDocument();
 
@@ -610,12 +528,12 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     // 3. Changing priority dropdown dismisses banner
     onClearBanner.mockClear();
     rerender(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard
           successBanner="Ticket TKT-2026-00003 created successfully!"
           onClearBanner={onClearBanner}
         />
-      </RequesterProvider>
+      </AuthProvider>
     );
     expect(screen.getByTestId("success-banner")).toBeInTheDocument();
 
@@ -628,12 +546,12 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     // 4. Changing status dropdown dismisses banner
     onClearBanner.mockClear();
     rerender(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard
           successBanner="Ticket TKT-2026-00004 created successfully!"
           onClearBanner={onClearBanner}
         />
-      </RequesterProvider>
+      </AuthProvider>
     );
     expect(screen.getByTestId("success-banner")).toBeInTheDocument();
 
@@ -649,20 +567,18 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
   // ---------------------------------------------------------------------------
   it("13. Prevents table cell wrapping with whitespace-nowrap and truncates summary with title attribute", async () => {
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <MyTicketsDashboard />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     await screen.findByTestId("ticket-row-101");
 
-    // 1. Verify Ticket No. button and cell have whitespace-nowrap
     const ticketLink = screen.getByTestId("ticket-link-101");
     expect(ticketLink).toHaveClass("whitespace-nowrap");
     const ticketNoCell = ticketLink.closest("td");
     expect(ticketNoCell).toHaveClass("whitespace-nowrap");
 
-    // 2. Verify cells have whitespace-nowrap
     const row = screen.getByTestId("ticket-row-101");
     const cells = row.querySelectorAll("td");
     expect(cells[0]).toHaveClass("whitespace-nowrap");
@@ -673,7 +589,6 @@ describe("Issue 8 — Frontend My Tickets Dashboard & Requester Selection Tests"
     expect(cells[6]).toHaveClass("whitespace-nowrap");
     expect(cells[7]).toHaveClass("whitespace-nowrap");
 
-    // 3. Verify Summary cell truncation styling and title attribute
     const summaryCell = cells[2];
     expect(summaryCell).toHaveAttribute("title", mockTicketList[0].summary);
     const summaryDiv = summaryCell.querySelector("div");
