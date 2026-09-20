@@ -16,7 +16,7 @@
 | **Issue 10** | `feature/10-lab3-documentation`           | Documentation & Engineering Contract      | `[PR #32]`              | `[Approved]`                    | `[Merge]`    |
 | **Issue 11** | `feature/11-database-migration`           | Database Migration & Idempotent Seed      | `[PR #33]`              | `[Approved]`                    | `[Merged]`   |
 | **Issue 12** | `feature/12-authentication-authorization` | Auth Foundation, Session & Discussion API | `[PR #34]`              | `[Request Changes -> Approved]` | `[Merge]`    |
-| **Issue 13** | `feature/13-client-auth-shell`            | Client Auth Shell & Requester Discussion  | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 13** | `feature/13-client-auth-shell`            | Client Auth Shell & Requester Discussion  | `[PR #35]`              | `[Approved]`                    | `[Merge]`    |
 | **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 | **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 | **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
@@ -98,18 +98,35 @@
 ### 2.3 Frontend React Testing Library Component Suites
 
 - **Target Command:** `npm --prefix client run test -- tests/lab-03/*.test.tsx`
-- **Test Log Output Placeholder:**
+- **Test Log Output (Issue 13 — Login & Change Password Suites):**
 
 ```text
-[PLACEHOLDER: Paste Vitest output for frontend component suites:
- - Login.test.tsx
- - ChangePassword.test.tsx
- - NavigationShell.test.tsx
- - RequesterTicketDetail.test.tsx
- - StaffTicketQueue.test.tsx
- - StaffTicketDetail.test.tsx
- - UserManagement.test.tsx]
+ RUN  v2.1.8 /Users/peta/Downloads/toktickit/client
+
+ ✓ tests/lab-03/Login.test.tsx (8)
+   ✓ Issue 13 — LoginScreen Component & Auth Integration Tests (8)
+     ✓ validates empty email and empty password upon submission without calling api.login
+     ✓ validates invalid email format upon submission
+     ✓ displays loading spinner and disables submit button during authentication
+     ✓ displays clear error banner when invalid credentials (401) are returned
+     ✓ displays specific error banner when inactive account returns authentication error
+     ✓ displays server unavailable error banner when API is unreachable
+     ✓ successful login updates auth state and redirects to My Tickets for normal users
+     ✓ successful login with mustChangePassword=true redirects to Change Password and blocks normal navigation
+ ✓ tests/lab-03/ChangePassword.test.tsx (4)
+   ✓ Issue 13 — ChangePasswordScreen Component Tests (4)
+     ✓ evaluates real-time password policy checklist dynamically as input changes
+     ✓ displays error banner when change-password API fails
+     ✓ handles successful password change, updates auth state, and allows continuation
+     ✓ completes full password change continuation in App: unlocks normal application and redirects to /my-tickets
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+   Duration  5.29s
 ```
+
+> [!NOTE]
+> Additional frontend component suites (`StaffTicketQueue.test.tsx`, `StaffTicketDetail.test.tsx`, and `UserManagement.test.tsx`) will be populated in subsequent Issues 14–16.
 
 ### 2.4 Playwright 20-Step End-to-End Browser Journey
 
@@ -130,10 +147,38 @@
 - **Target Commands:**
   - Server Regression: `npm --prefix server run test -- tests/lab-02/`
   - Client Regression: `npm --prefix client run test -- tests/lab-02/`
-- **Test Log Output Placeholder:**
+
+- **Server Regression Test Log Output:**
 
 ```text
-[PLACEHOLDER: Paste test outputs confirming all 64 server tests and 49 client tests continue to pass 100%]
+ RUN  v2.1.9 /Users/peta/Downloads/toktickit/server
+
+ ✓ tests/lab-02/attachments.api.test.ts (7)
+ ✓ tests/lab-02/create-ticket.api.test.ts (13)
+ ✓ tests/lab-02/my-tickets.api.test.ts (17)
+ ✓ tests/lab-02/requesters.test.ts (5)
+ ✓ tests/lab-02/ticket-detail.api.test.ts (20)
+
+ Test Files  5 passed (5)
+      Tests  62 passed (62)
+   Duration  4.04s
+```
+
+- **Client Regression Test Log Output:**
+
+```text
+ RUN  v2.1.8 /Users/peta/Downloads/toktickit/client
+
+ ✓ tests/lab-02/App.test.tsx (16)
+ ✓ tests/lab-02/AttachmentSection.test.tsx (9)
+ ✓ tests/lab-02/CreateTicket.test.tsx (7)
+ ✓ tests/lab-02/MyTickets.test.tsx (13)
+ ✓ tests/lab-02/RequesterHeader.test.tsx (6)
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx (7)
+
+ Test Files  6 passed (6)
+      Tests  58 passed (58)
+   Duration  4.94s
 ```
 
 ---
@@ -174,15 +219,27 @@ Screenshots will be captured automatically by `e2e/lab-03/capture-screenshots.sp
 ## 4. Production Build & Lint Verification
 
 - **Server Build Command:** `npm --prefix server run build`
-- **Server Build Output Placeholder:**
+- **Server Build Output:**
 
 ```text
-[PLACEHOLDER: Paste tsc build output demonstrating clean TypeScript compilation with zero errors]
+> toktickit-server@1.0.0 build
+> tsc
 ```
 
 - **Client Build Command:** `npm --prefix client run build`
-- **Client Build Output Placeholder:**
+- **Client Build Output:**
 
 ```text
-[PLACEHOLDER: Paste Vite production build output demonstrating bundle creation with zero warnings/errors]
+> toktickit-client@1.0.0 build
+> tsc && vite build
+
+vite v6.4.3 building for production...
+transforming (1) src/main.tsx...
+✓ 60 modules transformed.
+rendering chunks (1)...
+computing gzip size (3)...
+dist/index.html                   0.39 kB │ gzip:  0.27 kB
+dist/assets/index-DP8p7haN.css  244.55 kB │ gzip: 34.16 kB
+dist/assets/index-B7VImgTi.js   272.85 kB │ gzip: 73.15 kB
+✓ built in 786ms
 ```
