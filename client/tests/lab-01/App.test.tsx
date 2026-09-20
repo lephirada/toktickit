@@ -3,20 +3,32 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import * as api from "../../src/api.js";
 import App from "../../src/App.js";
 
+const mockAuthUser: api.AuthUser = {
+  id: 1,
+  email: "sarah@test.com",
+  fullName: "Sarah Connor",
+  role: "REQUESTER",
+  mustChangePassword: false,
+};
+
 describe("App", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     window.history.pushState({}, "", "/my-tickets");
     vi.restoreAllMocks();
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockAuthUser);
     vi.spyOn(api, "fetchCategories").mockResolvedValue([{ id: 1, name: "Hardware" }]);
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue([
-      { id: 1, email: "sarah@test.com", fullName: "Sarah Connor", department: "Engineering", isActive: true },
-    ]);
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 1, hasNext: false, hasPrev: false },
+    });
   });
 
-  it("renders the TokTickIT heading", () => {
+  it("renders the TokTickIT heading", async () => {
     render(<App />);
-    expect(screen.getByText(/TokTickIT/i)).toBeInTheDocument();
+    await screen.findByTestId("header-brand-link");
+    expect(screen.getAllByText(/TokTickIT/i).length).toBeGreaterThan(0);
   });
 
   it("shows Online and the categories returned by the API on success", async () => {
@@ -29,7 +41,7 @@ describe("App", () => {
     });
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /check system/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /check system/i }));
 
     expect(await screen.findByText(/System Status: Online/i)).toBeInTheDocument();
     expect(screen.getByText("Supported Request Categories")).toBeInTheDocument();
@@ -43,17 +55,13 @@ describe("App", () => {
     );
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /check system/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /check system/i }));
 
     expect(await screen.findByText(/System Status: Offline/i)).toBeInTheDocument();
     expect(screen.getByText(/Unable to connect to TokTickIT API/i)).toBeInTheDocument();
   });
 
-  it("clicking the Profile button in Header directly displays the SelectRequesterScreen", async () => {
-    localStorage.setItem("toktickit_requester_id", "1");
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue([
-      { id: 1, email: "sarah@test.com", fullName: "Sarah Connor", department: "Engineering", isActive: true },
-    ]);
+  it("clicking the Profile button in Header displays user profile menu", async () => {
     vi.spyOn(api, "fetchTickets").mockResolvedValue({
       data: [],
       pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 1, hasNext: false, hasPrev: false },
@@ -64,15 +72,11 @@ describe("App", () => {
     const profileBtn = await screen.findByTestId("header-profile-button");
     fireEvent.click(profileBtn);
 
-    expect(await screen.findByTestId("select-requester-screen")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Select Development Requester/i })).toBeInTheDocument();
+    expect(await screen.findByTestId("header-user-dropdown")).toBeInTheDocument();
+    expect(screen.getByText("sarah@test.com")).toBeInTheDocument();
   });
 
   it("clicking a ticket number navigates to /tickets/:id and transitions to ticket detail view", async () => {
-    localStorage.setItem("toktickit_requester_id", "1");
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue([
-      { id: 1, email: "sarah@test.com", fullName: "Sarah Connor", department: "Engineering", isActive: true },
-    ]);
     vi.spyOn(api, "fetchTickets").mockResolvedValue({
       data: [
         {

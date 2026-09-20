@@ -1,27 +1,87 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { checkSystem, Category } from "./api.js";
-import { RequesterProvider, useRequester } from "./context/RequesterContext.js";
+import { checkSystem, Category, UserRole } from "./api.js";
+import { AuthProvider, useAuth } from "./context/AuthContext.js";
 import Header from "./components/Header.js";
 import DirtyGuardModal from "./components/DirtyGuardModal.js";
 import CreateTicketForm from "./components/CreateTicketForm.js";
 import MyTicketsDashboard from "./components/MyTicketsDashboard.js";
-import SelectRequesterScreen from "./components/SelectRequesterScreen.js";
 import TicketDetailScreen from "./components/TicketDetailScreen.js";
-import { CheckCircleIcon } from "./components/icons/index.js";
+import LoginScreen from "./components/LoginScreen.js";
+import ChangePasswordScreen from "./components/ChangePasswordScreen.js";
+import { CheckCircleIcon, TicketIcon, UserIcon } from "./components/icons/index.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
-type ActiveView = "my-tickets" | "create-ticket" | "system-check" | "select-requester" | "ticket-detail";
+export type ActiveView =
+  | "my-tickets"
+  | "create-ticket"
+  | "ticket-detail"
+  | "change-password"
+  | "login"
+  | "staff-queue"
+  | "admin-users";
+
+export function resolveAllowedView(
+  path: string,
+  user?: { role: UserRole } | null,
+  mustChangePassword?: boolean
+): { view: ActiveView; path: string } {
+  // 1. Unauthenticated users: ALL paths resolve to /login
+  if (!user) {
+    return { view: "login", path: "/login" };
+  }
+
+  // 2. Authenticated user requiring password change: ALL paths locked to /change-password
+  if (mustChangePassword) {
+    return { view: "change-password", path: "/change-password" };
+  }
+
+  // 3. Authenticated user accessing /login: Redirect to role default landing page (NO BLANK SHELL)
+  if (path === "/login") {
+    if (user.role === "REQUESTER") return { view: "my-tickets", path: "/my-tickets" };
+    return { view: "staff-queue", path: "/staff/queue" };
+  }
+
+  // 4. Authenticated user accessing change-password
+  if (path === "/change-password") {
+    return { view: "change-password", path: "/change-password" };
+  }
+
+  // 5. Role-based restrictions:
+  if (user.role === "REQUESTER") {
+    if (path.startsWith("/tickets/")) return { view: "ticket-detail", path };
+    if (path === "/create-ticket") return { view: "create-ticket", path: "/create-ticket" };
+    return { view: "my-tickets", path: "/my-tickets" };
+  }
+
+  if (user.role === "IT_STAFF") {
+    // In Issue 13, Ticket Detail is Requester-only (IT Staff Ticket Detail is in Issue 15)
+    if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
+    return { view: "staff-queue", path: "/staff/queue" };
+  }
+
+  if (user.role === "ADMINISTRATOR") {
+    if (path === "/admin/users") return { view: "admin-users", path: "/admin/users" };
+    if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
+    return { view: "staff-queue", path: "/staff/queue" };
+  }
+
+  return { view: "my-tickets", path: "/my-tickets" };
+}
 
 export function AppContent() {
   const {
-    currentRequester,
+    user,
     isLoading,
+    isAuthenticated,
+    mustChangePassword,
     isFormDirty,
     setFormDirty,
     isDirtyModalOpen,
     confirmDiscard,
     cancelDiscard,
-  } = useRequester();
+    requestNavigationWithGuard,
+  } = useAuth();
+
   const [state, setState] = useState<UiState>("idle");
   const [categories, setCategories] = useState<Category[]>([]);
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -29,24 +89,12 @@ export function AppContent() {
     const match = window.location.pathname.match(/^\/tickets\/(\d+)$/);
     return match ? parseInt(match[1], 10) : null;
   });
+
   const [activeView, setActiveView] = useState<ActiveView>(() => {
-    const hasRequester = !!localStorage.getItem("toktickit_requester_id");
-    if (!hasRequester) {
-      return "select-requester";
-    }
-    if (window.location.pathname.startsWith("/tickets/")) {
-      return "ticket-detail";
-    }
-    if (window.location.pathname === "/select-requester") {
-      return "select-requester";
-    }
-    if (window.location.pathname === "/create-ticket") {
-      return "create-ticket";
-    }
-    return "my-tickets";
+    const path = window.location.pathname;
+    return resolveAllowedView(path, null).view;
   });
-  const [pendingScreen, setPendingScreen] = useState<ActiveView | null>(null);
-  const [showUnsavedModal, setShowUnsavedModal] = useState<boolean>(false);
+
   const [formKey, setFormKey] = useState<number>(0);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
@@ -68,106 +116,133 @@ export function AppContent() {
     }
   }, [activeView]);
 
-  // Dismiss success banner on requester switch
-  const prevRequesterIdRef = useRef<number | undefined>(currentRequester?.id);
+  // Auto-redirect to role landing page when password change completes
+  const prevMustChangePassword = useRef(mustChangePassword);
   useEffect(() => {
-    if (prevRequesterIdRef.current !== undefined && prevRequesterIdRef.current !== currentRequester?.id) {
-      setSuccessBanner(null);
+    if (prevMustChangePassword.current && !mustChangePassword && user) {
+      const landing = user.role === "REQUESTER" ? "my-tickets" : "staff-queue";
+      const landingPath = user.role === "REQUESTER" ? "/my-tickets" : "/staff/queue";
+      window.history.replaceState({}, "", landingPath);
+      setActiveView(landing);
     }
-    prevRequesterIdRef.current = currentRequester?.id;
-  }, [currentRequester?.id]);
+    prevMustChangePassword.current = mustChangePassword;
+  }, [mustChangePassword, user]);
 
-  // Route guard: if no active requester in context or localStorage, force select-requester screen
+  // Sync active view and enforce role authorization on user or route changes
   useEffect(() => {
-    const hasRequester = !!currentRequester || !!localStorage.getItem("toktickit_requester_id");
-    if (!isLoading && !hasRequester) {
-      if (activeView !== "select-requester") {
-        setActiveView("select-requester");
-        window.history.replaceState({}, "", "/select-requester");
+    if (isLoading) return;
+
+    if (!isAuthenticated || !user) {
+      if (window.location.pathname !== "/login") {
+        window.history.replaceState({}, "", "/login");
       }
+      setActiveView("login");
+      return;
     }
-  }, [isLoading, currentRequester, activeView]);
 
+    if (mustChangePassword) {
+      if (window.location.pathname !== "/change-password") {
+        window.history.replaceState({}, "", "/change-password");
+      }
+      setActiveView("change-password");
+      return;
+    }
+
+    const path = window.location.pathname;
+    const resolved = resolveAllowedView(path, user, mustChangePassword);
+    if (resolved.path !== path) {
+      window.history.replaceState({}, "", resolved.path);
+    }
+    if (resolved.view === "ticket-detail") {
+      const match = resolved.path.match(/^\/tickets\/(\d+)$/);
+      setSelectedTicketId(match ? parseInt(match[1], 10) : null);
+    } else {
+      setSelectedTicketId(null);
+    }
+    setActiveView(resolved.view);
+  }, [user, isLoading, isAuthenticated, mustChangePassword]);
+
+  // Sync active view with browser popstate
   useEffect(() => {
     const handlePopState = () => {
-      const hasRequester = !!currentRequester || !!localStorage.getItem("toktickit_requester_id");
-      if (!hasRequester) {
-        setActiveView("select-requester");
+      const path = window.location.pathname;
+      if (!isAuthenticated || !user) {
+        if (path !== "/login") {
+          window.history.replaceState({}, "", "/login");
+        }
+        setActiveView("login");
         return;
       }
-      const path = window.location.pathname;
-      const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
-      if (ticketMatch) {
-        setSelectedTicketId(parseInt(ticketMatch[1], 10));
-        setActiveView("ticket-detail");
-      } else if (path === "/select-requester") {
-        setActiveView("select-requester");
-      } else if (path === "/create-ticket") {
-        setActiveView("create-ticket");
-      } else {
-        setActiveView("my-tickets");
+      if (mustChangePassword) {
+        if (path !== "/change-password") {
+          window.history.replaceState({}, "", "/change-password");
+        }
+        setActiveView("change-password");
+        return;
       }
+      const resolved = resolveAllowedView(path, user, mustChangePassword);
+      if (resolved.path !== path) {
+        window.history.replaceState({}, "", resolved.path);
+      }
+      if (resolved.view === "ticket-detail") {
+        const match = resolved.path.match(/^\/tickets\/(\d+)$/);
+        setSelectedTicketId(match ? parseInt(match[1], 10) : null);
+      } else {
+        setSelectedTicketId(null);
+      }
+      setActiveView(resolved.view);
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [currentRequester]);
+  }, [user, isAuthenticated, mustChangePassword]);
 
   const handleNavigate = (targetScreen: string, ticketId?: number) => {
-    const hasRequester = !!currentRequester || !!localStorage.getItem("toktickit_requester_id");
-    if (!hasRequester && targetScreen !== "select-requester") {
-      setActiveView("select-requester");
-      window.history.pushState({}, "", "/select-requester");
-      return;
-    }
-
     if (targetScreen !== "my-tickets") {
       setSuccessBanner(null);
     }
 
-    if (targetScreen === activeView && !ticketId) {
+    // Harden against mustChangePassword: lock out any normal route navigation
+    if (mustChangePassword) {
+      if (window.location.pathname !== "/change-password") {
+        window.history.replaceState({}, "", "/change-password");
+      }
+      setActiveView("change-password");
       return;
     }
 
-    if (isFormDirty && activeView === "create-ticket") {
-      setPendingScreen(targetScreen as ActiveView);
-      setShowUnsavedModal(true);
-      return; // BLOCK navigation immediately
-    }
-
     if (targetScreen === "ticket-detail" && ticketId) {
-      setSelectedTicketId(ticketId);
-      window.history.pushState({}, "", `/tickets/${ticketId}`);
-    } else if (targetScreen === "my-tickets") {
-      window.history.pushState({}, "", "/my-tickets");
-    } else if (targetScreen === "create-ticket") {
-      window.history.pushState({}, "", "/create-ticket");
-    } else if (targetScreen === "select-requester") {
-      window.history.pushState({}, "", "/select-requester");
+      if (user?.role === "REQUESTER") {
+        setSelectedTicketId(ticketId);
+        window.history.pushState({}, "", `/tickets/${ticketId}`);
+        setActiveView("ticket-detail");
+        return;
+      } else {
+        window.history.pushState({}, "", "/staff/queue");
+        setActiveView("staff-queue");
+        return;
+      }
     }
 
-    setActiveView(targetScreen as ActiveView);
+    let targetPath = "/my-tickets";
+    if (targetScreen === "create-ticket") targetPath = "/create-ticket";
+    else if (targetScreen === "change-password") targetPath = "/change-password";
+    else if (targetScreen === "login") targetPath = "/login";
+    else if (targetScreen === "staff-queue") targetPath = "/staff/queue";
+    else if (targetScreen === "admin-users") targetPath = "/admin/users";
+
+    const resolved = resolveAllowedView(targetPath, user, mustChangePassword);
+    window.history.pushState({}, "", resolved.path);
+    setActiveView(resolved.view);
   };
 
   const handleModalCancel = () => {
-    setShowUnsavedModal(false);
-    setPendingScreen(null);
     cancelDiscard();
   };
 
   const handleModalConfirmDiscard = () => {
     setFormDirty(false);
-    setShowUnsavedModal(false);
     confirmDiscard();
-    if (pendingScreen) {
-      if (pendingScreen === "my-tickets") {
-        window.history.pushState({}, "", "/my-tickets");
-      } else if (pendingScreen === "select-requester") {
-        window.history.pushState({}, "", "/select-requester");
-      }
-      setActiveView(pendingScreen);
-      setPendingScreen(null);
-    }
     setFormKey((prev) => prev + 1);
   };
 
@@ -200,11 +275,63 @@ export function AppContent() {
     setSuccessBanner(null);
   }, []);
 
+  // 1. Loading Authentication State
+  if (isLoading) {
+    return (
+      <div
+        className="d-flex align-items-center justify-content-center min-vh-100"
+        data-testid="app-loading"
+        style={{ backgroundColor: "var(--zg-bg)" }}
+      >
+        <div className="text-center">
+          <div className="spinner-border text-success" role="status" style={{ width: "3rem", height: "3rem" }}>
+            <span className="visually-hidden">Loading application…</span>
+          </div>
+          <p className="mt-3 text-muted fw-medium">Loading TokTickIT…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated State -> Force Login Screen
+  if (!isAuthenticated) {
+    return (
+      <LoginScreen
+        onSuccess={() => {
+          // Handled inside LoginScreen via onNavigate or history
+        }}
+        onNavigate={(screen) => handleNavigate(screen)}
+      />
+    );
+  }
+
+  // 3. Authenticated but Must Change Password -> Force Change Password Screen
+  if (mustChangePassword) {
+    return (
+      <div className="min-vh-100 d-flex flex-column" style={{ backgroundColor: "var(--zg-bg)" }}>
+        <Header activeView="change-password" onNavigate={handleNavigate} />
+        <main className="container py-4 flex-grow-1">
+          <ChangePasswordScreen
+            onSuccess={() => {
+              handleNavigate("my-tickets");
+            }}
+            onNavigate={(screen) => handleNavigate(screen)}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  // 4. Authenticated Normal Application Shell
+  const effectiveView: ActiveView = (activeView === "login")
+    ? (user?.role === "REQUESTER" ? "my-tickets" : "staff-queue")
+    : activeView;
+
   return (
-    <div className="min-vh-100 d-flex flex-column">
-      <Header activeView={activeView} currentScreen={activeView} onNavigate={handleNavigate} />
+    <div className="min-vh-100 d-flex flex-column" style={{ backgroundColor: "var(--zg-bg)" }}>
+      <Header activeView={effectiveView} currentScreen={effectiveView} onNavigate={handleNavigate} />
       <DirtyGuardModal
-        isOpen={showUnsavedModal || isDirtyModalOpen}
+        isOpen={isDirtyModalOpen}
         onConfirm={handleModalConfirmDiscard}
         onCancel={handleModalCancel}
       />
@@ -213,17 +340,15 @@ export function AppContent() {
         className="container-fluid py-4 flex-grow-1 px-3 px-sm-4 px-lg-5"
         style={{
           maxWidth:
-            activeView === "my-tickets" || activeView === "ticket-detail"
+            effectiveView === "my-tickets" || effectiveView === "ticket-detail"
               ? 1380
-              : activeView === "select-requester"
-              ? 1200
               : 800,
           margin: "0 auto",
           width: "100%",
         }}
       >
         {/* Success Banner */}
-        {successBanner && activeView === "my-tickets" && (
+        {successBanner && effectiveView === "my-tickets" && (
           <div
             className="alert alert-success d-flex align-items-center justify-content-between mb-4 shadow-sm"
             role="alert"
@@ -242,20 +367,16 @@ export function AppContent() {
           </div>
         )}
 
-        {/* Select Requester Screen */}
-        {activeView === "select-requester" && (
-          <SelectRequesterScreen
-            onContinue={() => handleNavigate("my-tickets")}
-            onCancel={() => {
-              if (currentRequester || localStorage.getItem("toktickit_requester_id")) {
-                handleNavigate("my-tickets");
-              }
-            }}
+        {/* Change Password View (voluntary change from header menu) */}
+        {effectiveView === "change-password" && (
+          <ChangePasswordScreen
+            onSuccess={() => handleNavigate("my-tickets")}
+            onNavigate={(screen) => handleNavigate(screen)}
           />
         )}
 
         {/* Create Ticket View */}
-        {activeView === "create-ticket" && (
+        {effectiveView === "create-ticket" && (
           <section data-testid="create-ticket-section">
             <CreateTicketForm
               key={formKey}
@@ -266,7 +387,7 @@ export function AppContent() {
         )}
 
         {/* My Tickets Dashboard */}
-        {activeView === "my-tickets" && (currentRequester || localStorage.getItem("toktickit_requester_id")) && (
+        {effectiveView === "my-tickets" && (
           <section data-testid="my-tickets-section">
             <MyTicketsDashboard
               onCreateTicket={() => handleNavigate("create-ticket")}
@@ -278,12 +399,83 @@ export function AppContent() {
         )}
 
         {/* Ticket Detail View */}
-        {activeView === "ticket-detail" && (
+        {effectiveView === "ticket-detail" && (
           <section data-testid="ticket-detail-section">
             <TicketDetailScreen
               ticketId={selectedTicketId || 0}
               onNavigate={(view) => handleNavigate(view)}
             />
+          </section>
+        )}
+
+        {/* IT Staff Ticket Queue View (Issue 14 Destination) */}
+        {effectiveView === "staff-queue" && (
+          <section data-testid="staff-queue-section" className="w-full">
+            <div
+              className="bg-white border shadow-sm p-4 p-md-5 text-center mx-auto"
+              style={{
+                maxWidth: 800,
+                borderRadius: "16px",
+                borderColor: "#EAECF0",
+                boxShadow: "0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04)",
+              }}
+            >
+              <div
+                className="d-inline-flex align-items-center justify-content-center rounded-circle p-3 mb-3"
+                style={{ backgroundColor: "var(--zg-pale)" }}
+              >
+                <TicketIcon size={32} color="var(--zg-primary)" />
+              </div>
+              <h2 className="h4 fw-bold text-dark mb-2">IT Staff Ticket Queue</h2>
+              <p className="text-muted small mb-4" style={{ maxWidth: 500, margin: "0 auto" }}>
+                The shared IT Staff Ticket Queue with search, multi-field filtering, priority assignment, and ticket management is being developed in Issue 14.
+              </p>
+              <div className="d-flex justify-content-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-success btn-sm fw-semibold px-3 py-2 rounded-2"
+                  style={{ color: "var(--zg-primary)", borderColor: "var(--zg-primary)" }}
+                  onClick={() => handleNavigate("my-tickets")}
+                >
+                  View My Tickets
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Administrator User Management View (Issue 16 Destination) */}
+        {effectiveView === "admin-users" && (
+          <section data-testid="admin-users-section" className="w-full">
+            <div
+              className="bg-white border shadow-sm p-4 p-md-5 text-center mx-auto"
+              style={{
+                maxWidth: 800,
+                borderRadius: "16px",
+                borderColor: "#EAECF0",
+                boxShadow: "0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04)",
+              }}
+            >
+              <div
+                className="d-inline-flex align-items-center justify-content-center rounded-circle p-3 mb-3"
+                style={{ backgroundColor: "#F4EBFF" }}
+              >
+                <UserIcon size={32} color="#5925DC" />
+              </div>
+              <h2 className="h4 fw-bold text-dark mb-2">User Management</h2>
+              <p className="text-muted small mb-4" style={{ maxWidth: 500, margin: "0 auto" }}>
+                User directory, account creation, role assignments, and security guardrails are being developed in Issue 16.
+              </p>
+              <div className="d-flex justify-content-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm fw-semibold px-3 py-2 rounded-2"
+                  onClick={() => handleNavigate("staff-queue")}
+                >
+                  Back to Ticket Queue
+                </button>
+              </div>
+            </div>
           </section>
         )}
 
@@ -319,8 +511,8 @@ export function AppContent() {
 
 export default function App() {
   return (
-    <RequesterProvider>
+    <AuthProvider>
       <AppContent />
-    </RequesterProvider>
+    </AuthProvider>
   );
 }

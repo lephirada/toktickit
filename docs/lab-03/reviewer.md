@@ -12,7 +12,7 @@
 | `[PR #32]`              | `feature/10-lab3-documentation`           | `[Approved]`                    |
 | `[PR #33]`              | `feature/11-database-migration`           | `[Request Changes -> Approved]` |
 | `[PR #34]`              | `feature/12-authentication-authorization` | `[Request Changes -> Approved]` |
-| `[PR #... Placeholder]` | `feature/13-client-auth-shell`            | `[Pending]`                     |
+| `[PR #35]`              | `feature/13-client-auth-shell`            | `[Approved]`                    |
 | `[PR #... Placeholder]` | `feature/14-staff-queue`                  | `[Pending]`                     |
 | `[PR #... Placeholder]` | `feature/15-staff-ticket-operations`      | `[Pending]`                     |
 | `[PR #... Placeholder]` | `feature/16-user-management`              | `[Pending]`                     |
@@ -103,10 +103,12 @@
 - **Branch:** `feature/13-client-auth-shell`
 - **Reviewer comment I received:**
 
-  > `[Placeholder: Partner review comments for Issue 13 PR]`
+  > Reviewed the PR against the Issue 13 Acceptance Criteria. All required auth flows, protected routes, role-based navigation, logout, Requester workflow, comments/resolved flow, tests, and evidence are complete.
+  > CI (Client/Server/Playwright) also passes with no blocking issues.
+  > Approve.
 
 - **How I responded:**
-  > `[Placeholder: Author response to partner feedback]`
+  > Thank you for the review and approval Ka. I have updated docs/lab-03. You can merge this PR into lab3-staging now.
 
 ---
 
@@ -262,10 +264,12 @@
 
 - **My comment:**
 
-  > `[Placeholder: My review comment for partner's Issue 14 PR]`
+  > `Reviewed the latest changes against the acceptance criteria. The required staff ticket operations, comments, internal notes, requester resolution action, frontend updates, and tests are implemented. CI is also passing.
+
+  > Approved.
 
 - **Partner's response:**
-  > `[Placeholder: Partner's response]`
+  > Thank you so much @lephirada for reviewing and approving PR #46! All staff ticket operations, public comments, internal notes, requester resolution indication, responsive frontend views, and tests are confirmed. Proceeding to merge PR #46 into lab3-staging.
 
 ---
 
@@ -273,10 +277,12 @@
 
 - **My comment:**
 
-  > `[Placeholder: My review comment for partner's Issue 15 PR]`
+  > Reviewed the latest changes against the acceptance criteria. The admin user management API, safety guards, UI, and required tests are implemented, and CI is passing.
+
+  > Approved.
 
 - **Partner's response:**
-  > `[Placeholder: Partner's response]`
+  > Thank you so much @lephirada for reviewing and approving PR #47! All admin endpoints, safety rules, interactive UI, and test suites are verified. Proceeding to merge PR #47 into lab3-staging to complete Issue 17 (#39).
 
 ---
 

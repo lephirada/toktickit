@@ -355,7 +355,7 @@ describe("Issue 11 — Database Schema, Migration & Seed Verification (migration
     expect(catCount).toBe(4);
     expect(sysCount).toBe(6);
 
-    const DEFAULT_USER_PASSWORD_HASH = "$2b$10$epR.zIe6lO2vE9tK4x8GkOCsM4.W1YI2fT1J2V9q8J5B9X9b1w7y2";
+    const DEFAULT_USER_PASSWORD_HASH = "$2b$10$Darja.Q6FT2ivIiXVxb0V.S96Mw20uhnhV.UkhZVw7Jm91AWU5h4q";
     try {
       // 2. Manually mutate John Doe's password credentials with valid bcrypt format
       const modifiedHash = "$2b$10$customModifiedHashForIdempotencyTest123456789012345";

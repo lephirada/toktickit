@@ -16,3 +16,5 @@ export * from "./SwitchIcon";
 export * from "./HomeIcon";
 export * from "./DownloadIcon";
 export * from "./TrashIcon";
+export * from "./EyeIcon";
+export * from "./EyeOffIcon";
