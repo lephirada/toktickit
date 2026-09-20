@@ -24,9 +24,9 @@ export default function ChangePasswordScreen({ onSuccess, onNavigate }: ChangePa
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Real-time password policy validation checks
+  // Real-time password policy validation checks (aligned with Issue 12: 8-72 chars, upper, lower, digit, special)
   const rules = useMemo(() => {
-    const hasMinLength = newPassword.length >= 8;
+    const hasMinLength = newPassword.length >= 8 && newPassword.length <= 72;
     const hasUpperLower = /[a-z]/.test(newPassword) && /[A-Z]/.test(newPassword);
     const hasNumberAndSpecial = /\d/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword);
     const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
@@ -248,6 +248,7 @@ export default function ChangePasswordScreen({ onSuccess, onNavigate }: ChangePa
                 }}
                 placeholder="Enter new secure password"
                 autoComplete="new-password"
+                maxLength={72}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={loading}
@@ -284,6 +285,7 @@ export default function ChangePasswordScreen({ onSuccess, onNavigate }: ChangePa
                 }}
                 placeholder="Re-enter new secure password"
                 autoComplete="new-password"
+                maxLength={72}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={loading}
@@ -320,7 +322,7 @@ export default function ChangePasswordScreen({ onSuccess, onNavigate }: ChangePa
                 data-testid="rule-min-length"
               >
                 <span className="fw-bold">{rules.hasMinLength ? "✓" : "○"}</span>
-                <span>At least 8 characters</span>
+                <span>8 to 72 characters</span>
               </li>
               <li
                 className={`d-flex align-items-center gap-2 ${

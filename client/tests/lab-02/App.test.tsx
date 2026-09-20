@@ -276,4 +276,23 @@ describe("Issue 8 / Issue 13 — App Integration Tests", () => {
       expect(window.location.pathname).toBe("/change-password");
     });
   });
+
+  it("locks user with mustChangePassword: true to /change-password when accessing /create-ticket", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 1,
+      email: "sarah.connor@toktickit.com",
+      fullName: "Sarah Connor",
+      role: "REQUESTER",
+      mustChangePassword: true,
+    });
+    window.history.pushState({}, "", "/create-ticket");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("change-password-screen")).toBeInTheDocument();
+    expect(screen.queryByTestId("create-ticket-section")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/change-password");
+    });
+  });
 });

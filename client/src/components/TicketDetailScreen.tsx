@@ -322,6 +322,11 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
   };
 
   const handleOpenRemovalModal = (attachment: TicketDetailAttachment) => {
+    const isOwner = user?.id === ticket?.requesterId;
+    const isStaff = user?.role === "IT_STAFF";
+    const isAdmin = user?.role === "ADMINISTRATOR";
+    if (!isOwner && !isStaff && !isAdmin) return;
+
     setTargetAttachment(attachment);
     setRemovalModalOpen(true);
   };
@@ -333,6 +338,14 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
   };
 
   const handleAddAttachment = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isOwner = user?.id === ticket?.requesterId;
+    const isStaff = user?.role === "IT_STAFF";
+    const isAdmin = user?.role === "ADMINISTRATOR";
+    if (!isOwner && !isStaff && !isAdmin) {
+      setUploadError("You are not authorized to upload attachments to this ticket.");
+      return;
+    }
+
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -472,9 +485,12 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
   const timeline = ticket.activityTimeline || ticket.timeline || ticket.activityHistory || [];
 
   const isOwner = user?.id === ticket.requesterId;
+  const isStaff = user?.role === "IT_STAFF";
+  const isAdmin = user?.role === "ADMINISTRATOR";
   const isEligibleStatus = ticket.status === "IN_PROGRESS" || ticket.status === "WAITING_FOR_REQUESTER";
   const canConfirmResolved = isOwner && isEligibleStatus && !ticket.resolutionIndicated;
-  const canComment = isOwner || user?.role === "IT_STAFF" || user?.role === "ADMINISTRATOR";
+  const canComment = isOwner || isStaff || isAdmin;
+  const canManageAttachments = isOwner || isStaff || isAdmin;
 
   return (
     <div
@@ -801,27 +817,29 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
                 )}
               </div>
 
-              <div>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleAddAttachment}
-                  style={{ display: "none" }}
-                  accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
-                  data-testid="add-attachment-input"
-                />
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-success fw-semibold d-inline-flex align-items-center gap-1 px-3 py-1 rounded-2"
-                  style={{ borderColor: "var(--zg-primary, #006B3C)", color: "var(--zg-primary, #006B3C)" }}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={maxAttachmentsReached || isUploadingAttachment}
-                  data-testid="add-attachment-button"
-                >
-                  <PaperclipIcon size={14} color="currentColor" />
-                  <span>{isUploadingAttachment ? "Uploading..." : "+ Add Attachment"}</span>
-                </button>
-              </div>
+              {canManageAttachments && (
+                <div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleAddAttachment}
+                    style={{ display: "none" }}
+                    accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                    data-testid="add-attachment-input"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-success fw-semibold d-inline-flex align-items-center gap-1 px-3 py-1 rounded-2"
+                    style={{ borderColor: "var(--zg-primary, #006B3C)", color: "var(--zg-primary, #006B3C)" }}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={maxAttachmentsReached || isUploadingAttachment}
+                    data-testid="add-attachment-button"
+                  >
+                    <PaperclipIcon size={14} color="currentColor" />
+                    <span>{isUploadingAttachment ? "Uploading..." : "+ Add Attachment"}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="card-body p-4 p-md-5">
@@ -921,18 +939,21 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
                             <span className="small fw-semibold" style={{ color: "var(--zg-primary)" }}>Download</span>
                           </button>
 
-                          <span className="text-muted opacity-50">•</span>
-
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-link text-decoration-none p-0 text-danger d-inline-flex align-items-center gap-1 hover-opacity-75"
-                            onClick={() => handleOpenRemovalModal(att)}
-                            title="Remove attachment"
-                            data-testid={`remove-btn-${att.id}`}
-                          >
-                            <TrashIcon size={14} color="var(--zg-error, #B42318)" />
-                            <span className="small fw-semibold">Remove</span>
-                          </button>
+                          {canManageAttachments && (
+                            <>
+                              <span className="text-muted opacity-50">•</span>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-link text-decoration-none p-0 text-danger d-inline-flex align-items-center gap-1 hover-opacity-75"
+                                onClick={() => handleOpenRemovalModal(att)}
+                                title="Remove attachment"
+                                data-testid={`remove-btn-${att.id}`}
+                              >
+                                <TrashIcon size={14} color="var(--zg-error, #B42318)" />
+                                <span className="small fw-semibold" style={{ color: "var(--zg-error, #B42318)" }}>Remove</span>
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1090,7 +1111,7 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
             </form>
           ) : (
             <div className="alert alert-light border small text-muted p-3 text-center mb-0" data-testid="comment-permission-notice">
-              Only the ticket requester and IT staff can post comments to this discussion.
+              Only the ticket requester, IT staff, and administrators can post comments to this discussion.
             </div>
           )}
         </div>

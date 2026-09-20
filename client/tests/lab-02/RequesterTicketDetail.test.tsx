@@ -257,7 +257,7 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
     expect(await screen.findByTestId("comment-error")).toHaveTextContent("Comment cannot exceed 2,000 characters.");
   });
 
-  it("5. Hides comment form and shows notice when requester does not own the ticket", async () => {
+  it("5. Hides comment form, shows notice, and hides attachment actions when requester does not own ticket", async () => {
     // Ticket owned by requesterId: 999, but logged in user is id: 1
     vi.spyOn(api, "fetchTicketDetail").mockResolvedValue({
       ...mockTicketDetail,
@@ -266,8 +266,16 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
 
     renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
 
-    expect(await screen.findByTestId("comment-permission-notice")).toBeInTheDocument();
+    const notice = await screen.findByTestId("comment-permission-notice");
+    expect(notice).toBeInTheDocument();
+    expect(notice).toHaveTextContent(
+      "Only the ticket requester, IT staff, and administrators can post comments to this discussion."
+    );
     expect(screen.queryByTestId("public-comment-form")).not.toBeInTheDocument();
+
+    // Non-owner requester cannot add or remove attachments
+    expect(screen.queryByTestId("add-attachment-button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("remove-btn-881")).not.toBeInTheDocument();
   });
 
   it("6. Problem Appears Resolved triggers modal and calls confirmation API", async () => {
@@ -304,5 +312,87 @@ describe("Section 12 / Issue 9 — Requester Ticket Detail Component Tests (Requ
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledWith(42, "Working now, thanks!");
     });
+  });
+
+  it("7. IT Staff can view comment form, post public comments, and see attachment actions on any ticket", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 50,
+      fullName: "Alex Rivera",
+      email: "alex.rivera@toktickit.com",
+      role: "IT_STAFF",
+      mustChangePassword: false,
+    });
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue({
+      ...mockTicketDetail,
+      requesterId: 999, // IT staff does not own ticket
+    });
+    const postCommentSpy = vi.spyOn(api, "postPublicComment").mockResolvedValue({
+      data: {
+        id: 2,
+        ticketId: 42,
+        authorId: 50,
+        authorName: "Alex Rivera",
+        authorRole: "IT_STAFF",
+        content: "We are investigating this issue.",
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+
+    expect(await screen.findByTestId("public-comment-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("comment-permission-notice")).not.toBeInTheDocument();
+
+    const input = screen.getByTestId("comment-input");
+    fireEvent.change(input, { target: { value: "We are investigating this issue." } });
+    fireEvent.click(screen.getByTestId("comment-submit-btn"));
+
+    await waitFor(() => {
+      expect(postCommentSpy).toHaveBeenCalledWith(42, "We are investigating this issue.");
+    });
+
+    expect(screen.getByTestId("add-attachment-button")).toBeInTheDocument();
+    expect(screen.getByTestId("remove-btn-881")).toBeInTheDocument();
+  });
+
+  it("8. Administrator can view comment form, post public comments, and see attachment actions on any ticket", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 100,
+      fullName: "Admin User",
+      email: "admin@toktickit.com",
+      role: "ADMINISTRATOR",
+      mustChangePassword: false,
+    });
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue({
+      ...mockTicketDetail,
+      requesterId: 999, // Admin does not own ticket
+    });
+    const postCommentSpy = vi.spyOn(api, "postPublicComment").mockResolvedValue({
+      data: {
+        id: 3,
+        ticketId: 42,
+        authorId: 100,
+        authorName: "Admin User",
+        authorRole: "ADMINISTRATOR",
+        content: "Admin note on this ticket.",
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    renderWithAuth(<TicketDetailScreen ticketId={42} onNavigate={vi.fn()} />);
+
+    expect(await screen.findByTestId("public-comment-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("comment-permission-notice")).not.toBeInTheDocument();
+
+    const input = screen.getByTestId("comment-input");
+    fireEvent.change(input, { target: { value: "Admin note on this ticket." } });
+    fireEvent.click(screen.getByTestId("comment-submit-btn"));
+
+    await waitFor(() => {
+      expect(postCommentSpy).toHaveBeenCalledWith(42, "Admin note on this ticket.");
+    });
+
+    expect(screen.getByTestId("add-attachment-button")).toBeInTheDocument();
+    expect(screen.getByTestId("remove-btn-881")).toBeInTheDocument();
   });
 });

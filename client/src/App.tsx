@@ -159,7 +159,7 @@ export function AppContent() {
       return;
     }
 
-    const resolved = resolveAllowedView(path, user, false);
+    const resolved = resolveAllowedView(path, user, mustChangePassword);
     if (resolved.path !== path) {
       window.history.replaceState({}, "", resolved.path);
     }
@@ -190,7 +190,7 @@ export function AppContent() {
         setActiveView("ticket-detail");
         return;
       }
-      const resolved = resolveAllowedView(path, user, false);
+      const resolved = resolveAllowedView(path, user, mustChangePassword);
       if (resolved.path !== path) {
         window.history.replaceState({}, "", resolved.path);
       }
@@ -204,6 +204,15 @@ export function AppContent() {
   const handleNavigate = (targetScreen: string, ticketId?: number) => {
     if (targetScreen !== "my-tickets") {
       setSuccessBanner(null);
+    }
+
+    // Harden against mustChangePassword: lock out any normal route navigation
+    if (mustChangePassword) {
+      if (window.location.pathname !== "/change-password") {
+        window.history.replaceState({}, "", "/change-password");
+      }
+      setActiveView("change-password");
+      return;
     }
 
     if (targetScreen === "ticket-detail" && ticketId) {
@@ -220,15 +229,9 @@ export function AppContent() {
     else if (targetScreen === "staff-queue") targetPath = "/staff/queue";
     else if (targetScreen === "admin-users") targetPath = "/admin/users";
 
-    if (user) {
-      const resolved = resolveAllowedView(targetPath, user, false);
-      window.history.pushState({}, "", resolved.path);
-      setActiveView(resolved.view);
-    } else {
-      const nextView = (targetScreen as ActiveView) || "my-tickets";
-      window.history.pushState({}, "", targetPath);
-      setActiveView(nextView);
-    }
+    const resolved = resolveAllowedView(targetPath, user, mustChangePassword);
+    window.history.pushState({}, "", resolved.path);
+    setActiveView(resolved.view);
   };
 
   const handleModalCancel = () => {
