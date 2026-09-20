@@ -5,9 +5,43 @@ import path from "path";
 const SCREENSHOT_DIR = path.resolve(process.cwd(), "artifacts/lab-03/screenshots");
 
 test.describe("Lab 3 Responsive Screenshot Capture", () => {
-  test.beforeAll(() => {
+  let ticketId: number | string = 1;
+
+  test.beforeAll(async ({ request }) => {
     if (!fs.existsSync(SCREENSHOT_DIR)) {
       fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    }
+
+    try {
+      const loginRes = await request.post("http://localhost:3000/api/auth/login", {
+        data: {
+          email: "jennifer.anderson@toktickit.com",
+          password: "Password123!",
+        },
+      });
+
+      if (loginRes.ok()) {
+        const ticketsRes = await request.get("http://localhost:3000/api/tickets?pageSize=1");
+        const ticketsData = await ticketsRes.json();
+        if (ticketsData.data && ticketsData.data.length > 0) {
+          ticketId = ticketsData.data[0].id;
+        } else {
+          const createRes = await request.post("http://localhost:3000/api/tickets", {
+            data: {
+              categoryId: 1,
+              priority: "P2_MEDIUM",
+              summary: "MacBook Pro keyboard key sticking intermittently",
+              description: "The spacebar and E key on my corporate laptop occasionally register double keypresses.",
+            },
+          });
+          const createData = await createRes.json();
+          if (createData.data?.id) {
+            ticketId = createData.data.id;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not pre-seed ticket for screenshot capture:", e);
     }
   });
 
@@ -90,7 +124,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
       await page.click('[data-testid="login-submit-btn"]');
 
       await page.waitForSelector('[data-testid="my-tickets-section"]');
-      await page.goto("http://localhost:5173/tickets/2321");
+      await page.goto(`http://localhost:5173/tickets/${ticketId}`);
       await page.waitForSelector('[data-testid="ticket-detail-screen"]');
       await page.screenshot({
         path: path.join(SCREENSHOT_DIR, `05-ticket-detail-${vp.name}.png`),
