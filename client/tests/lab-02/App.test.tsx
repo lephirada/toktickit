@@ -295,4 +295,66 @@ describe("Issue 8 / Issue 13 — App Integration Tests", () => {
       expect(window.location.pathname).toBe("/change-password");
     });
   });
+
+  it("redirects authenticated IT_STAFF accessing /tickets/42 to /staff/queue and does not render TicketDetailScreen", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 2,
+      email: "john.doe@toktickit.com",
+      fullName: "John Doe",
+      role: "IT_STAFF",
+      mustChangePassword: false,
+    });
+    window.history.pushState({}, "", "/tickets/42");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("staff-queue-section")).toBeInTheDocument();
+    expect(screen.queryByTestId("ticket-detail-screen")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/staff/queue");
+    });
+  });
+
+  it("redirects authenticated ADMINISTRATOR accessing /tickets/42 to /staff/queue and does not render TicketDetailScreen", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 3,
+      email: "admin@toktickit.com",
+      fullName: "Admin User",
+      role: "ADMINISTRATOR",
+      mustChangePassword: false,
+    });
+    window.history.pushState({}, "", "/tickets/42");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("staff-queue-section")).toBeInTheDocument();
+    expect(screen.queryByTestId("ticket-detail-screen")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/staff/queue");
+    });
+  });
+
+  it("renders TicketDetailScreen when authenticated REQUESTER accesses /tickets/42", async () => {
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue({
+      id: 42,
+      ticketNo: "TKT-2026-00042",
+      summary: "VPN Issue",
+      description: "Cannot connect to VPN",
+      priority: "P1_HIGH",
+      status: "NEW",
+      requesterId: 1,
+      requester: { id: 1, fullName: "Sarah Connor", email: "sarah.connor@toktickit.com", department: "Engineering" },
+      category: { id: 1, name: "Hardware" },
+      attachments: [],
+      activityTimeline: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    window.history.pushState({}, "", "/tickets/42");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("ticket-detail-screen")).toBeInTheDocument();
+    expect(screen.queryByTestId("staff-queue-section")).not.toBeInTheDocument();
+  });
 });

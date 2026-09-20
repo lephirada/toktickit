@@ -46,18 +46,15 @@ export function resolveAllowedView(
     return { view: "change-password", path: "/change-password" };
   }
 
-  // 5. Ticket Detail
-  if (path.startsWith("/tickets/")) {
-    return { view: "ticket-detail", path };
-  }
-
-  // 6. Role-based restrictions:
+  // 5. Role-based restrictions:
   if (user.role === "REQUESTER") {
+    if (path.startsWith("/tickets/")) return { view: "ticket-detail", path };
     if (path === "/create-ticket") return { view: "create-ticket", path: "/create-ticket" };
     return { view: "my-tickets", path: "/my-tickets" };
   }
 
   if (user.role === "IT_STAFF") {
+    // In Issue 13, Ticket Detail is Requester-only (IT Staff Ticket Detail is in Issue 15)
     if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
     return { view: "staff-queue", path: "/staff/queue" };
   }
@@ -152,16 +149,15 @@ export function AppContent() {
     }
 
     const path = window.location.pathname;
-    const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
-    if (ticketMatch) {
-      setSelectedTicketId(parseInt(ticketMatch[1], 10));
-      setActiveView("ticket-detail");
-      return;
-    }
-
     const resolved = resolveAllowedView(path, user, mustChangePassword);
     if (resolved.path !== path) {
       window.history.replaceState({}, "", resolved.path);
+    }
+    if (resolved.view === "ticket-detail") {
+      const match = resolved.path.match(/^\/tickets\/(\d+)$/);
+      setSelectedTicketId(match ? parseInt(match[1], 10) : null);
+    } else {
+      setSelectedTicketId(null);
     }
     setActiveView(resolved.view);
   }, [user, isLoading, isAuthenticated, mustChangePassword]);
@@ -184,15 +180,15 @@ export function AppContent() {
         setActiveView("change-password");
         return;
       }
-      const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
-      if (ticketMatch) {
-        setSelectedTicketId(parseInt(ticketMatch[1], 10));
-        setActiveView("ticket-detail");
-        return;
-      }
       const resolved = resolveAllowedView(path, user, mustChangePassword);
       if (resolved.path !== path) {
         window.history.replaceState({}, "", resolved.path);
+      }
+      if (resolved.view === "ticket-detail") {
+        const match = resolved.path.match(/^\/tickets\/(\d+)$/);
+        setSelectedTicketId(match ? parseInt(match[1], 10) : null);
+      } else {
+        setSelectedTicketId(null);
       }
       setActiveView(resolved.view);
     };
@@ -216,10 +212,16 @@ export function AppContent() {
     }
 
     if (targetScreen === "ticket-detail" && ticketId) {
-      setSelectedTicketId(ticketId);
-      window.history.pushState({}, "", `/tickets/${ticketId}`);
-      setActiveView("ticket-detail");
-      return;
+      if (user?.role === "REQUESTER") {
+        setSelectedTicketId(ticketId);
+        window.history.pushState({}, "", `/tickets/${ticketId}`);
+        setActiveView("ticket-detail");
+        return;
+      } else {
+        window.history.pushState({}, "", "/staff/queue");
+        setActiveView("staff-queue");
+        return;
+      }
     }
 
     let targetPath = "/my-tickets";
