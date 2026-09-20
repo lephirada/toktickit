@@ -12,6 +12,7 @@ describe("Issue 13 — LoginScreen Component & Auth Integration Tests", () => {
     sessionStorage.clear();
     window.history.pushState({}, "", "/login");
     vi.restoreAllMocks();
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(null);
   });
 
   it("validates empty email and empty password upon submission without calling api.login", async () => {
@@ -85,7 +86,7 @@ describe("Issue 13 — LoginScreen Component & Auth Integration Tests", () => {
     expect(submitBtn).toBeDisabled();
     expect(screen.getByText(/Signing In…/i)).toBeInTheDocument();
 
-    // Clean up
+    // Clean up and await resolution
     resolveLogin!({
       data: {
         id: 1,
@@ -94,6 +95,10 @@ describe("Issue 13 — LoginScreen Component & Auth Integration Tests", () => {
         role: "REQUESTER",
         mustChangePassword: false,
       },
+    });
+
+    await waitFor(() => {
+      expect(submitBtn).not.toBeDisabled();
     });
   });
 

@@ -10,6 +10,7 @@ describe("Issue 13 — ChangePasswordScreen Component Tests", () => {
     localStorage.clear();
     sessionStorage.clear();
     vi.restoreAllMocks();
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(null);
   });
 
   it("evaluates real-time password policy checklist dynamically as input changes", async () => {
@@ -18,6 +19,8 @@ describe("Issue 13 — ChangePasswordScreen Component Tests", () => {
         <ChangePasswordScreen />
       </AuthProvider>
     );
+
+    expect(await screen.findByTestId("change-password-screen")).toBeInTheDocument();
 
     const newPassInput = screen.getByTestId("new-password-input");
     const confirmPassInput = screen.getByTestId("confirm-password-input");

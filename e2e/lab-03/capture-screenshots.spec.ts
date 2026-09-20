@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 
 const SCREENSHOT_DIR = path.resolve(process.cwd(), "artifacts/lab-03/screenshots");
 
@@ -10,6 +11,16 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
   test.beforeAll(async ({ request }) => {
     if (!fs.existsSync(SCREENSHOT_DIR)) {
       fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    }
+
+    try {
+      execSync("npm --prefix server run db:seed", { stdio: "ignore" });
+      execSync(
+        `node -e 'const { PrismaClient } = require("./server/node_modules/@prisma/client"); const p = new PrismaClient({ datasources: { db: { url: "postgresql://toktickit:toktickit@localhost:5432/toktickit?schema=public" } } }); p.user.update({ where: { email: "sarah.connor@toktickit.com" }, data: { passwordHash: "$2b$10$Darja.Q6FT2ivIiXVxb0V.S96Mw20uhnhV.UkhZVw7Jm91AWU5h4q", mustChangePassword: true } }).catch(() => {}).finally(() => p.$disconnect());'`,
+        { stdio: "ignore" }
+      );
+    } catch {
+      // ignore
     }
 
     try {

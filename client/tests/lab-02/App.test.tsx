@@ -116,6 +116,7 @@ describe("Issue 8 / Issue 13 — App Integration Tests", () => {
     // Test navigating away clears the banner
     fireEvent.click(screen.getByRole("link", { name: /\+ create ticket/i }));
     expect(screen.queryByTestId("success-banner")).not.toBeInTheDocument();
+    expect(await screen.findByTestId("create-ticket-section")).toBeInTheDocument();
   });
 
   it("routes IT_STAFF to /staff/queue and renders staff-queue-section without broken screen", async () => {

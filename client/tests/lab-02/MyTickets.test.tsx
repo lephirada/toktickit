@@ -453,7 +453,7 @@ describe("Issue 8 — Frontend My Tickets Dashboard Tests", () => {
     expect(screen.getByTestId("success-banner")).toBeInTheDocument();
     expect(screen.getByText("Ticket TKT-2026-00001 created successfully!")).toBeInTheDocument();
 
-    act(() => {
+    await act(async () => {
       vi.advanceTimersByTime(5000);
     });
 
@@ -476,6 +476,7 @@ describe("Issue 8 — Frontend My Tickets Dashboard Tests", () => {
       </AuthProvider>
     );
 
+    expect(await screen.findByTestId("ticket-row-101")).toBeInTheDocument();
     expect(screen.getByTestId("success-banner")).toBeInTheDocument();
     const closeBtn = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeBtn);
@@ -498,6 +499,7 @@ describe("Issue 8 — Frontend My Tickets Dashboard Tests", () => {
       </AuthProvider>
     );
 
+    expect(await screen.findByTestId("ticket-row-101")).toBeInTheDocument();
     expect(screen.getByTestId("success-banner")).toBeInTheDocument();
 
     // 1. Changing search input dismisses banner
@@ -560,6 +562,10 @@ describe("Issue 8 — Frontend My Tickets Dashboard Tests", () => {
 
     expect(screen.queryByTestId("success-banner")).not.toBeInTheDocument();
     expect(onClearBanner).toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("tickets-loading-spinner")).not.toBeInTheDocument();
+    });
   });
 
   // ---------------------------------------------------------------------------

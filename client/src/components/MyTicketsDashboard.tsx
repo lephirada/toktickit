@@ -962,7 +962,7 @@ export default function MyTicketsDashboard({
                     <span className="fw-semibold text-dark">{pagination.totalItems}</span> tickets
                   </div>
 
-                  <div className="d-flex align-items-center gap-3">
+                  <div className="d-flex flex-column flex-sm-row align-items-center justify-content-between gap-3 pt-3 border-top w-100">
                     {/* Page Size Selector */}
                     <div className="d-flex align-items-center gap-1 small text-muted">
                       <label htmlFor="page-size-select" className="text-nowrap mb-0">
@@ -988,7 +988,7 @@ export default function MyTicketsDashboard({
 
                     {/* Navigation buttons */}
                     <nav aria-label="Ticket Pagination">
-                      <ul className="pagination pagination-sm mb-0 gap-1">
+                      <ul className="pagination pagination-sm mb-0 gap-1 flex-nowrap">
                         <li className={`page-item ${pagination.page <= 1 ? "disabled" : ""}`}>
                           <button
                             type="button"
