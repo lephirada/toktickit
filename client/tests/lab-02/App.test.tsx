@@ -220,4 +220,60 @@ describe("Issue 8 / Issue 13 — App Integration Tests", () => {
       expect(window.location.pathname).toBe("/login");
     });
   });
+
+  it("redirects authenticated REQUESTER accessing /login to /my-tickets and renders dashboard without blank shell", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 1,
+      email: "sarah.connor@toktickit.com",
+      fullName: "Sarah Connor",
+      role: "REQUESTER",
+      mustChangePassword: false,
+    });
+    window.history.pushState({}, "", "/login");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("my-tickets-section")).toBeInTheDocument();
+    expect(screen.queryByTestId("login-screen")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/my-tickets");
+    });
+  });
+
+  it("redirects authenticated IT_STAFF accessing /login to /staff/queue and renders staff queue", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 2,
+      email: "john.doe@toktickit.com",
+      fullName: "John Doe",
+      role: "IT_STAFF",
+      mustChangePassword: false,
+    });
+    window.history.pushState({}, "", "/login");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("staff-queue-section")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/staff/queue");
+    });
+  });
+
+  it("locks user with mustChangePassword: true to /change-password when accessing /my-tickets", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 1,
+      email: "sarah.connor@toktickit.com",
+      fullName: "Sarah Connor",
+      role: "REQUESTER",
+      mustChangePassword: true,
+    });
+    window.history.pushState({}, "", "/my-tickets");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("change-password-screen")).toBeInTheDocument();
+    expect(screen.queryByTestId("my-tickets-section")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/change-password");
+    });
+  });
 });

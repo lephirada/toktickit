@@ -59,15 +59,13 @@ export default function ChangePasswordScreen({ onSuccess, onNavigate }: ChangePa
 
       updatePasswordChanged();
       setSuccessMessage("Password changed successfully! Redirecting…");
-      onSuccess?.();
-
-      setTimeout(() => {
-        if (onNavigate) {
-          onNavigate("my-tickets");
-        } else {
-          window.history.pushState({}, "", "/my-tickets");
-        }
-      }, 1000);
+      if (onSuccess) {
+        onSuccess();
+      } else if (onNavigate) {
+        onNavigate("my-tickets");
+      } else {
+        window.history.pushState({}, "", "/my-tickets");
+      }
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message || "Failed to change password. Please check your inputs.");

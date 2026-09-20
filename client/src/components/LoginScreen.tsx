@@ -83,7 +83,16 @@ export default function LoginScreen({ onSuccess, onNavigate }: LoginScreenProps)
           setErrorMessage(err.message || "Unable to complete login. Please try again.");
         }
       } else if (err instanceof Error) {
-        setErrorMessage(err.message || "Unable to connect to the server. Please try again later.");
+        if (
+          err.message?.toLowerCase().includes("network") ||
+          err.message?.toLowerCase().includes("fetch") ||
+          err.message?.toLowerCase().includes("connect") ||
+          err.message?.toLowerCase().includes("failed")
+        ) {
+          setErrorMessage("Unable to connect to the server. Please try again later.");
+        } else {
+          setErrorMessage(err.message || "Unable to connect to the server. Please try again later.");
+        }
       } else {
         setErrorMessage("Unable to connect to the server. Please try again later.");
       }

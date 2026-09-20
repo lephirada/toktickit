@@ -123,4 +123,59 @@ describe("Issue 13 — ChangePasswordScreen Component Tests", () => {
     );
     expect(onSuccessMock).toHaveBeenCalled();
   });
+
+  it("completes full password change continuation in App: unlocks normal application and redirects to /my-tickets", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+      id: 1,
+      email: "sarah.connor@toktickit.com",
+      fullName: "Sarah Connor",
+      role: "REQUESTER",
+      mustChangePassword: true,
+    });
+    vi.spyOn(api, "changePassword").mockResolvedValue({
+      data: {
+        message: "Password changed successfully",
+        mustChangePassword: false,
+      },
+    });
+    vi.spyOn(api, "fetchTickets").mockResolvedValue({
+      data: [],
+      pagination: {
+        page: 1,
+        pageSize: 10,
+        totalItems: 0,
+        totalPages: 0,
+        hasNext: false,
+        hasPrev: false,
+      },
+    });
+    vi.spyOn(api, "fetchCategories").mockResolvedValue([]);
+
+    render(<App />);
+
+    // 1. Initial render locked to change-password
+    expect(await screen.findByTestId("change-password-screen")).toBeInTheDocument();
+    expect(screen.queryByTestId("nav-my-tickets")).not.toBeInTheDocument();
+
+    // 2. Submit valid password change
+    fireEvent.change(screen.getByTestId("current-password-input"), {
+      target: { value: "InitialTempPass1!" },
+    });
+    fireEvent.change(screen.getByTestId("new-password-input"), {
+      target: { value: "BrandNewSecurePass123!" },
+    });
+    fireEvent.change(screen.getByTestId("confirm-password-input"), {
+      target: { value: "BrandNewSecurePass123!" },
+    });
+
+    fireEvent.click(screen.getByTestId("change-password-submit-btn"));
+
+    // 3. Unlocks normal application shell & redirects to /my-tickets
+    expect(await screen.findByTestId("my-tickets-section")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-my-tickets")).toBeInTheDocument();
+    expect(screen.queryByTestId("change-password-screen")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/my-tickets");
+    });
+  });
 });

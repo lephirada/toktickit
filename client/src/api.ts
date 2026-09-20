@@ -92,12 +92,12 @@ export interface SystemStatus {
 }
 
 export async function checkSystem(): Promise<SystemStatus> {
-  const healthRes = await fetch(`${API_URL}/api/health`);
+  const healthRes = await fetch(`${API_URL}/api/health`, { credentials: "include" });
   if (!healthRes.ok) {
     throw new Error("Unable to connect to TokTickIT API");
   }
 
-  const categoriesRes = await fetch(`${API_URL}/api/categories`);
+  const categoriesRes = await fetch(`${API_URL}/api/categories`, { credentials: "include" });
   if (!categoriesRes.ok) {
     throw new Error("Unable to fetch categories");
   }
@@ -107,7 +107,7 @@ export async function checkSystem(): Promise<SystemStatus> {
 }
 
 export async function fetchCategories(): Promise<Category[]> {
-  const res = await fetch(`${API_URL}/api/categories`);
+  const res = await fetch(`${API_URL}/api/categories`, { credentials: "include" });
   if (!res.ok) {
     throw new Error("Unable to fetch categories");
   }
@@ -119,7 +119,7 @@ export async function fetchRelatedSystems(categoryId?: number): Promise<RelatedS
   const url = categoryId !== undefined
     ? `${API_URL}/api/related-systems?categoryId=${categoryId}`
     : `${API_URL}/api/related-systems`;
-  const res = await fetch(url);
+  const res = await fetch(url, { credentials: "include" });
   if (!res.ok) {
     throw new Error("Unable to fetch related systems");
   }

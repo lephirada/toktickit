@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { checkSystem, Category, UserRole } from "./api.js";
 import { AuthProvider, useAuth } from "./context/AuthContext.js";
 import Header from "./components/Header.js";
@@ -20,39 +20,54 @@ export type ActiveView =
   | "staff-queue"
   | "admin-users";
 
-export function resolveAllowedView(path: string, user?: { role: UserRole } | null): { view: ActiveView; path: string } {
-  if (path.startsWith("/tickets/")) {
-    return { view: "ticket-detail", path };
-  }
-  if (path === "/change-password") {
-    return { view: "change-password", path: "/change-password" };
-  }
-  if (path === "/login") {
+export function resolveAllowedView(
+  path: string,
+  user?: { role: UserRole } | null,
+  mustChangePassword?: boolean
+): { view: ActiveView; path: string } {
+  // 1. Unauthenticated users: ALL paths resolve to /login
+  if (!user) {
     return { view: "login", path: "/login" };
   }
 
-  // Role-based restrictions:
-  if (user?.role === "REQUESTER") {
+  // 2. Authenticated user requiring password change: ALL paths locked to /change-password
+  if (mustChangePassword) {
+    return { view: "change-password", path: "/change-password" };
+  }
+
+  // 3. Authenticated user accessing /login: Redirect to role default landing page (NO BLANK SHELL)
+  if (path === "/login") {
+    if (user.role === "REQUESTER") return { view: "my-tickets", path: "/my-tickets" };
+    return { view: "staff-queue", path: "/staff/queue" };
+  }
+
+  // 4. Authenticated user accessing change-password
+  if (path === "/change-password") {
+    return { view: "change-password", path: "/change-password" };
+  }
+
+  // 5. Ticket Detail
+  if (path.startsWith("/tickets/")) {
+    return { view: "ticket-detail", path };
+  }
+
+  // 6. Role-based restrictions:
+  if (user.role === "REQUESTER") {
     if (path === "/create-ticket") return { view: "create-ticket", path: "/create-ticket" };
     return { view: "my-tickets", path: "/my-tickets" };
   }
 
-  if (user?.role === "IT_STAFF") {
+  if (user.role === "IT_STAFF") {
     if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
     return { view: "staff-queue", path: "/staff/queue" };
   }
 
-  if (user?.role === "ADMINISTRATOR") {
+  if (user.role === "ADMINISTRATOR") {
     if (path === "/admin/users") return { view: "admin-users", path: "/admin/users" };
     if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
-    if (path === "/my-tickets") return { view: "my-tickets", path: "/my-tickets" };
-    if (path === "/create-ticket") return { view: "create-ticket", path: "/create-ticket" };
     return { view: "staff-queue", path: "/staff/queue" };
   }
 
-  if (path === "/create-ticket") return { view: "create-ticket", path: "/create-ticket" };
-  if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
-  if (path === "/admin/users") return { view: "admin-users", path: "/admin/users" };
   return { view: "my-tickets", path: "/my-tickets" };
 }
 
@@ -104,11 +119,23 @@ export function AppContent() {
     }
   }, [activeView]);
 
+  // Auto-redirect to role landing page when password change completes
+  const prevMustChangePassword = useRef(mustChangePassword);
+  useEffect(() => {
+    if (prevMustChangePassword.current && !mustChangePassword && user) {
+      const landing = user.role === "REQUESTER" ? "my-tickets" : "staff-queue";
+      const landingPath = user.role === "REQUESTER" ? "/my-tickets" : "/staff/queue";
+      window.history.replaceState({}, "", landingPath);
+      setActiveView(landing);
+    }
+    prevMustChangePassword.current = mustChangePassword;
+  }, [mustChangePassword, user]);
+
   // Sync active view and enforce role authorization on user or route changes
   useEffect(() => {
     if (isLoading) return;
 
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !user) {
       if (window.location.pathname !== "/login") {
         window.history.replaceState({}, "", "/login");
       }
@@ -116,13 +143,23 @@ export function AppContent() {
       return;
     }
 
-    if (!user || mustChangePassword) return;
+    if (mustChangePassword) {
+      if (window.location.pathname !== "/change-password") {
+        window.history.replaceState({}, "", "/change-password");
+      }
+      setActiveView("change-password");
+      return;
+    }
 
     const path = window.location.pathname;
     const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
-    if (ticketMatch) return;
+    if (ticketMatch) {
+      setSelectedTicketId(parseInt(ticketMatch[1], 10));
+      setActiveView("ticket-detail");
+      return;
+    }
 
-    const resolved = resolveAllowedView(path, user);
+    const resolved = resolveAllowedView(path, user, false);
     if (resolved.path !== path) {
       window.history.replaceState({}, "", resolved.path);
     }
@@ -133,13 +170,27 @@ export function AppContent() {
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname;
+      if (!isAuthenticated || !user) {
+        if (path !== "/login") {
+          window.history.replaceState({}, "", "/login");
+        }
+        setActiveView("login");
+        return;
+      }
+      if (mustChangePassword) {
+        if (path !== "/change-password") {
+          window.history.replaceState({}, "", "/change-password");
+        }
+        setActiveView("change-password");
+        return;
+      }
       const ticketMatch = path.match(/^\/tickets\/(\d+)$/);
       if (ticketMatch) {
         setSelectedTicketId(parseInt(ticketMatch[1], 10));
         setActiveView("ticket-detail");
         return;
       }
-      const resolved = resolveAllowedView(path, user);
+      const resolved = resolveAllowedView(path, user, false);
       if (resolved.path !== path) {
         window.history.replaceState({}, "", resolved.path);
       }
@@ -148,7 +199,7 @@ export function AppContent() {
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [user]);
+  }, [user, isAuthenticated, mustChangePassword]);
 
   const handleNavigate = (targetScreen: string, ticketId?: number) => {
     if (targetScreen !== "my-tickets") {
@@ -169,9 +220,15 @@ export function AppContent() {
     else if (targetScreen === "staff-queue") targetPath = "/staff/queue";
     else if (targetScreen === "admin-users") targetPath = "/admin/users";
 
-    const resolved = resolveAllowedView(targetPath, user);
-    window.history.pushState({}, "", resolved.path);
-    setActiveView(resolved.view);
+    if (user) {
+      const resolved = resolveAllowedView(targetPath, user, false);
+      window.history.pushState({}, "", resolved.path);
+      setActiveView(resolved.view);
+    } else {
+      const nextView = (targetScreen as ActiveView) || "my-tickets";
+      window.history.pushState({}, "", targetPath);
+      setActiveView(nextView);
+    }
   };
 
   const handleModalCancel = () => {
@@ -261,9 +318,13 @@ export function AppContent() {
   }
 
   // 4. Authenticated Normal Application Shell
+  const effectiveView: ActiveView = (activeView === "login")
+    ? (user?.role === "REQUESTER" ? "my-tickets" : "staff-queue")
+    : activeView;
+
   return (
     <div className="min-vh-100 d-flex flex-column" style={{ backgroundColor: "var(--zg-bg)" }}>
-      <Header activeView={activeView} currentScreen={activeView} onNavigate={handleNavigate} />
+      <Header activeView={effectiveView} currentScreen={effectiveView} onNavigate={handleNavigate} />
       <DirtyGuardModal
         isOpen={isDirtyModalOpen}
         onConfirm={handleModalConfirmDiscard}
@@ -274,7 +335,7 @@ export function AppContent() {
         className="container-fluid py-4 flex-grow-1 px-3 px-sm-4 px-lg-5"
         style={{
           maxWidth:
-            activeView === "my-tickets" || activeView === "ticket-detail"
+            effectiveView === "my-tickets" || effectiveView === "ticket-detail"
               ? 1380
               : 800,
           margin: "0 auto",
@@ -282,7 +343,7 @@ export function AppContent() {
         }}
       >
         {/* Success Banner */}
-        {successBanner && activeView === "my-tickets" && (
+        {successBanner && effectiveView === "my-tickets" && (
           <div
             className="alert alert-success d-flex align-items-center justify-content-between mb-4 shadow-sm"
             role="alert"
@@ -302,7 +363,7 @@ export function AppContent() {
         )}
 
         {/* Change Password View (voluntary change from header menu) */}
-        {activeView === "change-password" && (
+        {effectiveView === "change-password" && (
           <ChangePasswordScreen
             onSuccess={() => handleNavigate("my-tickets")}
             onNavigate={(screen) => handleNavigate(screen)}
@@ -310,7 +371,7 @@ export function AppContent() {
         )}
 
         {/* Create Ticket View */}
-        {activeView === "create-ticket" && (
+        {effectiveView === "create-ticket" && (
           <section data-testid="create-ticket-section">
             <CreateTicketForm
               key={formKey}
@@ -321,7 +382,7 @@ export function AppContent() {
         )}
 
         {/* My Tickets Dashboard */}
-        {activeView === "my-tickets" && (
+        {effectiveView === "my-tickets" && (
           <section data-testid="my-tickets-section">
             <MyTicketsDashboard
               onCreateTicket={() => handleNavigate("create-ticket")}
@@ -333,7 +394,7 @@ export function AppContent() {
         )}
 
         {/* Ticket Detail View */}
-        {activeView === "ticket-detail" && (
+        {effectiveView === "ticket-detail" && (
           <section data-testid="ticket-detail-section">
             <TicketDetailScreen
               ticketId={selectedTicketId || 0}
@@ -343,7 +404,7 @@ export function AppContent() {
         )}
 
         {/* IT Staff Ticket Queue View (Issue 14 Destination) */}
-        {activeView === "staff-queue" && (
+        {effectiveView === "staff-queue" && (
           <section data-testid="staff-queue-section" className="w-full">
             <div
               className="bg-white border shadow-sm p-4 p-md-5 text-center mx-auto"
@@ -379,7 +440,7 @@ export function AppContent() {
         )}
 
         {/* Administrator User Management View (Issue 16 Destination) */}
-        {activeView === "admin-users" && (
+        {effectiveView === "admin-users" && (
           <section data-testid="admin-users-section" className="w-full">
             <div
               className="bg-white border shadow-sm p-4 p-md-5 text-center mx-auto"

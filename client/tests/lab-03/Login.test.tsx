@@ -166,7 +166,7 @@ describe("Issue 13 — LoginScreen Component & Auth Integration Tests", () => {
     fireEvent.click(screen.getByTestId("login-submit-btn"));
 
     expect(await screen.findByTestId("login-error-banner")).toHaveTextContent(
-      "Network error"
+      "Unable to connect to the server. Please try again later."
     );
   });
 
