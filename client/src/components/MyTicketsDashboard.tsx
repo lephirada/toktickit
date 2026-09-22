@@ -134,22 +134,19 @@ export function renderStatusBadge(status: string) {
     case "WAITING_FOR_REQUESTER":
       return (
         <span
-          className="badge zg-status-badge rounded-pill d-inline-flex flex-column align-items-center justify-content-center text-center"
+          className="badge zg-status-badge"
           style={{
             backgroundColor: "var(--zg-status-waiting-bg)",
             color: "var(--zg-status-waiting-text)",
             border: "1px solid #FEDF89",
-            fontSize: "0.6rem",
-            fontWeight: 700,
-            lineHeight: 1.2,
-            padding: "4px 12px",
-            whiteSpace: "normal", // ปลดล็อกไม่ให้คลาส .badge ของ Bootstrap บังคับบรรทัดเดียว
-            letterSpacing: "0.02em",
+            maxWidth: "100%",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            fontSize: "0.66rem",
           }}
           title="WAITING FOR REQUESTER"
         >
-          <span>WAITING FOR</span>
-          <span>REQUESTER</span>
+          WAITING FOR REQUESTER
         </span>
       );
     case "RESOLVED":
@@ -864,7 +861,7 @@ export default function MyTicketsDashboard({
                           )}
                         </td>
                         <td className="whitespace-nowrap text-center">
-                          <div className="d-inline-flex flex-column align-items-center justify-content-center">
+                          <div className="d-flex flex-column align-items-center justify-content-center">
                             {renderStatusBadge(ticket.status)}
                             {ticket.resolutionIndicated && (
                               <span
