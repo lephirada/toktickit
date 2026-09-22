@@ -478,16 +478,15 @@ app.get(
         sortOrder,
         page,
         pageSize,
-        limit,
       } = req.query;
 
       // 1. Pagination parameters
       const parsedPage = parseInt(page as string, 10);
       const pageNum = !isNaN(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
-      const requestedLimit = parseInt((pageSize as string) || (limit as string), 10);
-      const limitNum = !isNaN(requestedLimit) && requestedLimit > 0
-        ? Math.min(requestedLimit, 50)
+      const parsedPageSize = parseInt(pageSize as string, 10);
+      const limitNum = !isNaN(parsedPageSize) && parsedPageSize > 0
+        ? Math.min(parsedPageSize, 50)
         : 10;
 
       const skip = (pageNum - 1) * limitNum;

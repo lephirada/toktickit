@@ -760,26 +760,27 @@ export default function StaffTicketQueue() {
         </div>
       ) : (
         <>
-          {/* Desktop Table View (>= 992px) */}
-          <div className="d-none d-lg-block">
+          {/* Desktop & Tablet Table View (>= 768px, bounded horizontal scroll on tablet) */}
+          <div className="d-none d-md-block">
             <div className="zg-table-container mb-4" style={{ borderRadius: "12px", border: "1px solid #EAECF0", overflow: "hidden" }}>
-              <div className="table-responsive w-100" style={{ overflowX: "hidden" }}>
+              <div className="table-responsive w-100" style={{ overflowX: "auto" }}>
                 <table
                   className="table table-hover align-middle mb-0 zg-table-fixed"
+                  style={{ minWidth: "1140px" }}
                   data-testid="staff-ticket-table"
                 >
                   <colgroup>
-                    <col style={{ width: "9.5%" }} />
-                    <col style={{ width: "13.5%" }} />
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "8%" }} />
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "8.5%" }} />
-                    <col style={{ width: "7%" }} />
-                    <col style={{ width: "7.5%" }} />
+                    <col style={{ width: "120px" }} />
+                    <col style={{ width: "165px" }} />
+                    <col style={{ width: "120px" }} />
+                    <col style={{ width: "95px" }} />
+                    <col style={{ width: "95px" }} />
+                    <col style={{ width: "90px" }} />
+                    <col style={{ width: "95px" }} />
+                    <col style={{ width: "110px" }} />
+                    <col style={{ width: "95px" }} />
+                    <col style={{ width: "80px" }} />
+                    <col style={{ width: "80px" }} />
                   </colgroup>
                   <thead style={{ backgroundColor: "#F9FAFB" }}>
                     <tr>
@@ -956,11 +957,11 @@ export default function StaffTicketQueue() {
             </div>
           </div>
 
-          {/* Mobile & Tablet Card View (< 992px, 2 columns on tablet) */}
-          <div className="d-lg-none mb-4" data-testid="staff-ticket-cards">
+          {/* Mobile Card View (< 768px) */}
+          <div className="d-md-none mb-4" data-testid="staff-ticket-cards">
             <div className="row g-3">
               {tickets.map((t) => (
-                <div key={t.id} className="col-12 col-md-6">
+                <div key={t.id} className="col-12">
                   <div
                     className="card border shadow-sm p-3 h-100"
                     style={{ borderRadius: "12px", borderColor: "#EAECF0" }}
@@ -1001,9 +1002,13 @@ export default function StaffTicketQueue() {
                     </div>
 
                     {/* Taxonomy */}
-                    <div className="small text-muted mb-2">
-                      <span className="fw-medium text-dark">{t.category.name}</span>
-                      {t.relatedSystem && <span> • {t.relatedSystem.name}</span>}
+                    <div className="small text-muted mb-2 d-flex flex-wrap align-items-center gap-1.5">
+                      <span className="badge bg-light text-dark border px-2 py-0.5" style={{ fontSize: "0.72rem" }}>
+                        {t.category.name}
+                      </span>
+                      <span className="text-secondary small" style={{ fontSize: "0.75rem" }}>
+                        • System: <span className="text-dark fw-medium">{t.relatedSystem ? t.relatedSystem.name : "—"}</span>
+                      </span>
                     </div>
 
                     {/* Requester & Owner */}

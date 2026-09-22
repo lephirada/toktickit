@@ -167,8 +167,8 @@
 - **Test Log Output:**
 
 ```text
- ✓ tests/lab-03/StaffTicketQueue.test.tsx (18)
-   ✓ Issue 14 — StaffTicketQueue Component Tests (StaffTicketQueue.test.tsx) (18)
+ ✓ tests/lab-03/StaffTicketQueue.test.tsx (19)
+   ✓ Issue 14 — StaffTicketQueue Component Tests (StaffTicketQueue.test.tsx) (19)
      ✓ Scenario 1: renders all 11 required columns in desktop table view
      ✓ Scenario 2: renders status badges with correct Lab 3 status classes and text
      ✓ Scenario 3: renders both requested priority and IT priority clearly
@@ -187,9 +187,10 @@
      ✓ Scenario 16: renders mobile cards exposing all required fields
      ✓ Scenario 17: does not render duplicate filter bars or navigation items
      ✓ Scenario 18: includes proper accessible headers, test IDs, and labels
+     ✓ Scenario 19: toggles collapsible filter drawer and displays active filter count badge
 
  Test Files  1 passed (1)
-      Tests  18 passed (18)
+      Tests  19 passed (19)
 ```
 
 ### 2.4 Playwright 20-Step End-to-End Browser Journey

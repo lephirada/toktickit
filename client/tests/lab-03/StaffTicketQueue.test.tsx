@@ -392,6 +392,11 @@ describe("Issue 14 — StaffTicketQueue Component Tests (StaffTicketQueue.test.t
     expect(cards[0]).toHaveTextContent("OPEN");
     expect(cards[0]).toHaveTextContent("David Lee");
     expect(cards[0]).toHaveTextContent("Requester Confirmed Resolved");
+
+    // Second card checks (with null relatedSystem and unassigned owner)
+    expect(cards[1]).toHaveTextContent("TKT-2026-00002");
+    expect(cards[1]).toHaveTextContent("System: —");
+    expect(cards[1]).toHaveTextContent("Unassigned");
   });
 
   // 17. no duplicate navigation or filter controls

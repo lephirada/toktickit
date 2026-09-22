@@ -154,10 +154,10 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
       await page.click('[data-testid="login-submit-btn"]');
 
       await page.waitForSelector('[data-testid="staff-ticket-queue-view"]');
-      if (vp.name === "desktop") {
-        await page.waitForSelector('[data-testid="staff-ticket-table"]');
-      } else {
+      if (vp.name === "mobile") {
         await page.waitForSelector('[data-testid="staff-ticket-cards"]');
+      } else {
+        await page.waitForSelector('[data-testid="staff-ticket-table"]');
       }
       await page.screenshot({
         path: path.join(SCREENSHOT_DIR, `06-staff-queue-${vp.name}.png`),

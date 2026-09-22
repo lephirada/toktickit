@@ -445,35 +445,152 @@ describe("Issue 14 — IT Staff Ticket Queue API Suite (staff-queue.api.test.ts)
       expect(descDates[i]).toBeLessThanOrEqual(descDates[i - 1]);
     }
 
-    // b. itPriority sorting
-    const resPrio = await request(app)
-      .get("/api/staff/tickets?sortBy=itPriority&sortOrder=asc")
+    // b. updatedAt asc and desc
+    const resUpdatedAsc = await request(app)
+      .get("/api/staff/tickets?sortBy=updatedAt&sortOrder=asc&pageSize=50")
       .set("Cookie", cookieStaff);
-    expect(resPrio.status).toBe(200);
+    expect(resUpdatedAsc.status).toBe(200);
+    const ascUpdated = resUpdatedAsc.body.data.map((t: any) => new Date(t.updatedAt).getTime());
+    for (let i = 1; i < ascUpdated.length; i++) {
+      expect(ascUpdated[i]).toBeGreaterThanOrEqual(ascUpdated[i - 1]);
+    }
 
-    // c. status sorting
-    const resStatus = await request(app)
-      .get("/api/staff/tickets?sortBy=status&sortOrder=asc")
+    const resUpdatedDesc = await request(app)
+      .get("/api/staff/tickets?sortBy=updatedAt&sortOrder=desc&pageSize=50")
       .set("Cookie", cookieStaff);
-    expect(resStatus.status).toBe(200);
+    expect(resUpdatedDesc.status).toBe(200);
+    const descUpdated = resUpdatedDesc.body.data.map((t: any) => new Date(t.updatedAt).getTime());
+    for (let i = 1; i < descUpdated.length; i++) {
+      expect(descUpdated[i]).toBeLessThanOrEqual(descUpdated[i - 1]);
+    }
 
-    // d. updatedAt sorting
-    const resUpdated = await request(app)
-      .get("/api/staff/tickets?sortBy=updatedAt&sortOrder=desc")
+    // c. itPriority sorting asc and desc
+    const priorityOrderMap: Record<string, number> = {
+      P0_URGENT: 1,
+      P1_HIGH: 2,
+      P2_MEDIUM: 3,
+      P3_LOW: 4,
+    };
+    const resPrioAsc = await request(app)
+      .get("/api/staff/tickets?sortBy=itPriority&sortOrder=asc&pageSize=50")
       .set("Cookie", cookieStaff);
-    expect(resUpdated.status).toBe(200);
+    expect(resPrioAsc.status).toBe(200);
+    const nonNullPrioAsc = resPrioAsc.body.data
+      .map((t: any) => t.itPriority)
+      .filter((p: any) => p !== null);
+    for (let i = 1; i < nonNullPrioAsc.length; i++) {
+      expect(priorityOrderMap[nonNullPrioAsc[i]]).toBeGreaterThanOrEqual(
+        priorityOrderMap[nonNullPrioAsc[i - 1]]
+      );
+    }
+
+    const resPrioDesc = await request(app)
+      .get("/api/staff/tickets?sortBy=itPriority&sortOrder=desc&pageSize=50")
+      .set("Cookie", cookieStaff);
+    expect(resPrioDesc.status).toBe(200);
+    const nonNullPrioDesc = resPrioDesc.body.data
+      .map((t: any) => t.itPriority)
+      .filter((p: any) => p !== null);
+    for (let i = 1; i < nonNullPrioDesc.length; i++) {
+      expect(priorityOrderMap[nonNullPrioDesc[i]]).toBeLessThanOrEqual(
+        priorityOrderMap[nonNullPrioDesc[i - 1]]
+      );
+    }
+
+    // d. status sorting asc and desc
+    const statusOrderMap: Record<string, number> = {
+      NEW: 1,
+      OPEN: 2,
+      IN_PROGRESS: 3,
+      WAITING_FOR_REQUESTER: 4,
+      RESOLVED: 5,
+      CLOSED: 6,
+      REOPENED: 7,
+      CANCELLED: 8,
+    };
+    const resStatusAsc = await request(app)
+      .get("/api/staff/tickets?sortBy=status&sortOrder=asc&pageSize=50")
+      .set("Cookie", cookieStaff);
+    expect(resStatusAsc.status).toBe(200);
+    const statusesAsc = resStatusAsc.body.data.map((t: any) => t.status);
+    for (let i = 1; i < statusesAsc.length; i++) {
+      expect(statusOrderMap[statusesAsc[i]]).toBeGreaterThanOrEqual(
+        statusOrderMap[statusesAsc[i - 1]]
+      );
+    }
+
+    const resStatusDesc = await request(app)
+      .get("/api/staff/tickets?sortBy=status&sortOrder=desc&pageSize=50")
+      .set("Cookie", cookieStaff);
+    expect(resStatusDesc.status).toBe(200);
+    const statusesDesc = resStatusDesc.body.data.map((t: any) => t.status);
+    for (let i = 1; i < statusesDesc.length; i++) {
+      expect(statusOrderMap[statusesDesc[i]]).toBeLessThanOrEqual(
+        statusOrderMap[statusesDesc[i - 1]]
+      );
+    }
 
     // e. invalid sortBy safely falls back to createdAt DESC
     const resInvalidSort = await request(app)
-      .get("/api/staff/tickets?sortBy=arbitrary_malicious_col")
+      .get("/api/staff/tickets?sortBy=arbitrary_malicious_col&pageSize=50")
       .set("Cookie", cookieStaff);
     expect(resInvalidSort.status).toBe(200);
+    const fallbackSortDates = resInvalidSort.body.data.map((t: any) => new Date(t.createdAt).getTime());
+    for (let i = 1; i < fallbackSortDates.length; i++) {
+      expect(fallbackSortDates[i]).toBeLessThanOrEqual(fallbackSortDates[i - 1]);
+    }
 
     // f. invalid sortOrder safely falls back to desc
     const resInvalidOrder = await request(app)
-      .get("/api/staff/tickets?sortBy=createdAt&sortOrder=diagonal")
+      .get("/api/staff/tickets?sortBy=createdAt&sortOrder=diagonal&pageSize=50")
       .set("Cookie", cookieStaff);
     expect(resInvalidOrder.status).toBe(200);
+    const fallbackOrderDates = resInvalidOrder.body.data.map((t: any) => new Date(t.createdAt).getTime());
+    for (let i = 1; i < fallbackOrderDates.length; i++) {
+      expect(fallbackOrderDates[i]).toBeLessThanOrEqual(fallbackOrderDates[i - 1]);
+    }
+
+    // g. deterministic tie-breaker: tickets with identical timestamp sorted by id DESC
+    const tieTimestamp = new Date("2026-03-15T09:00:00.000Z");
+    const tieKey = `TIE-${Date.now()}`;
+    const tie1 = await prisma.ticket.create({
+      data: {
+        ticketNo: `TKT-${tieKey}-1`,
+        summary: `Tie Breaker Verification Alpha ${tieKey}`,
+        description: "Tie test 1",
+        requestedPriority: Priority.P2_MEDIUM,
+        status: TicketStatus.OPEN,
+        categoryId: testCategoryA.id,
+        requesterId: requesterUser.id,
+        createdAt: tieTimestamp,
+        updatedAt: tieTimestamp,
+      },
+    });
+    const tie2 = await prisma.ticket.create({
+      data: {
+        ticketNo: `TKT-${tieKey}-2`,
+        summary: `Tie Breaker Verification Beta ${tieKey}`,
+        description: "Tie test 2",
+        requestedPriority: Priority.P2_MEDIUM,
+        status: TicketStatus.OPEN,
+        categoryId: testCategoryA.id,
+        requesterId: requesterUser.id,
+        createdAt: tieTimestamp,
+        updatedAt: tieTimestamp,
+      },
+    });
+    createdTicketIds.push(tie1.id, tie2.id);
+
+    expect(tie2.id).toBeGreaterThan(tie1.id);
+
+    const resTie = await request(app)
+      .get(`/api/staff/tickets?search=${encodeURIComponent(tieKey)}&sortBy=createdAt&sortOrder=asc`)
+      .set("Cookie", cookieStaff);
+    expect(resTie.status).toBe(200);
+    expect(resTie.body.data.length).toBe(2);
+    // Since primary sort (createdAt) is identical, secondary sort (id DESC) places tie2 (higher id) first
+    expect(resTie.body.data[0].id).toBe(tie2.id);
+    expect(resTie.body.data[1].id).toBe(tie1.id);
   });
 
   // 21. pagination metadata verification (page, pageSize, totalItems, totalPages, hasNext, hasPrev)
