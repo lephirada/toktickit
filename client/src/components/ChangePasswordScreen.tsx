@@ -116,7 +116,7 @@ export default function ChangePasswordScreen({ onSuccess, onNavigate }: ChangePa
             Change Your Password
           </h1>
           <p className="text-secondary small mb-0" style={{ color: "#475467" }}>
-            Set a new secure password to activate and protect <br/>your account.
+            Set a new secure password to activate and protect your account.
           </p>
         </div>
 

@@ -17,7 +17,7 @@
 | **Issue 11** | `feature/11-database-migration`           | Database Migration & Idempotent Seed      | `[PR #33]`              | `[Approved]`                    | `[Merged]`   |
 | **Issue 12** | `feature/12-authentication-authorization` | Auth Foundation, Session & Discussion API | `[PR #34]`              | `[Request Changes -> Approved]` | `[Merge]`    |
 | **Issue 13** | `feature/13-client-auth-shell`            | Client Auth Shell & Requester Discussion  | `[PR #35]`              | `[Approved]`                    | `[Merge]`    |
-| **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #... Placeholder]` | `[Implemented]`                 | `[Ready for Review]` |
 | **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 | **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 | **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
@@ -95,6 +95,42 @@
   2. **Bounded Lifespan:** Tokens are strictly constrained to 8 hours (`8 * 60 * 60` seconds).
   3. **Secret Rotation (`JWT_SECRET`):** In the event of token compromise, rotating the server `JWT_SECRET` instantly and fleet-wide revokes all existing sessions.
 
+### 2.2.2 Issue 14 IT Staff Queue API Suite (`staff-queue.api.test.ts`)
+
+- **Target Command:** `npm --prefix server run test -- tests/lab-03/staff-queue.api.test.ts`
+- **Test Log Output:**
+
+```text
+ ✓ tests/lab-03/staff-queue.api.test.ts (23)
+   ✓ Issue 14 — IT Staff Ticket Queue API Suite (staff-queue.api.test.ts) (23)
+     ✓ Scenario 1: denies unauthenticated requests with 401 UNAUTHORIZED
+     ✓ Scenario 2: denies REQUESTER user with 403 FORBIDDEN_ROLE
+     ✓ Scenario 3: allows IT_STAFF user with 200 OK and valid response structure
+     ✓ Scenario 4: allows ADMINISTRATOR user with 200 OK
+     ✓ Scenario 5: blocks inactive IT_STAFF user with 401 ACCOUNT_DEACTIVATED
+     ✓ Scenario 6: searches tickets by exact and partial ticketNo
+     ✓ Scenario 7: searches tickets by summary keywords
+     ✓ Scenario 8: performs case-insensitive substring search
+     ✓ Scenario 9: filters tickets by categoryId
+     ✓ Scenario 10: filters tickets by requestedPriority
+     ✓ Scenario 11: filters tickets by itPriority
+     ✓ Scenario 12: filters tickets by status
+     ✓ Scenario 13: filters tickets by owner=UNASSIGNED
+     ✓ Scenario 14: filters tickets by owner=MY_TICKETS for currently authenticated staff
+     ✓ Scenario 15: filters tickets using combined search, category, status, and owner criteria
+     ✓ Scenario 16: applies default pagination (page 1, pageSize 10)
+     ✓ Scenario 17: supports custom page query parameter
+     ✓ Scenario 18: supports custom pageSize query parameter
+     ✓ Scenario 19: clamps pageSize > 50 down to 50
+     ✓ Scenario 20: supports sorting by allowed fields, directions, fallbacks, and deterministic tie-breaker
+     ✓ Scenario 21: returns accurate pagination metadata matching data count
+     ✓ Scenario 22: returns empty data array when requested page is beyond totalPages
+     ✓ Scenario 23: returns empty array when filter criteria match zero tickets
+
+ Test Files  1 passed (1)
+      Tests  23 passed (23)
+```
+
 ### 2.3 Frontend React Testing Library Component Suites
 
 - **Target Command:** `npm --prefix client run test -- tests/lab-03/*.test.tsx`
@@ -125,8 +161,36 @@
    Duration  5.29s
 ```
 
-> [!NOTE]
-> Additional frontend component suites (`StaffTicketQueue.test.tsx`, `StaffTicketDetail.test.tsx`, and `UserManagement.test.tsx`) will be populated in subsequent Issues 14–16.
+### 2.3.1 Issue 14 Staff Ticket Queue Component Suite (`StaffTicketQueue.test.tsx`)
+
+- **Target Command:** `npm --prefix client run test -- tests/lab-03/StaffTicketQueue.test.tsx`
+- **Test Log Output:**
+
+```text
+ ✓ tests/lab-03/StaffTicketQueue.test.tsx (18)
+   ✓ Issue 14 — StaffTicketQueue Component Tests (StaffTicketQueue.test.tsx) (18)
+     ✓ Scenario 1: renders all 11 required columns in desktop table view
+     ✓ Scenario 2: renders status badges with correct Lab 3 status classes and text
+     ✓ Scenario 3: renders both requested priority and IT priority clearly
+     ✓ Scenario 4: renders requester details and assigned owner or unassigned badge
+     ✓ Scenario 5: updates search input value synchronously as user types
+     ✓ Scenario 6: debounces search input without triggering fetch on every keystroke
+     ✓ Scenario 7: executes API query after debounce timer expires
+     ✓ Scenario 8: renders all required filter controls in the toolbar
+     ✓ Scenario 9: triggers API query with reset to page 1 when filter changes
+     ✓ Scenario 10: restores default filter parameters when Reset Filters is clicked
+     ✓ Scenario 11: renders pagination controls with accurate text and disabled states
+     ✓ Scenario 12: renders skeleton placeholder rows during loading state
+     ✓ Scenario 13: renders empty queue illustration and message when totalItems is 0 and no filters active
+     ✓ Scenario 14: renders no-results message and Clear Filters button when filters match 0 tickets
+     ✓ Scenario 15: renders error alert banner with retry button on API failure
+     ✓ Scenario 16: renders mobile cards exposing all required fields
+     ✓ Scenario 17: does not render duplicate filter bars or navigation items
+     ✓ Scenario 18: includes proper accessible headers, test IDs, and labels
+
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+```
 
 ### 2.4 Playwright 20-Step End-to-End Browser Journey
 
