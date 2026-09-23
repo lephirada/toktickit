@@ -155,9 +155,11 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
 
       await page.waitForSelector('[data-testid="staff-ticket-queue-view"]');
       if (vp.name === "mobile") {
-        await page.waitForSelector('[data-testid="staff-ticket-cards"]');
+        await expect(page.locator('[data-testid="staff-ticket-cards"]')).toBeVisible();
+        await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeHidden();
       } else {
-        await page.waitForSelector('[data-testid="staff-ticket-table"]');
+        await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
+        await expect(page.locator('[data-testid="staff-ticket-cards"]')).toBeHidden();
       }
       await page.screenshot({
         path: path.join(SCREENSHOT_DIR, `06-staff-queue-${vp.name}.png`),

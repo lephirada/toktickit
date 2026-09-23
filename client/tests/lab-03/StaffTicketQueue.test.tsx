@@ -397,6 +397,20 @@ describe("Issue 14 — StaffTicketQueue Component Tests (StaffTicketQueue.test.t
     expect(cards[1]).toHaveTextContent("TKT-2026-00002");
     expect(cards[1]).toHaveTextContent("System: —");
     expect(cards[1]).toHaveTextContent("Unassigned");
+
+    // Responsive container assertions:
+    // Desktop/Tablet Table container is configured for >= 768px (d-none d-md-block)
+    const tableEl = screen.getByTestId("staff-ticket-table");
+    const tableContainer = tableEl.closest(".d-none.d-md-block");
+    expect(tableContainer).toBeInTheDocument();
+
+    // Mobile Cards container is configured for < 768px (d-md-none)
+    const cardsContainer = screen.getByTestId("staff-ticket-cards");
+    expect(cardsContainer).toHaveClass("d-md-none");
+
+    // Table wrapper is bounded with overflowX auto for tablet scroll containment
+    const tableResponsiveWrapper = tableEl.closest(".table-responsive");
+    expect(tableResponsiveWrapper).toBeInTheDocument();
   });
 
   // 17. no duplicate navigation or filter controls

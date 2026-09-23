@@ -813,7 +813,15 @@ export default function StaffTicketQueue() {
                         scope="col"
                         className="py-3 px-2 small fw-bold text-secondary text-center user-select-none"
                         style={{ cursor: "pointer" }}
+                        tabIndex={0}
+                        aria-sort={sortBy === "itPriority" ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}
                         onClick={() => handleSortToggle("itPriority")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleSortToggle("itPriority");
+                          }
+                        }}
                         data-testid="sort-column-itPriority"
                       >
                         <div className="d-inline-flex align-items-center justify-content-center">
@@ -826,7 +834,15 @@ export default function StaffTicketQueue() {
                         scope="col"
                         className="py-3 px-2 small fw-bold text-secondary text-center user-select-none"
                         style={{ cursor: "pointer" }}
+                        tabIndex={0}
+                        aria-sort={sortBy === "status" ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}
                         onClick={() => handleSortToggle("status")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleSortToggle("status");
+                          }
+                        }}
                         data-testid="sort-column-status"
                       >
                         <div className="d-inline-flex align-items-center justify-content-center">
@@ -843,7 +859,15 @@ export default function StaffTicketQueue() {
                         scope="col"
                         className="py-3 px-2 small fw-bold text-secondary text-center user-select-none"
                         style={{ cursor: "pointer" }}
+                        tabIndex={0}
+                        aria-sort={sortBy === "createdAt" ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}
                         onClick={() => handleSortToggle("createdAt")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleSortToggle("createdAt");
+                          }
+                        }}
                         data-testid="sort-column-createdAt"
                       >
                         <div className="d-inline-flex align-items-center justify-content-center">
@@ -856,7 +880,15 @@ export default function StaffTicketQueue() {
                         scope="col"
                         className="py-3 px-2 small fw-bold text-secondary text-center user-select-none"
                         style={{ cursor: "pointer" }}
+                        tabIndex={0}
+                        aria-sort={sortBy === "updatedAt" ? (sortOrder === "asc" ? "ascending" : "descending") : "none"}
                         onClick={() => handleSortToggle("updatedAt")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleSortToggle("updatedAt");
+                          }
+                        }}
                         data-testid="sort-column-updatedAt"
                       >
                         <div className="d-inline-flex align-items-center justify-content-center">
