@@ -17,7 +17,7 @@
 | **Issue 11** | `feature/11-database-migration`           | Database Migration & Idempotent Seed      | `[PR #33]`              | `[Approved]`                    | `[Merged]`   |
 | **Issue 12** | `feature/12-authentication-authorization` | Auth Foundation, Session & Discussion API | `[PR #34]`              | `[Request Changes -> Approved]` | `[Merge]`    |
 | **Issue 13** | `feature/13-client-auth-shell`            | Client Auth Shell & Requester Discussion  | `[PR #35]`              | `[Approved]`                    | `[Merge]`    |
-| **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #36]`              | `[Approved]`                    | `[Merged]`   |
 | **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 | **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 | **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
@@ -95,6 +95,42 @@
   2. **Bounded Lifespan:** Tokens are strictly constrained to 8 hours (`8 * 60 * 60` seconds).
   3. **Secret Rotation (`JWT_SECRET`):** In the event of token compromise, rotating the server `JWT_SECRET` instantly and fleet-wide revokes all existing sessions.
 
+### 2.2.2 Issue 14 IT Staff Queue API Suite (`staff-queue.api.test.ts`)
+
+- **Target Command:** `npm --prefix server run test -- tests/lab-03/staff-queue.api.test.ts`
+- **Test Log Output:**
+
+```text
+ ✓ tests/lab-03/staff-queue.api.test.ts (23)
+   ✓ Issue 14 — IT Staff Ticket Queue API Suite (staff-queue.api.test.ts) (23)
+     ✓ Scenario 1: denies unauthenticated requests with 401 UNAUTHORIZED
+     ✓ Scenario 2: denies REQUESTER user with 403 FORBIDDEN_ROLE
+     ✓ Scenario 3: allows IT_STAFF user with 200 OK and valid response structure
+     ✓ Scenario 4: allows ADMINISTRATOR user with 200 OK
+     ✓ Scenario 5: blocks inactive IT_STAFF user with 401 ACCOUNT_DEACTIVATED
+     ✓ Scenario 6: searches tickets by exact and partial ticketNo
+     ✓ Scenario 7: searches tickets by summary keywords
+     ✓ Scenario 8: performs case-insensitive substring search
+     ✓ Scenario 9: filters tickets by categoryId
+     ✓ Scenario 10: filters tickets by requestedPriority
+     ✓ Scenario 11: filters tickets by itPriority
+     ✓ Scenario 12: filters tickets by status
+     ✓ Scenario 13: filters tickets by owner=UNASSIGNED
+     ✓ Scenario 14: filters tickets by owner=MY_TICKETS for currently authenticated staff
+     ✓ Scenario 15: filters tickets using combined search, category, status, and owner criteria
+     ✓ Scenario 16: applies default pagination (page 1, pageSize 10)
+     ✓ Scenario 17: supports custom page query parameter
+     ✓ Scenario 18: supports custom pageSize query parameter
+     ✓ Scenario 19: clamps pageSize > 50 down to 50
+     ✓ Scenario 20: supports sorting by allowed fields, directions, fallbacks, and deterministic tie-breaker
+     ✓ Scenario 21: returns accurate pagination metadata matching data count
+     ✓ Scenario 22: returns empty data array when requested page is beyond totalPages
+     ✓ Scenario 23: returns empty array when filter criteria match zero tickets
+
+ Test Files  1 passed (1)
+      Tests  23 passed (23)
+```
+
 ### 2.3 Frontend React Testing Library Component Suites
 
 - **Target Command:** `npm --prefix client run test -- tests/lab-03/*.test.tsx`
@@ -125,8 +161,37 @@
    Duration  5.29s
 ```
 
-> [!NOTE]
-> Additional frontend component suites (`StaffTicketQueue.test.tsx`, `StaffTicketDetail.test.tsx`, and `UserManagement.test.tsx`) will be populated in subsequent Issues 14–16.
+### 2.3.1 Issue 14 Staff Ticket Queue Component Suite (`StaffTicketQueue.test.tsx`)
+
+- **Target Command:** `npm --prefix client run test -- tests/lab-03/StaffTicketQueue.test.tsx`
+- **Test Log Output:**
+
+```text
+ ✓ tests/lab-03/StaffTicketQueue.test.tsx (19)
+   ✓ Issue 14 — StaffTicketQueue Component Tests (StaffTicketQueue.test.tsx) (19)
+     ✓ Scenario 1: renders all 11 required columns in desktop table view
+     ✓ Scenario 2: renders status badges with correct Lab 3 status classes and text
+     ✓ Scenario 3: renders both requested priority and IT priority clearly
+     ✓ Scenario 4: renders requester details and assigned owner or unassigned badge
+     ✓ Scenario 5: updates search input value synchronously as user types
+     ✓ Scenario 6: debounces search input without triggering fetch on every keystroke
+     ✓ Scenario 7: executes API query after debounce timer expires
+     ✓ Scenario 8: renders all required filter controls in the toolbar
+     ✓ Scenario 9: triggers API query with reset to page 1 when filter changes
+     ✓ Scenario 10: restores default filter parameters when Reset Filters is clicked
+     ✓ Scenario 11: renders pagination controls with accurate text and disabled states
+     ✓ Scenario 12: renders skeleton placeholder rows during loading state
+     ✓ Scenario 13: renders empty queue illustration and message when totalItems is 0 and no filters active
+     ✓ Scenario 14: renders no-results message and Clear Filters button when filters match 0 tickets
+     ✓ Scenario 15: renders error alert banner with retry button on API failure
+     ✓ Scenario 16: renders mobile cards exposing all required fields
+     ✓ Scenario 17: does not render duplicate filter bars or navigation items
+     ✓ Scenario 18: includes proper accessible headers, test IDs, and labels
+     ✓ Scenario 19: toggles collapsible filter drawer and displays active filter count badge
+
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+```
 
 ### 2.4 Playwright 20-Step End-to-End Browser Journey
 
@@ -187,32 +252,34 @@
 
 Screenshots will be captured automatically by `e2e/lab-03/capture-screenshots.spec.ts` and stored in `artifacts/lab-03/screenshots/`.
 
-| Image Identifier | Screen View                 | Viewport & Resolution       | File Path Placeholder                                          |
-| :--------------- | :-------------------------- | :-------------------------- | :------------------------------------------------------------- |
-| `SCR-01-D`       | Login Screen                | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/01-login-desktop.png`            |
-| `SCR-01-T`       | Login Screen                | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/01-login-tablet.png`             |
-| `SCR-01-M`       | Login Screen                | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/01-login-mobile.png`             |
-| `SCR-02-D`       | Change Password Screen      | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/02-change-password-desktop.png`  |
-| `SCR-02-T`       | Change Password Screen      | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/02-change-password-tablet.png`   |
-| `SCR-02-M`       | Change Password Screen      | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/02-change-password-mobile.png`   |
-| `SCR-03-D`       | Shared Header Shell & Nav   | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/03-header-nav-desktop.png`       |
-| `SCR-03-T`       | Shared Header Shell & Nav   | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/03-header-nav-tablet.png`        |
-| `SCR-03-M`       | Shared Header Shell & Nav   | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/03-header-nav-mobile.png`        |
-| `SCR-04-D`       | Requester Ticket Detail     | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/04-requester-ticket-desktop.png` |
-| `SCR-04-T`       | Requester Ticket Detail     | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/04-requester-ticket-tablet.png`  |
-| `SCR-04-M`       | Requester Ticket Detail     | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/04-requester-ticket-mobile.png`  |
-| `SCR-05-D`       | IT Staff Ticket Queue       | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/05-staff-queue-desktop.png`      |
-| `SCR-05-T`       | IT Staff Ticket Queue       | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/05-staff-queue-tablet.png`       |
-| `SCR-05-M`       | IT Staff Ticket Queue       | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/05-staff-queue-mobile.png`       |
-| `SCR-06-D`       | IT Staff Ticket Detail      | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/06-staff-ticket-desktop.png`     |
-| `SCR-06-T`       | IT Staff Ticket Detail      | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/06-staff-ticket-tablet.png`      |
-| `SCR-06-M`       | IT Staff Ticket Detail      | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/06-staff-ticket-mobile.png`      |
-| `SCR-07-D`       | Admin User Management Table | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/07-admin-users-desktop.png`      |
-| `SCR-07-T`       | Admin User Management Table | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/07-admin-users-tablet.png`       |
-| `SCR-07-M`       | Admin User Management Table | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/07-admin-users-mobile.png`       |
-| `SCR-08-D`       | User Modal Dialog           | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/08-user-modal-desktop.png`       |
-| `SCR-08-T`       | User Modal Dialog           | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/08-user-modal-tablet.png`        |
-| `SCR-08-M`       | User Modal Dialog           | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/08-user-modal-mobile.png`        |
+| Image Identifier | Screen View                  | Viewport & Resolution       | File Path Placeholder                                                |
+| :--------------- | :--------------------------- | :-------------------------- | :------------------------------------------------------------------- |
+| `SCR-01-D`       | Login Screen                 | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/01-login-desktop.png`                  |
+| `SCR-01-T`       | Login Screen                 | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/01-login-tablet.png`                   |
+| `SCR-01-M`       | Login Screen                 | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/01-login-mobile.png`                   |
+| `SCR-02-D`       | Change Password Screen       | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/02-change-password-desktop.png`        |
+| `SCR-02-T`       | Change Password Screen       | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/02-change-password-tablet.png`         |
+| `SCR-02-M`       | Change Password Screen       | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/02-change-password-mobile.png`         |
+| `SCR-03-D`       | My Tickets Dashboard         | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/03-my-tickets-desktop.png`             |
+| `SCR-03-T`       | My Tickets Dashboard         | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/03-my-tickets-tablet.png`              |
+| `SCR-03-M`       | My Tickets Dashboard         | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/03-my-tickets-mobile.png`              |
+| `SCR-04-D`       | Create Ticket Screen         | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/04-create-ticket-desktop.png`          |
+| `SCR-04-T`       | Create Ticket Screen         | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/04-create-ticket-tablet.png`           |
+| `SCR-04-M`       | Create Ticket Screen         | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/04-create-ticket-mobile.png`           |
+| `SCR-05-D`       | Requester Ticket Detail      | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/05-ticket-detail-desktop.png`          |
+| `SCR-05-T`       | Requester Ticket Detail      | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/05-ticket-detail-tablet.png`           |
+| `SCR-05-M`       | Requester Ticket Detail      | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/05-ticket-detail-mobile.png`           |
+| `SCR-06-D`       | IT Staff Ticket Queue        | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/06-staff-queue-desktop.png`            |
+| `SCR-06-T`       | IT Staff Ticket Queue        | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/06-staff-queue-tablet.png`             |
+| `SCR-06-T-FO`    | IT Staff Queue (Filter Open) | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/06-staff-queue-tablet-filter-open.png` |
+| `SCR-06-M`       | IT Staff Ticket Queue        | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/06-staff-queue-mobile.png`             |
+| `SCR-06-M-FO`    | IT Staff Queue (Filter Open) | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/06-staff-queue-mobile-filter-open.png` |
+| `SCR-07-D`       | IT Staff Ticket Detail       | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/07-staff-ticket-desktop.png`           |
+| `SCR-07-T`       | IT Staff Ticket Detail       | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/07-staff-ticket-tablet.png`            |
+| `SCR-07-M`       | IT Staff Ticket Detail       | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/07-staff-ticket-mobile.png`            |
+| `SCR-08-D`       | Admin User Management Table  | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/08-admin-users-desktop.png`            |
+| `SCR-08-T`       | Admin User Management Table  | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/08-admin-users-tablet.png`             |
+| `SCR-08-M`       | Admin User Management Table  | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/08-admin-users-mobile.png`             |
 
 ---
 

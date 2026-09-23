@@ -457,6 +457,247 @@ app.get(
 );
 
 // ---------------------------------------------------------------------------
+// Issue 14 — Staff Ticket Queue Query API with Filtering, Search & Pagination
+// GET /api/staff/tickets
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/staff/tickets",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const {
+        search,
+        categoryId,
+        requestedPriority,
+        itPriority,
+        status,
+        owner,
+        sortBy,
+        sortOrder,
+        page,
+        pageSize,
+      } = req.query;
+
+      // 1. Pagination parameters
+      const parsedPage = parseInt(page as string, 10);
+      const pageNum = !isNaN(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+      const parsedPageSize = parseInt(pageSize as string, 10);
+      const limitNum = !isNaN(parsedPageSize) && parsedPageSize > 0
+        ? Math.min(parsedPageSize, 50)
+        : 10;
+
+      const skip = (pageNum - 1) * limitNum;
+      const take = limitNum;
+
+      // 2. Filter conditions
+      const where: Prisma.TicketWhereInput = {};
+
+      // Search: ticketNo or summary (case-insensitive)
+      if (typeof search === "string" && search.trim().length > 0) {
+        const term = search.trim();
+        where.OR = [
+          { ticketNo: { contains: term, mode: "insensitive" } },
+          { summary: { contains: term, mode: "insensitive" } },
+        ];
+      }
+
+      // Category filter
+      if (categoryId !== undefined && categoryId !== "") {
+        const catId = parseInt(categoryId as string, 10);
+        if (isNaN(catId) || catId <= 0) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid categoryId parameter.",
+                [{ field: "categoryId", message: "categoryId must be a positive integer" }]
+              )
+            );
+          return;
+        }
+        where.categoryId = catId;
+      }
+
+      // Priority validation
+      const validPriorities = ["P0_URGENT", "P1_HIGH", "P2_MEDIUM", "P3_LOW"];
+      if (requestedPriority !== undefined && requestedPriority !== "") {
+        const reqPrioStr = String(requestedPriority).toUpperCase();
+        if (!validPriorities.includes(reqPrioStr)) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid requestedPriority parameter.",
+                [{ field: "requestedPriority", message: `requestedPriority must be one of: ${validPriorities.join(", ")}` }]
+              )
+            );
+          return;
+        }
+        where.requestedPriority = reqPrioStr as Priority;
+      }
+
+      if (itPriority !== undefined && itPriority !== "") {
+        const itPrioStr = String(itPriority).toUpperCase();
+        if (!validPriorities.includes(itPrioStr)) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid itPriority parameter.",
+                [{ field: "itPriority", message: `itPriority must be one of: ${validPriorities.join(", ")}` }]
+              )
+            );
+          return;
+        }
+        where.itPriority = itPrioStr as Priority;
+      }
+
+      // Status validation
+      const validStatuses = [
+        "NEW",
+        "OPEN",
+        "IN_PROGRESS",
+        "WAITING_FOR_REQUESTER",
+        "RESOLVED",
+        "CLOSED",
+        "REOPENED",
+        "CANCELLED",
+      ];
+      if (status !== undefined && status !== "") {
+        const statusStr = String(status).toUpperCase();
+        if (!validStatuses.includes(statusStr)) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid status parameter.",
+                [{ field: "status", message: `status must be one of: ${validStatuses.join(", ")}` }]
+              )
+            );
+          return;
+        }
+        where.status = statusStr as TicketStatus;
+      }
+
+      // Owner filter: ALL, UNASSIGNED, MY_TICKETS
+      if (owner !== undefined && owner !== "") {
+        const ownerStr = String(owner).toUpperCase();
+        if (ownerStr === "UNASSIGNED") {
+          where.ownerId = null;
+        } else if (ownerStr === "MY_TICKETS") {
+          where.ownerId = req.user!.id;
+        } else if (ownerStr === "ALL") {
+          // No owner filter
+        } else {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid owner parameter.",
+                [{ field: "owner", message: "owner must be one of: ALL, UNASSIGNED, MY_TICKETS" }]
+              )
+            );
+          return;
+        }
+      }
+
+      // 3. Sorting
+      const validSortFields: Record<string, string> = {
+        createdat: "createdAt",
+        itpriority: "itPriority",
+        status: "status",
+        updatedat: "updatedAt",
+      };
+
+      const sortFieldKey = typeof sortBy === "string" ? sortBy.toLowerCase() : "createdat";
+      const sortFieldName = validSortFields[sortFieldKey] || "createdAt";
+      const sortDirection: "asc" | "desc" =
+        typeof sortOrder === "string" && sortOrder.toLowerCase() === "asc" ? "asc" : "desc";
+
+      const orderBy: Prisma.TicketOrderByWithRelationInput[] = [
+        { [sortFieldName]: sortDirection },
+        { id: "desc" },
+      ];
+
+      // 4. Query DB in parallel
+      const prisma = getPrisma();
+      const [totalCount, tickets] = await Promise.all([
+        prisma.ticket.count({ where }),
+        prisma.ticket.findMany({
+          where,
+          skip,
+          take,
+          orderBy,
+          select: {
+            id: true,
+            ticketNo: true,
+            summary: true,
+            requestedPriority: true,
+            itPriority: true,
+            status: true,
+            resolutionIndicated: true,
+            createdAt: true,
+            updatedAt: true,
+            requester: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+              },
+            },
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            relatedSystem: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            owner: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      const totalPages = Math.ceil(totalCount / limitNum);
+
+      res.status(200).json({
+        data: tickets,
+        pagination: {
+          page: pageNum,
+          pageSize: limitNum,
+          totalItems: totalCount,
+          totalPages,
+          hasNext: pageNum < totalPages,
+          hasPrev: pageNum > 1,
+        },
+      });
+    } catch (error) {
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to fetch staff tickets."));
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Issue 7 — Pre-upload Attachments
 // POST /api/attachments/pre-upload
 // ---------------------------------------------------------------------------

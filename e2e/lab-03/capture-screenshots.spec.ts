@@ -142,5 +142,39 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
         fullPage: true,
       });
     });
+
+    test(`captures Staff Ticket Queue screen (${vp.name})`, async ({ page }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.goto("http://localhost:5173/login");
+      await page.waitForSelector('[data-testid="login-screen"]');
+
+      // Login with David Lee (active IT Staff, mustChangePassword: false)
+      await page.fill('[data-testid="login-email-input"]', "david.lee@toktickit.com");
+      await page.fill('[data-testid="login-password-input"]', "Password123!");
+      await page.click('[data-testid="login-submit-btn"]');
+
+      await page.waitForSelector('[data-testid="staff-ticket-queue-view"]');
+      if (vp.name === "mobile") {
+        await expect(page.locator('[data-testid="staff-ticket-cards"]')).toBeVisible();
+        await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeHidden();
+      } else {
+        await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
+        await expect(page.locator('[data-testid="staff-ticket-cards"]')).toBeHidden();
+      }
+      await page.screenshot({
+        path: path.join(SCREENSHOT_DIR, `06-staff-queue-${vp.name}.png`),
+        fullPage: true,
+      });
+
+      // For tablet and mobile, also capture with filter drawer opened
+      if (vp.name !== "desktop") {
+        await page.click('[data-testid="queue-filter-drawer-toggle"]');
+        await page.waitForTimeout(200);
+        await page.screenshot({
+          path: path.join(SCREENSHOT_DIR, `06-staff-queue-${vp.name}-filter-open.png`),
+          fullPage: true,
+        });
+      }
+    });
   }
 });

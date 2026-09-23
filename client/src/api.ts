@@ -290,6 +290,114 @@ export async function fetchTickets(params?: TicketQueryParams): Promise<FetchTic
   };
 }
 
+export interface StaffTicketItem {
+  id: number;
+  ticketNo: string;
+  summary: string;
+  requestedPriority: string;
+  itPriority: string | null;
+  status: string;
+  resolutionIndicated: boolean;
+  createdAt: string;
+  updatedAt: string;
+  requester: {
+    id: number;
+    fullName: string;
+    email: string;
+  };
+  category: {
+    id: number;
+    name: string;
+  };
+  relatedSystem?: {
+    id: number;
+    name: string;
+  } | null;
+  owner?: {
+    id: number;
+    fullName: string;
+    email?: string;
+  } | null;
+}
+
+export interface StaffTicketQueryParams {
+  search?: string;
+  categoryId?: number;
+  requestedPriority?: string;
+  itPriority?: string;
+  status?: string;
+  owner?: "ALL" | "UNASSIGNED" | "MY_TICKETS" | string;
+  sortBy?: "createdAt" | "itPriority" | "status" | "updatedAt" | string;
+  sortOrder?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+}
+
+export interface FetchStaffTicketsResponse {
+  data: StaffTicketItem[];
+  pagination: PaginationMeta;
+}
+
+export async function fetchStaffTickets(
+  params?: StaffTicketQueryParams
+): Promise<FetchStaffTicketsResponse> {
+  const query = new URLSearchParams();
+  if (params) {
+    if (params.search && params.search.trim()) query.set("search", params.search.trim());
+    if (params.categoryId !== undefined && params.categoryId !== null && !isNaN(params.categoryId)) {
+      query.set("categoryId", String(params.categoryId));
+    }
+    if (params.requestedPriority && params.requestedPriority !== "ALL") {
+      query.set("requestedPriority", params.requestedPriority);
+    }
+    if (params.itPriority && params.itPriority !== "ALL") {
+      query.set("itPriority", params.itPriority);
+    }
+    if (params.status && params.status !== "ALL") {
+      query.set("status", params.status);
+    }
+    if (params.owner && params.owner !== "ALL") {
+      query.set("owner", params.owner);
+    }
+    if (params.sortBy) query.set("sortBy", params.sortBy);
+    if (params.sortOrder) query.set("sortOrder", params.sortOrder);
+    if (params.page !== undefined) query.set("page", String(params.page));
+    if (params.pageSize !== undefined) query.set("pageSize", String(params.pageSize));
+  }
+
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  const res = await fetch(`${API_URL}/api/staff/tickets${queryString}`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || "Unable to fetch staff tickets",
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  const rawList: StaffTicketItem[] = Array.isArray(body) ? body : body.data || [];
+  const pagination: PaginationMeta = body.pagination || {
+    page: params?.page || 1,
+    pageSize: params?.pageSize || 10,
+    totalItems: rawList.length,
+    totalPages: Math.ceil(rawList.length / (params?.pageSize || 10)) || 1,
+    hasNext: false,
+    hasPrev: false,
+  };
+
+  return {
+    data: rawList,
+    pagination,
+  };
+}
+
 export async function uploadAttachments(files: File[]): Promise<{ data: AttachmentItem[] }> {
   const formData = new FormData();
   for (const file of files) {

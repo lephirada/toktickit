@@ -13,7 +13,7 @@
 | `[PR #33]`              | `feature/11-database-migration`           | `[Request Changes -> Approved]` |
 | `[PR #34]`              | `feature/12-authentication-authorization` | `[Request Changes -> Approved]` |
 | `[PR #35]`              | `feature/13-client-auth-shell`            | `[Approved]`                    |
-| `[PR #... Placeholder]` | `feature/14-staff-queue`                  | `[Pending]`                     |
+| `[PR #36]`              | `feature/14-staff-queue`                  | `[Approved]`                    |
 | `[PR #... Placeholder]` | `feature/15-staff-ticket-operations`      | `[Pending]`                     |
 | `[PR #... Placeholder]` | `feature/16-user-management`              | `[Pending]`                     |
 | `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Pending]`                     |
@@ -117,10 +117,13 @@
 - **Branch:** `feature/14-staff-queue`
 - **Reviewer comment I received:**
 
-  > `[Placeholder: Partner review comments for Issue 14 PR]`
+  > Reviewed the PR against the Issue 14 Acceptance Criteria. The Staff Queue API, RBAC, search/filter/sort/pagination, responsive UI, required tests, and desktop/tablet/mobile evidence are all implemented.
+  > CI passes for Server, Client, and Playwright E2E with no blocking issues.
+  >
+  > Approve
 
 - **How I responded:**
-  > `[Placeholder: Author response to partner feedback]`
+  > Thank you for the review and approval Ka. I have updated docs/lab-03. You can merge this PR into lab3-staging now.
 
 ---
 

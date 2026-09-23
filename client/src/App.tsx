@@ -8,6 +8,7 @@ import MyTicketsDashboard from "./components/MyTicketsDashboard.js";
 import TicketDetailScreen from "./components/TicketDetailScreen.js";
 import LoginScreen from "./components/LoginScreen.js";
 import ChangePasswordScreen from "./components/ChangePasswordScreen.js";
+import StaffTicketQueue from "./components/StaffTicketQueue.js";
 import { CheckCircleIcon, TicketIcon, UserIcon } from "./components/icons/index.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
@@ -337,11 +338,13 @@ export function AppContent() {
       />
 
       <main
-        className="container-fluid py-4 flex-grow-1 px-3 px-sm-4 px-lg-5"
+        className={`container-fluid py-4 flex-grow-1 ${effectiveView === "staff-queue" ? "px-2 px-sm-3 px-xl-4" : "px-3 px-sm-4 px-lg-4"}`}
         style={{
           maxWidth:
-            effectiveView === "my-tickets" || effectiveView === "ticket-detail"
-              ? 1380
+            effectiveView === "staff-queue"
+              ? "1600px"
+              : effectiveView === "my-tickets" || effectiveView === "ticket-detail"
+              ? 1440
               : 800,
           margin: "0 auto",
           width: "100%",
@@ -411,36 +414,7 @@ export function AppContent() {
         {/* IT Staff Ticket Queue View (Issue 14 Destination) */}
         {effectiveView === "staff-queue" && (
           <section data-testid="staff-queue-section" className="w-full">
-            <div
-              className="bg-white border shadow-sm p-4 p-md-5 text-center mx-auto"
-              style={{
-                maxWidth: 800,
-                borderRadius: "16px",
-                borderColor: "#EAECF0",
-                boxShadow: "0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04)",
-              }}
-            >
-              <div
-                className="d-inline-flex align-items-center justify-content-center rounded-circle p-3 mb-3"
-                style={{ backgroundColor: "var(--zg-pale)" }}
-              >
-                <TicketIcon size={32} color="var(--zg-primary)" />
-              </div>
-              <h2 className="h4 fw-bold text-dark mb-2">IT Staff Ticket Queue</h2>
-              <p className="text-muted small mb-4" style={{ maxWidth: 500, margin: "0 auto" }}>
-                The shared IT Staff Ticket Queue with search, multi-field filtering, priority assignment, and ticket management is being developed in Issue 14.
-              </p>
-              <div className="d-flex justify-content-center gap-2">
-                <button
-                  type="button"
-                  className="btn btn-outline-success btn-sm fw-semibold px-3 py-2 rounded-2"
-                  style={{ color: "var(--zg-primary)", borderColor: "var(--zg-primary)" }}
-                  onClick={() => handleNavigate("my-tickets")}
-                >
-                  View My Tickets
-                </button>
-              </div>
-            </div>
+            <StaffTicketQueue />
           </section>
         )}
 
