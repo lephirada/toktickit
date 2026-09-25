@@ -153,6 +153,59 @@ describe("Issue 15 — Public Comments & Internal Notes Suite (comments-notes.ap
       expect(res.status).toBe(422);
       expect(res.body.error.code).toBe("VALIDATION_ERROR");
     });
+
+    it("lists public comments created by staff with author, timestamp, and content", async () => {
+      const ticket = await createTestTicket();
+
+      // Staff posts public comment
+      const createRes = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Cookie", cookieStaff)
+        .send({ content: "Official staff public update." });
+
+      expect(createRes.status).toBe(201);
+
+      // List comments as staff
+      const listRes = await request(app)
+        .get(`/api/tickets/${ticket.id}/comments`)
+        .set("Cookie", cookieStaff);
+
+      expect(listRes.status).toBe(200);
+      expect(Array.isArray(listRes.body.data)).toBe(true);
+      const found = listRes.body.data.find(
+        (c: any) => c.content === "Official staff public update." || c.body === "Official staff public update."
+      );
+      expect(found).toBeDefined();
+      expect(found.authorRole).toBe("IT_STAFF");
+      expect(found.authorName).toBe("Notes IT Staff");
+      expect(found.createdAt).toBeDefined();
+    });
+
+    it("verifies public comment length boundaries: accepts 1 and 2000 chars, rejects 2001 chars", async () => {
+      const ticket = await createTestTicket();
+
+      // 1 char boundary -> 201
+      const res1 = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Cookie", cookieStaff)
+        .send({ content: "A" });
+      expect(res1.status).toBe(201);
+
+      // 2000 chars boundary -> 201
+      const res2000 = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Cookie", cookieStaff)
+        .send({ content: "B".repeat(2000) });
+      expect(res2000.status).toBe(201);
+
+      // 2001 chars boundary -> 422
+      const res2001 = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Cookie", cookieStaff)
+        .send({ content: "C".repeat(2001) });
+      expect(res2001.status).toBe(422);
+      expect(res2001.body.error.code).toBe("VALIDATION_ERROR");
+    });
   });
 
   // =========================================================================
@@ -226,17 +279,32 @@ describe("Issue 15 — Public Comments & Internal Notes Suite (comments-notes.ap
       expect(res.body.error.code).toBe("VALIDATION_ERROR");
     });
 
-    it("rejects internal note exceeding 2000 characters with 422", async () => {
+    it("verifies internal note length boundaries: accepts 1 and 2000 chars, rejects 2001 chars with 422", async () => {
       const ticket = await createTestTicket();
-      const longNote = "a".repeat(2001);
 
-      const res = await request(app)
+      // 1 char boundary -> 201
+      const res1 = await request(app)
         .post(`/api/staff/tickets/${ticket.id}/notes`)
         .set("Cookie", cookieStaff)
-        .send({ content: longNote });
+        .send({ content: "X" });
+      expect(res1.status).toBe(201);
+      expect(res1.body.data.content).toBe("X");
 
-      expect(res.status).toBe(422);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      // 2000 chars boundary -> 201
+      const res2000 = await request(app)
+        .post(`/api/staff/tickets/${ticket.id}/notes`)
+        .set("Cookie", cookieStaff)
+        .send({ content: "Y".repeat(2000) });
+      expect(res2000.status).toBe(201);
+      expect(res2000.body.data.content).toBe("Y".repeat(2000));
+
+      // 2001 chars boundary -> 422
+      const res2001 = await request(app)
+        .post(`/api/staff/tickets/${ticket.id}/notes`)
+        .set("Cookie", cookieStaff)
+        .send({ content: "Z".repeat(2001) });
+      expect(res2001.status).toBe(422);
+      expect(res2001.body.error.code).toBe("VALIDATION_ERROR");
     });
 
     it("rejects adding internal note on CLOSED and CANCELLED tickets with 422", async () => {

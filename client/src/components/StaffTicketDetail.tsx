@@ -12,10 +12,11 @@ import {
   updateTicketStatus,
   fetchInternalNotes,
   postInternalNote,
-  postPublicComment,
   UpdateStatusPayload,
+  TicketDetailAttachment,
 } from "../api";
 import { StatusTransitionModal, STATUS_LABELS } from "./StatusTransitionModal";
+import { AttachmentRemovalModal } from "./AttachmentRemovalModal";
 import {
   HomeIcon,
   PaperclipIcon,
@@ -259,6 +260,10 @@ export const StaffTicketDetail: React.FC<StaffTicketDetailProps> = ({
   // Claiming
   const [isClaiming, setIsClaiming] = useState<boolean>(false);
 
+  // Attachment soft-removal modal state
+  const [removalModalOpen, setRemovalModalOpen] = useState<boolean>(false);
+  const [targetAttachment, setTargetAttachment] = useState<TicketDetailAttachment | null>(null);
+
   // Auto-dismiss alerts after 4.5s for success and 6s for errors
   useEffect(() => {
     if (!actionSuccess) return;
@@ -313,6 +318,18 @@ export const StaffTicketDetail: React.FC<StaffTicketDetailProps> = ({
   const isClosed = ticket?.status === "CLOSED";
   const isCancelled = ticket?.status === "CANCELLED";
   const isLocked = isClosed || isCancelled;
+
+  const handleOpenRemovalModal = (att: any) => {
+    if (isLocked) return;
+    setTargetAttachment(att);
+    setRemovalModalOpen(true);
+  };
+
+  const handleRemovalSuccess = (updatedAttachment: TicketDetailAttachment) => {
+    setActionSuccess(`Attachment "${updatedAttachment.originalName}" was successfully removed.`);
+    setTimeout(() => setActionSuccess(null), 5000);
+    loadData();
+  };
 
   // Claim action
   const handleClaim = async () => {
@@ -892,16 +909,29 @@ export const StaffTicketDetail: React.FC<StaffTicketDetailProps> = ({
                   </div>
 
                   {!att.isSoftDeleted && (
-                    <a
-                      href={`/api/attachments/${att.id}/download`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 py-1 px-2 fw-semibold rounded-2"
-                      style={{ fontSize: "0.8rem" }}
-                    >
-                      <DownloadIcon size={13} />
-                      <span>Download &darr;</span>
-                    </a>
+                    <div className="d-flex align-items-center gap-2">
+                      <a
+                        href={`/api/attachments/${att.id}/download`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1 py-1 px-2 fw-semibold rounded-2"
+                        style={{ fontSize: "0.8rem" }}
+                      >
+                        <DownloadIcon size={13} />
+                        <span>Download &darr;</span>
+                      </a>
+                      {!isLocked && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRemovalModal(att)}
+                          className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 py-1 px-2 fw-semibold rounded-2"
+                          style={{ fontSize: "0.8rem" }}
+                          data-testid={`remove-attachment-btn-${att.id}`}
+                        >
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </li>
               ))}
@@ -1269,6 +1299,17 @@ export const StaffTicketDetail: React.FC<StaffTicketDetailProps> = ({
           onSubmit={handleStatusSubmit}
         />
       )}
+
+      {/* Attachment Soft-Removal Modal */}
+      <AttachmentRemovalModal
+        isOpen={removalModalOpen}
+        attachment={targetAttachment}
+        onClose={() => {
+          setRemovalModalOpen(false);
+          setTargetAttachment(null);
+        }}
+        onSuccess={handleRemovalSuccess}
+      />
     </div>
   );
 };

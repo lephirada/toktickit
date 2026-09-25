@@ -363,4 +363,24 @@ describe("StaffTicketDetail Component (StaffTicketDetail.test.tsx)", () => {
     const prioritySelect = screen.getByLabelText(/IT PRIORITY/i);
     expect(prioritySelect).toBeDisabled();
   });
+
+  it("renders attachment with Remove button and opens soft-removal modal", async () => {
+    render(
+      <StaffTicketDetail
+        ticketId={101}
+        currentUser={mockCurrentUser}
+        onNavigateBack={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("latency_graph.png")).toBeInTheDocument();
+      expect(screen.getByTestId("remove-attachment-btn-1")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("remove-attachment-btn-1"));
+
+    expect(screen.getByText(/Remove Attachment/i)).toBeInTheDocument();
+  });
 });
+

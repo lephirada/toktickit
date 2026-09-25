@@ -1,16 +1,9 @@
 import React, { useState } from "react";
 import { UpdateStatusPayload } from "../api";
 
-export const ALLOWED_STATUS_TRANSITIONS: Record<string, string[]> = {
-  NEW: ["OPEN", "CANCELLED"],
-  OPEN: ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["WAITING_FOR_REQUESTER", "RESOLVED", "CANCELLED"],
-  WAITING_FOR_REQUESTER: ["IN_PROGRESS", "CANCELLED"],
-  RESOLVED: ["CLOSED", "REOPENED"],
-  CLOSED: ["REOPENED"],
-  REOPENED: ["OPEN"],
-  CANCELLED: [],
-};
+import { ALLOWED_STATUS_TRANSITIONS, TicketStatus } from "../../../shared/ticketStateMachine.js";
+export { ALLOWED_STATUS_TRANSITIONS };
+
 
 export const STATUS_LABELS: Record<string, string> = {
   NEW: "New",
@@ -36,7 +29,7 @@ export const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
   onClose,
   onSubmit,
 }) => {
-  const allowed = ALLOWED_STATUS_TRANSITIONS[currentStatus] || [];
+  const allowed: string[] = (ALLOWED_STATUS_TRANSITIONS as Record<string, string[]>)[currentStatus] || [];
   const [selectedStatus, setSelectedStatus] = useState<string>(allowed[0] || "");
   const [resolutionSummary, setResolutionSummary] = useState<string>("");
   const [cancellationReason, setCancellationReason] = useState<string>("");

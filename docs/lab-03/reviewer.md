@@ -14,7 +14,7 @@
 | `[PR #34]`              | `feature/12-authentication-authorization` | `[Request Changes -> Approved]` |
 | `[PR #35]`              | `feature/13-client-auth-shell`            | `[Approved]`                    |
 | `[PR #36]`              | `feature/14-staff-queue`                  | `[Approved]`                    |
-| `[PR #37 Placeholder]` | `feature/15-staff-ticket-operations`      | `[In Review / Implemented]`     |
+| `[PR #37]`              | `feature/15-staff-ticket-operations`      | `[In Review / Implemented]`     |
 | `[PR #... Placeholder]` | `feature/16-user-management`              | `[Pending]`                     |
 | `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Pending]`                     |
 

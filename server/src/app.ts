@@ -1008,7 +1008,11 @@ app.patch(
         if (isClaim) {
           // Conditional update to guard against concurrent claim races
           const updateResult = await tx.ticket.updateMany({
-            where: { id: ticket.id, ownerId: null },
+            where: {
+              id: ticket.id,
+              ownerId: null,
+              status: { notIn: ["CLOSED", "CANCELLED"] },
+            },
             data: {
               ownerId: targetOwnerId,
               status: ticket.status === "NEW" ? "OPEN" : ticket.status,
@@ -1019,14 +1023,21 @@ app.patch(
             throw new Error("RACE_LOST");
           }
         } else {
-          // Explicit reassignment: preserves status if not NEW; if NEW, transitions to OPEN
-          await tx.ticket.update({
-            where: { id: ticket.id },
+          // Explicit reassignment: atomic conditional update ensuring ticket is not locked or closed
+          const updateResult = await tx.ticket.updateMany({
+            where: {
+              id: ticket.id,
+              status: { notIn: ["CLOSED", "CANCELLED"] },
+            },
             data: {
               ownerId: targetOwnerId,
               status: ticket.status === "NEW" ? "OPEN" : ticket.status,
             },
           });
+
+          if (updateResult.count === 0) {
+            throw new Error("TICKET_LOCKED");
+          }
         }
 
         const activityType =
@@ -1050,6 +1061,7 @@ app.patch(
               previousOwnerId: ticket.ownerId,
               newOwnerId: targetOwnerId,
               newOwnerName: targetUser.fullName,
+              isClaim,
             },
           },
         });
@@ -1072,6 +1084,14 @@ app.patch(
               "TICKET_ALREADY_CLAIMED",
               "Ticket has already been claimed or assigned to another staff member."
             )
+          );
+        return;
+      }
+      if (error?.message === "TICKET_LOCKED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope("TICKET_LOCKED", "Cannot reassign a closed or cancelled ticket.")
           );
         return;
       }
@@ -2740,51 +2760,62 @@ app.post(
       const mimeType =
         file.mimetype === "image/jpg" ? "image/jpeg" : file.mimetype;
 
-      const attachment = await getPrisma().$transaction(async (tx) => {
-        const createdAtt = await tx.attachment.create({
-          data: {
-            originalName: file.originalname,
-            storageKey,
-            mimeType,
-            sizeBytes: file.size,
-            uploadedById: req.user!.id,
-            ticketId: ticket.id,
-            isSoftDeleted: false,
-          },
-          select: {
-            id: true,
-            originalName: true,
-            mimeType: true,
-            sizeBytes: true,
-            ticketId: true,
-            isSoftDeleted: true,
-            createdAt: true,
-          },
-        });
-
-        // Append audit timeline entry inside the same transaction
-        await auditService.appendTicketAuditLog(
-          ticket.id,
-          {
-            type: "ATTACHMENT_ADDED",
-            action: "Attachment uploaded",
-            message:
-              req.user!.role === "REQUESTER"
-                ? `Attachment ${file.originalname} added by requester.`
-                : `Attachment ${file.originalname} attached to ticket.`,
-            timestamp: new Date(),
-            actorId: req.user!.id,
-            actorName: req.user!.fullName,
-            metadata: {
-              attachmentId: createdAtt.id,
+      let attachment;
+      try {
+        attachment = await getPrisma().$transaction(async (tx) => {
+          const createdAtt = await tx.attachment.create({
+            data: {
               originalName: file.originalname,
+              storageKey,
+              mimeType,
+              sizeBytes: file.size,
+              uploadedById: req.user!.id,
+              ticketId: ticket.id,
+              isSoftDeleted: false,
             },
-          },
-          tx
-        );
+            select: {
+              id: true,
+              originalName: true,
+              mimeType: true,
+              sizeBytes: true,
+              ticketId: true,
+              isSoftDeleted: true,
+              createdAt: true,
+            },
+          });
 
-        return createdAtt;
-      });
+          // Append audit timeline entry inside the same transaction
+          await auditService.appendTicketAuditLog(
+            ticket.id,
+            {
+              type: "ATTACHMENT_ADDED",
+              action: "Attachment uploaded",
+              message:
+                req.user!.role === "REQUESTER"
+                  ? `Attachment ${file.originalname} added by requester.`
+                  : `Attachment ${file.originalname} attached to ticket.`,
+              timestamp: new Date(),
+              actorId: req.user!.id,
+              actorName: req.user!.fullName,
+              metadata: {
+                attachmentId: createdAtt.id,
+                originalName: file.originalname,
+              },
+            },
+            tx
+          );
+
+          return createdAtt;
+        });
+      } catch (txError) {
+        // Clean up orphan file from filesystem if database transaction fails
+        try {
+          await fs.promises.unlink(filePath);
+        } catch {
+          // ignore unlink error
+        }
+        throw txError;
+      }
 
       res.status(201).json({
         data: {
