@@ -831,13 +831,18 @@ export async function claimTicket(
 
 export async function reassignTicket(
   ticketId: number,
-  ownerId: number
+  ownerId: number,
+  expectedOwnerId?: number | null
 ): Promise<{ data: StaffTicketDetailData }> {
+  const payload: { ownerId: number; expectedOwnerId?: number | null } = { ownerId };
+  if (expectedOwnerId !== undefined) {
+    payload.expectedOwnerId = expectedOwnerId;
+  }
   const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/assign`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ ownerId }),
+    body: JSON.stringify(payload),
   });
 
   const body = await res.json().catch(() => null);

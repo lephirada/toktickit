@@ -1003,6 +1003,29 @@ app.patch(
         return;
       }
 
+      // Concurrency guard for explicit reassignment: verify expected owner if provided
+      const expectedOwnerId =
+        req.body?.expectedOwnerId !== undefined
+          ? req.body.expectedOwnerId === null
+            ? null
+            : parseInt(String(req.body.expectedOwnerId), 10)
+          : ticket.ownerId;
+
+      if (
+        req.body?.expectedOwnerId !== undefined &&
+        req.body.expectedOwnerId !== ticket.ownerId
+      ) {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "TICKET_MODIFIED_CONCURRENTLY",
+              "Ticket assignment has been modified concurrently by another user."
+            )
+          );
+        return;
+      }
+
       // Atomic update + activity in same transaction
       const result = await getPrisma().$transaction(async (tx) => {
         if (isClaim) {
@@ -1024,9 +1047,11 @@ app.patch(
           }
         } else {
           // Explicit reassignment: atomic conditional update ensuring ticket is not locked or closed
+          // and guarding against concurrent stale reassignments
           const updateResult = await tx.ticket.updateMany({
             where: {
               id: ticket.id,
+              ownerId: expectedOwnerId,
               status: { notIn: ["CLOSED", "CANCELLED"] },
             },
             data: {
@@ -1036,12 +1061,23 @@ app.patch(
           });
 
           if (updateResult.count === 0) {
-            throw new Error("TICKET_LOCKED");
+            const currentCheck = await tx.ticket.findUnique({
+              where: { id: ticket.id },
+              select: { status: true, ownerId: true },
+            });
+            if (currentCheck?.status === "CLOSED" || currentCheck?.status === "CANCELLED") {
+              throw new Error("TICKET_LOCKED");
+            }
+            throw new Error("REASSIGN_RACE_LOST");
           }
         }
 
         const activityType =
-          isClaim && ticket.status === "NEW" ? "TICKET_CLAIMED" : "ASSIGNMENT_CHANGED";
+          isClaim && ticket.status === "NEW"
+            ? "TICKET_CLAIMED"
+            : ticket.ownerId === null
+            ? "TICKET_ASSIGNED"
+            : "ASSIGNMENT_CHANGED";
         const activityAction =
           isClaim && ticket.status === "NEW" ? "Ticket claimed" : "Owner reassigned";
         const activityMessage =
@@ -1083,6 +1119,17 @@ app.patch(
             createErrorEnvelope(
               "TICKET_ALREADY_CLAIMED",
               "Ticket has already been claimed or assigned to another staff member."
+            )
+          );
+        return;
+      }
+      if (error?.message === "REASSIGN_RACE_LOST") {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "TICKET_MODIFIED_CONCURRENTLY",
+              "Ticket assignment has been modified concurrently by another user."
             )
           );
         return;

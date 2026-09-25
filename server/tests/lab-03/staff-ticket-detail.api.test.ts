@@ -426,6 +426,61 @@ describe("Issue 15 — Staff Ticket Operations API Suite (staff-ticket-detail.ap
       }
     });
 
+    it("guarantees concurrency safety during simultaneous explicit reassignments (deterministic, exactly one winner, loser gets 409)", async () => {
+      const ticket = await createTicket({
+        status: TicketStatus.OPEN,
+        ownerId: staffUserA.id,
+      });
+
+      // Staff A tries to reassign to Staff B, while Staff B tries to reassign to adminUser simultaneously
+      const [res1, res2] = await Promise.all([
+        request(app)
+          .patch(`/api/staff/tickets/${ticket.id}/assign`)
+          .set("Cookie", cookieStaffA)
+          .send({ ownerId: staffUserB.id }),
+        request(app)
+          .patch(`/api/staff/tickets/${ticket.id}/assign`)
+          .set("Cookie", cookieStaffB)
+          .send({ ownerId: adminUser.id }),
+      ]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([200, 409]);
+
+      const winnerRes = res1.status === 200 ? res1 : res2;
+      const loserRes = res1.status === 409 ? res1 : res2;
+
+      expect([staffUserB.id, adminUser.id]).toContain(winnerRes.body.data.ownerId);
+      expect(loserRes.body.error.code).toBe("TICKET_MODIFIED_CONCURRENTLY");
+
+      // Verify DB final state is deterministic and matches the winner
+      const finalTicket = await prisma.ticket.findUnique({ where: { id: ticket.id } });
+      expect(finalTicket?.ownerId).toBe(winnerRes.body.data.ownerId);
+
+      // Verify only one ASSIGNMENT_CHANGED activity was written for this race
+      const activities = await prisma.ticketActivity.findMany({
+        where: { ticketId: ticket.id, type: "ASSIGNMENT_CHANGED" },
+      });
+      expect(activities.length).toBe(1);
+    });
+
+    it("rejects explicit reassignment when caller provides stale expectedOwnerId (409 Conflict TICKET_MODIFIED_CONCURRENTLY)", async () => {
+      const ticket = await createTicket({
+        status: TicketStatus.OPEN,
+        ownerId: staffUserA.id,
+      });
+
+      // Caller expects ticket to be owned by adminUser (stale view), but it's actually owned by staffUserA
+      const res = await request(app)
+        .patch(`/api/staff/tickets/${ticket.id}/assign`)
+        .set("Cookie", cookieStaffA)
+        .send({ ownerId: staffUserB.id, expectedOwnerId: adminUser.id });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe("TICKET_MODIFIED_CONCURRENTLY");
+      expect(res.body.error.message).toContain("concurrently");
+    });
+
     it("rejects assignment to an inactive user with 422 INACTIVE_OWNER (AC-15-05)", async () => {
       const ticket = await createTicket({ status: TicketStatus.OPEN, ownerId: staffUserA.id });
 
