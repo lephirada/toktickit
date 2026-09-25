@@ -12,6 +12,7 @@ import {
   updateTicketStatus,
   fetchInternalNotes,
   postInternalNote,
+  postPublicComment,
   UpdateStatusPayload,
   TicketDetailAttachment,
 } from "../api";
