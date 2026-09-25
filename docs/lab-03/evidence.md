@@ -18,7 +18,7 @@
 | **Issue 12** | `feature/12-authentication-authorization` | Auth Foundation, Session & Discussion API | `[PR #34]`              | `[Request Changes -> Approved]` | `[Merge]`    |
 | **Issue 13** | `feature/13-client-auth-shell`            | Client Auth Shell & Requester Discussion  | `[PR #35]`              | `[Approved]`                    | `[Merge]`    |
 | **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #36]`              | `[Approved]`                    | `[Merged]`   |
-| **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #37 Placeholder]` | `[In Review / Implemented]`     | `[Pending]`  |
 | **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 | **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 
@@ -131,6 +131,34 @@
       Tests  23 passed (23)
 ```
 
+### 2.2.3 Issue 15 IT Staff Operations & Notes API Suites (`staff-ticket-detail.api.test.ts` & `comments-notes.api.test.ts`)
+
+- **Target Command:** `npm --prefix server run test -- tests/lab-03/staff-ticket-detail.api.test.ts tests/lab-03/comments-notes.api.test.ts`
+- **Test Log Output:**
+
+```text
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (52)
+   ✓ Issue 15 — Staff Ticket Operations API Suite (staff-ticket-detail.api.test.ts) (52)
+     ✓ 1. RBAC & Security Access (AC-15-02) (5)
+     ✓ 2. Active Staff Users List (GET /api/staff/users) (2)
+     ✓ 3. Operational Ticket Detail (GET /api/staff/tickets/:id - AC-15-01) (2)
+     ✓ 4. Claim & Assignment Operations (AC-15-03, AC-15-04, AC-15-05) (9)
+     ✓ 5. IT Priority Updates (AC-15-16) (3)
+     ✓ 6. State Machine & Status Transitions (AC-15-06, AC-15-07, AC-15-13) (18)
+     ✓ 7. Transaction Atomicity & Rollback (AC-15-17) (1)
+     ✓ 8. Attachment Access Matrix (AC-15-14, AC-15-15, ATT-01..12) (12)
+ ✓ tests/lab-03/comments-notes.api.test.ts (12)
+   ✓ Issue 15 — Public Comments & Internal Notes Suite (comments-notes.api.test.ts) (12)
+     ✓ 1. Public Comments (AC-15-09) (2)
+     ✓ 2. Internal Notes Creation & Retrieval (AC-15-10) (8)
+     ✓ 3. Internal Notes Privacy & Leakage Prevention (AC-15-11) (2)
+
+ Test Files  2 passed (2)
+      Tests  64 passed (64)
+```
+
+- **Full Server Suite Verification:** `npm --prefix server test` (15/15 test files passed, 214/214 tests passed).
+
 ### 2.3 Frontend React Testing Library Component Suites
 
 - **Target Command:** `npm --prefix client run test -- tests/lab-03/*.test.tsx`
@@ -192,6 +220,30 @@
  Test Files  1 passed (1)
       Tests  19 passed (19)
 ```
+
+### 2.3.2 Issue 15 Staff Ticket Detail Component Suite (`StaffTicketDetail.test.tsx`)
+
+- **Target Command:** `npm --prefix client run test -- tests/lab-03/StaffTicketDetail.test.tsx`
+- **Test Log Output:**
+
+```text
+ ✓ tests/lab-03/StaffTicketDetail.test.tsx (9)
+   ✓ StaffTicketDetail Component (StaffTicketDetail.test.tsx) (9)
+     ✓ renders operational ticket details, metadata, and status badges
+     ✓ shows 'Claim Ticket' button when ticket is unassigned and triggers claim API
+     ✓ reassigns ticket owner when selecting new staff user from dropdown
+     ✓ updates IT Priority when changing dropdown value
+     ✓ opens StatusTransitionModal and validates reason fields on submission
+     ✓ enforces mandatory reason length in StatusTransitionModal when target is CANCELLED
+     ✓ renders Amber Internal Notes tab with Lock Icon and allows posting internal notes
+     ✓ renders Activity timeline tab with audit events
+     ✓ locks operational controls when ticket status is CLOSED or CANCELLED
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+```
+
+- **Full Client Suite Verification:** `npm --prefix client test` (11/11 test files passed, 103/103 tests passed).
 
 ### 2.4 Playwright 20-Step End-to-End Browser Journey
 

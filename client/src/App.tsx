@@ -9,6 +9,7 @@ import TicketDetailScreen from "./components/TicketDetailScreen.js";
 import LoginScreen from "./components/LoginScreen.js";
 import ChangePasswordScreen from "./components/ChangePasswordScreen.js";
 import StaffTicketQueue from "./components/StaffTicketQueue.js";
+import { StaffTicketDetail } from "./components/StaffTicketDetail.js";
 import { CheckCircleIcon, TicketIcon, UserIcon } from "./components/icons/index.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
@@ -19,6 +20,7 @@ export type ActiveView =
   | "change-password"
   | "login"
   | "staff-queue"
+  | "staff-ticket-detail"
   | "admin-users";
 
 export function resolveAllowedView(
@@ -55,12 +57,13 @@ export function resolveAllowedView(
   }
 
   if (user.role === "IT_STAFF") {
-    // In Issue 13, Ticket Detail is Requester-only (IT Staff Ticket Detail is in Issue 15)
+    if (path.startsWith("/staff/tickets/")) return { view: "staff-ticket-detail", path };
     if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
     return { view: "staff-queue", path: "/staff/queue" };
   }
 
   if (user.role === "ADMINISTRATOR") {
+    if (path.startsWith("/staff/tickets/")) return { view: "staff-ticket-detail", path };
     if (path === "/admin/users") return { view: "admin-users", path: "/admin/users" };
     if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
     return { view: "staff-queue", path: "/staff/queue" };
@@ -87,8 +90,12 @@ export function AppContent() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => {
-    const match = window.location.pathname.match(/^\/tickets\/(\d+)$/);
-    return match ? parseInt(match[1], 10) : null;
+    const path = typeof window !== "undefined" ? window.location.pathname : "";
+    const staffMatch = path.match(/^\/staff\/tickets\/(\d+)$/);
+    if (staffMatch) return parseInt(staffMatch[1], 10);
+    const reqMatch = path.match(/^\/tickets\/(\d+)$/);
+    if (reqMatch) return parseInt(reqMatch[1], 10);
+    return null;
   });
 
   const [activeView, setActiveView] = useState<ActiveView>(() => {
@@ -157,6 +164,9 @@ export function AppContent() {
     if (resolved.view === "ticket-detail") {
       const match = resolved.path.match(/^\/tickets\/(\d+)$/);
       setSelectedTicketId(match ? parseInt(match[1], 10) : null);
+    } else if (resolved.view === "staff-ticket-detail") {
+      const match = resolved.path.match(/^\/staff\/tickets\/(\d+)$/);
+      setSelectedTicketId(match ? parseInt(match[1], 10) : null);
     } else {
       setSelectedTicketId(null);
     }
@@ -187,6 +197,9 @@ export function AppContent() {
       }
       if (resolved.view === "ticket-detail") {
         const match = resolved.path.match(/^\/tickets\/(\d+)$/);
+        setSelectedTicketId(match ? parseInt(match[1], 10) : null);
+      } else if (resolved.view === "staff-ticket-detail") {
+        const match = resolved.path.match(/^\/staff\/tickets\/(\d+)$/);
         setSelectedTicketId(match ? parseInt(match[1], 10) : null);
       } else {
         setSelectedTicketId(null);
@@ -219,10 +232,18 @@ export function AppContent() {
         setActiveView("ticket-detail");
         return;
       } else {
-        window.history.pushState({}, "", "/staff/queue");
-        setActiveView("staff-queue");
+        window.history.pushState({}, "", `/staff/tickets/${ticketId}`);
+        setSelectedTicketId(ticketId);
+        setActiveView("staff-ticket-detail");
         return;
       }
+    }
+
+    if (targetScreen === "staff-ticket-detail" && ticketId) {
+      setSelectedTicketId(ticketId);
+      window.history.pushState({}, "", `/staff/tickets/${ticketId}`);
+      setActiveView("staff-ticket-detail");
+      return;
     }
 
     let targetPath = "/my-tickets";
@@ -343,7 +364,7 @@ export function AppContent() {
           maxWidth:
             effectiveView === "staff-queue"
               ? "1600px"
-              : effectiveView === "my-tickets" || effectiveView === "ticket-detail"
+              : effectiveView === "my-tickets" || effectiveView === "ticket-detail" || effectiveView === "staff-ticket-detail"
               ? 1440
               : 800,
           margin: "0 auto",
@@ -414,7 +435,27 @@ export function AppContent() {
         {/* IT Staff Ticket Queue View (Issue 14 Destination) */}
         {effectiveView === "staff-queue" && (
           <section data-testid="staff-queue-section" className="w-full">
-            <StaffTicketQueue />
+            <StaffTicketQueue
+              onViewTicket={(ticketId) => handleNavigate("staff-ticket-detail", ticketId)}
+            />
+          </section>
+        )}
+
+        {/* IT Staff Ticket Detail View (Issue 15 Destination) */}
+        {effectiveView === "staff-ticket-detail" && user && (
+          <section data-testid="staff-ticket-detail-section" className="w-full">
+            {selectedTicketId ? (
+              <StaffTicketDetail
+                ticketId={selectedTicketId}
+                currentUser={user}
+                onNavigateBack={() => handleNavigate("staff-queue")}
+              />
+            ) : (
+              <div style={{ padding: "48px 20px", textAlign: "center", color: "#667085" }}>
+                <div className="spinner-border text-success mb-3" role="status" style={{ width: "2.5rem", height: "2.5rem" }} />
+                <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "#344054" }}>Loading staff ticket details...</div>
+              </div>
+            )}
           </section>
         )}
 

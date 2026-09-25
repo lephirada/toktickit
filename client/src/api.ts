@@ -717,3 +717,248 @@ export async function confirmProblemResolved(
 
   return body;
 }
+
+// ===========================================================================
+// Issue 15 — Staff Ticket Operations
+// ===========================================================================
+
+export interface StaffUserItem {
+  id: number;
+  fullName: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface InternalNoteItem {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  authorName: string;
+  authorRole: string;
+  content: string;
+  body?: string;
+  createdAt: string;
+}
+
+export interface TicketActivityItem {
+  id: string | number;
+  type: string;
+  action: string;
+  message: string;
+  timestamp: string;
+  actor: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface StaffTicketDetailData extends TicketItem {
+  requestedPriority?: string;
+  itPriority?: string | null;
+  ownerId?: number | null;
+  owner?: StaffUserItem | null;
+  resolutionSummary?: string | null;
+  cancellationReason?: string | null;
+  reopenReason?: string | null;
+  comments?: PublicCommentItem[];
+  activityTimeline?: TicketActivityItem[];
+}
+
+export async function fetchStaffUsers(): Promise<{ data: StaffUserItem[] }> {
+  const res = await fetch(`${API_URL}/api/staff/users`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch staff users with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function fetchStaffTicketDetail(
+  ticketId: number
+): Promise<{ data: StaffTicketDetailData }> {
+  const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch ticket detail with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function claimTicket(
+  ticketId: number
+): Promise<{ data: StaffTicketDetailData }> {
+  const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/assign`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({}),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to claim ticket with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function reassignTicket(
+  ticketId: number,
+  ownerId: number
+): Promise<{ data: StaffTicketDetailData }> {
+  const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/assign`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ownerId }),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to reassign ticket with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function updateTicketPriority(
+  ticketId: number,
+  itPriority: string
+): Promise<{ data: StaffTicketDetailData }> {
+  const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/priority`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ itPriority }),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to update priority with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export interface UpdateStatusPayload {
+  status: string;
+  resolutionSummary?: string;
+  cancellationReason?: string;
+  reopenReason?: string;
+}
+
+export async function updateTicketStatus(
+  ticketId: number,
+  payload: UpdateStatusPayload
+): Promise<{ data: StaffTicketDetailData }> {
+  const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to update status with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function fetchInternalNotes(
+  ticketId: number
+): Promise<{ data: InternalNoteItem[] }> {
+  const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/notes`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch notes with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function postInternalNote(
+  ticketId: number,
+  content: string
+): Promise<{ data: InternalNoteItem }> {
+  const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ content }),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to post note with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+

@@ -155,7 +155,19 @@ function TableSortIndicator({ active, order }: { active: boolean; order: "asc" |
   );
 }
 
-export default function StaffTicketQueue() {
+interface StaffTicketQueueProps {
+  onViewTicket?: (ticketId: number) => void;
+}
+
+export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps = {}) {
+  const handleTicketClick = (ticketId: number) => {
+    if (onViewTicket) {
+      onViewTicket(ticketId);
+    } else {
+      window.history.pushState({}, "", `/staff/tickets/${ticketId}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  };
   const [tickets, setTickets] = useState<StaffTicketItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -409,7 +421,7 @@ export default function StaffTicketQueue() {
             {/* 2. Mobile/Tablet Collapsible Filter Drawer Button (order-2, d-lg-none) */}
             <button
               type="button"
-              className={`btn btn-sm d-lg-none d-inline-flex align-items-center justify-content-center gap-1.5 order-2 zg-filter-toggle-btn ${
+              className={`btn btn-sm d-lg-none d-inline-flex align-items-center justify-content-center gap-2 order-2 zg-filter-toggle-btn ${
                 isFilterDrawerOpen ? "is-active" : ""
               } ${activeDropdownCount > 0 ? "has-filters" : ""}`}
               onClick={() => setIsFilterDrawerOpen((prev) => !prev)}
@@ -421,7 +433,7 @@ export default function StaffTicketQueue() {
               <span>Filters (4)</span>
               {activeDropdownCount > 0 && (
                 <span
-                  className="badge rounded-pill text-white ms-0.5"
+                  className="badge rounded-pill text-white ms-1"
                   style={{
                     backgroundColor: "var(--zg-primary)",
                     fontSize: "0.68rem",
@@ -766,21 +778,21 @@ export default function StaffTicketQueue() {
               <div className="table-responsive w-100" style={{ overflowX: "auto" }}>
                 <table
                   className="table table-hover align-middle mb-0 zg-table-fixed"
-                  style={{ minWidth: "1140px" }}
+                  style={{ width: "100%", minWidth: "1140px" }}
                   data-testid="staff-ticket-table"
                 >
                   <colgroup>
-                    <col style={{ width: "120px" }} />
-                    <col style={{ width: "165px" }} />
-                    <col style={{ width: "120px" }} />
-                    <col style={{ width: "95px" }} />
-                    <col style={{ width: "95px" }} />
-                    <col style={{ width: "90px" }} />
-                    <col style={{ width: "95px" }} />
-                    <col style={{ width: "110px" }} />
-                    <col style={{ width: "95px" }} />
-                    <col style={{ width: "80px" }} />
-                    <col style={{ width: "80px" }} />
+                    <col style={{ width: "9.5%", minWidth: "110px" }} />
+                    <col style={{ width: "15%", minWidth: "160px" }} />
+                    <col style={{ width: "8%", minWidth: "120px" }} />
+                    <col style={{ width: "9%", minWidth: "90px" }} />
+                    <col style={{ width: "8%", minWidth: "90px" }} />
+                    <col style={{ width: "9%", minWidth: "85px" }} />
+                    <col style={{ width: "9%", minWidth: "85px" }} />
+                    <col style={{ width: "9%", minWidth: "100px" }} />
+                    <col style={{ width: "8.5%", minWidth: "90px" }} />
+                    <col style={{ width: "7%", minWidth: "75px" }} />
+                    <col style={{ width: "8%", minWidth: "75px" }} />
                   </colgroup>
                   <thead style={{ backgroundColor: "#F9FAFB" }}>
                     <tr>
@@ -900,7 +912,12 @@ export default function StaffTicketQueue() {
                   </thead>
                   <tbody>
                     {tickets.map((t) => (
-                      <tr key={t.id} data-testid={`ticket-row-${t.id}`}>
+                      <tr
+                        key={t.id}
+                        data-testid={`ticket-row-${t.id}`}
+                        onClick={() => handleTicketClick(t.id)}
+                        style={{ cursor: "pointer" }}
+                      >
                         {/* 1. Ticket No */}
                         <td className="ps-3 pe-2 py-3 text-nowrap" data-testid="queue-ticket-no">
                           <span className="fw-bold font-monospace text-dark" style={{ fontSize: "0.78rem", letterSpacing: "-0.01em" }}>
@@ -939,7 +956,7 @@ export default function StaffTicketQueue() {
                         </td>
                         {/* 4. Category */}
                         <td className="px-2 py-3 text-center" data-testid="queue-category">
-                          <span className="badge bg-light text-dark border px-1.5 py-1 text-wrap" style={{ fontSize: "0.7rem", lineHeight: 1.25 }}>
+                          <span className="badge bg-light text-dark border px-2 py-1 text-wrap" style={{ fontSize: "0.7rem", lineHeight: 1.25 }}>
                             {t.category.name}
                           </span>
                         </td>
@@ -968,7 +985,7 @@ export default function StaffTicketQueue() {
                               {t.owner.fullName}
                             </span>
                           ) : (
-                            <span className="badge bg-light text-muted border px-1.5 py-1 text-wrap" style={{ fontSize: "0.7rem" }}>
+                            <span className="badge bg-light text-muted border px-2 py-1 text-wrap" style={{ fontSize: "0.7rem" }}>
                               Unassigned
                             </span>
                           )}
@@ -996,8 +1013,9 @@ export default function StaffTicketQueue() {
                 <div key={t.id} className="col-12">
                   <div
                     className="card border shadow-sm p-3 h-100"
-                    style={{ borderRadius: "12px", borderColor: "#EAECF0" }}
+                    style={{ borderRadius: "12px", borderColor: "#EAECF0", cursor: "pointer" }}
                     data-testid="mobile-ticket-card"
+                    onClick={() => handleTicketClick(t.id)}
                   >
                     {/* Card Header: Ticket No & Status */}
                     <div className="d-flex align-items-center justify-content-between mb-2">
@@ -1034,8 +1052,8 @@ export default function StaffTicketQueue() {
                     </div>
 
                     {/* Taxonomy */}
-                    <div className="small text-muted mb-2 d-flex flex-wrap align-items-center gap-1.5">
-                      <span className="badge bg-light text-dark border px-2 py-0.5" style={{ fontSize: "0.72rem" }}>
+                    <div className="small text-muted mb-2 d-flex flex-wrap align-items-center gap-2">
+                      <span className="badge bg-light text-dark border px-2 py-1" style={{ fontSize: "0.72rem" }}>
                         {t.category.name}
                       </span>
                       <span className="text-secondary small" style={{ fontSize: "0.75rem" }}>

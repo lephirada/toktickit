@@ -97,8 +97,8 @@ const DetailHistoryIcon = ({ size = 15, className = "" }: { size?: number; class
   </svg>
 );
 
-const DetailDocIcon = ({ size = 15, className = "" }: { size?: number; className?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+const DetailDocIcon = ({ size = 15, className = "", color = "currentColor" }: { size?: number; className?: string; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
     <polyline points="14 2 14 8 20 8" />
     <line x1="16" y1="13" x2="8" y2="13" />
@@ -563,9 +563,9 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
       )}
 
       {/* Top Action / Header Bar */}
-      <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-4">
+      <div className="d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 mb-4">
         {/* Left: Back button & Confirm Resolved if eligible */}
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center justify-content-start gap-2 flex-grow-1" style={{ flex: "1 1 0" }}>
           <button
             type="button"
             className="btn btn-outline-secondary btn-sm fw-semibold px-3 py-2 rounded-2 bg-white shadow-sm"
@@ -593,40 +593,44 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
           )}
         </div>
 
-        {/* Center: Title + Ticket No Badge */}
-        <div className="d-flex align-items-center gap-2">
-          <h1 className="h3 fw-bold text-dark mb-0" style={{ letterSpacing: "-0.01em" }}>
+        {/* Center: Title + Ticket No Badge (Placed Underneath and Centered) */}
+        <div className="d-flex flex-column align-items-center text-center px-2">
+          <h1 className="h3 fw-bold text-dark mb-1" style={{ letterSpacing: "-0.01em" }}>
             Ticket Details
           </h1>
-          <span
-            className="badge px-2 py-1 rounded-pill font-monospace"
-            style={{
-              backgroundColor: "var(--zg-pale)",
-              color: "var(--zg-primary)",
-              border: "1px solid #A6F4C5",
-              fontSize: "0.85rem",
-              fontWeight: 700,
-            }}
-            data-testid="ticket-number"
-          >
-            #{ticket.ticketNo}
-          </span>
+          <div>
+            <span
+              className="badge px-3 py-1 rounded-pill font-monospace"
+              style={{
+                backgroundColor: "var(--zg-pale)",
+                color: "var(--zg-primary)",
+                border: "1px solid #A6F4C5",
+                fontSize: "0.85rem",
+                fontWeight: 700,
+              }}
+              data-testid="ticket-number"
+            >
+              <span>#</span><span>{ticket.ticketNo}</span>
+            </span>
+          </div>
         </div>
 
         {/* Right: Created Date Card */}
-        <div
-          className="card border shadow-sm px-3 py-2 rounded-3 bg-white"
-          style={{
-            borderColor: "#EAECF0",
-            minWidth: 180,
-          }}
-        >
-          <div className="text-muted small fw-medium mb-1" style={{ fontSize: "0.75rem" }}>
-            Created Date
-          </div>
-          <div className="d-flex align-items-center gap-1 text-dark fw-semibold small" style={{ fontSize: "0.82rem" }}>
-            <DetailCalendarIcon size={14} className="text-muted flex-shrink-0" />
-            <span>{formatDateTime(ticket.createdAt)}</span>
+        <div className="d-flex align-items-center justify-content-md-end justify-content-start gap-2 flex-grow-1" style={{ flex: "1 1 0" }}>
+          <div
+            className="card border shadow-sm px-3 py-2 rounded-3 bg-white"
+            style={{
+              borderColor: "#EAECF0",
+              minWidth: 180,
+            }}
+          >
+            <div className="text-muted small fw-medium mb-1" style={{ fontSize: "0.75rem" }}>
+              Created Date
+            </div>
+            <div className="d-flex align-items-center gap-1 text-dark fw-semibold small" style={{ fontSize: "0.82rem" }}>
+              <DetailCalendarIcon size={14} className="text-muted flex-shrink-0" />
+              <span>{formatDateTime(ticket.createdAt)}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -707,19 +711,6 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
           </div>
         </div>
 
-        {/* Last Updated / Request Card */}
-        <div className="col-12 col-sm-6 col-lg-3">
-          <div className="card h-100 border shadow-sm p-3 rounded-3 bg-white" style={{ borderColor: "#EAECF0" }}>
-            <div className="d-flex align-items-center gap-1 text-muted small fw-semibold text-uppercase mb-2" style={{ fontSize: "0.75rem", letterSpacing: "0.03em" }}>
-              <DetailHistoryIcon size={15} className="text-muted flex-shrink-0" />
-              <span>Last Updated</span>
-            </div>
-            <div className="fw-bold text-dark" style={{ fontSize: "0.9rem" }}>
-              {ticket.updatedAt ? formatDateTime(ticket.updatedAt) : "—"}
-            </div>
-          </div>
-        </div>
-
         {/* IT Priority Card (if present) */}
         {ticket.itPriority && (
           <div className="col-12 col-sm-6 col-lg-3">
@@ -732,7 +723,20 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
             </div>
           </div>
         )}
+        {/* Last Updated / Request Card */}
+        <div className="col-12 col-sm-6 col-lg-3">
+          <div className="card h-100 border shadow-sm p-3 rounded-3 bg-white" style={{ borderColor: "#EAECF0" }}>
+            <div className="d-flex align-items-center gap-1 text-muted small fw-semibold text-uppercase mb-2" style={{ fontSize: "0.75rem", letterSpacing: "0.03em" }}>
+              <DetailHistoryIcon size={15} className="text-muted flex-shrink-0" />
+              <span>Last Updated</span>
+            </div>
+            <div className="fw-bold text-dark" style={{ fontSize: "0.9rem" }}>
+              {ticket.updatedAt ? formatDateTime(ticket.updatedAt) : "—"}
+            </div>
+          </div>
+        </div>
       </div>
+
 
       {/* 1. Ticket Overview Card: Summary & Description */}
       <div
@@ -744,31 +748,31 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
         }}
         data-testid="ticket-overview-card"
       >
-        <div className="card-body px-3 pt-3 pb-3 p-md-5">
+        <div className="card-body px-3 pt-3 pb-3 p-md-4">
           <div className="mb-4 pb-3 border-bottom" style={{ borderColor: "#F2F4F7" }}>
-            <div className="d-flex align-items-center gap-1 text-muted small fw-semibold text-uppercase mb-1" style={{ letterSpacing: "0.04em", fontSize: "0.75rem" }}>
-              <DetailDocIcon size={14} className="text-muted flex-shrink-0 pb-1" />
-              <span>Summary</span>
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <DetailDocIcon size={18} color="var(--zg-primary, #006B3C)" className="flex-shrink-0" />
+              <h2 className="h5 fw-bold text-dark mb-0 text-nowrap">Summary</h2>
             </div>
-            <h2 className="h4 fw-bold text-dark mb-0" data-testid="ticket-summary">
+            <div className="h4 fw-bold text-dark mb-0 ms-4" style={{ lineHeight: 1.4 }} data-testid="ticket-summary">
               {ticket.summary}
-            </h2>
+            </div>
           </div>
 
           <div>
-            <div className="d-flex align-items-center gap-1 text-muted small fw-semibold text-uppercase mb-2" style={{ letterSpacing: "0.04em", fontSize: "0.75rem" }}>
-              <DetailDocIcon size={14} className="text-muted flex-shrink-0" />
-              <span>Description</span>
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <DetailDocIcon size={18} color="var(--zg-primary, #006B3C)" className="flex-shrink-0" />
+              <h2 className="h5 fw-bold text-dark mb-0 text-nowrap">Description</h2>
             </div>
             <div
-              className="py-1 px-2 rounded-3 text-dark border"
+              className="p-2 rounded-3 text-dark border mx-4"
               style={{
                 backgroundColor: "#FAFCFB",
                 borderColor: "#EAECF0",
                 whiteSpace: "pre-wrap",
                 minHeight: 100,
                 lineHeight: 1.6,
-                fontSize: "0.925rem",
+                fontSize: "0.95rem",
               }}
               data-testid="ticket-description"
             >
@@ -842,7 +846,7 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
               )}
             </div>
 
-            <div className="card-body p-4 p-md-5">
+            <div className="card-body p-4 p-md-4">
               {uploadError && (
                 <div className="alert alert-danger small py-2 px-3 mb-3 d-flex align-items-center gap-2 rounded-2" role="alert">
                   <AlertTriangleIcon size={16} color="currentColor" />
@@ -983,7 +987,7 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
             <span>Public Discussion ({comments.length})</span>
           </h2>
         </div>
-        <div className="card-body p-4 p-md-5">
+        <div className="card-body p-4 p-md-4">
           {/* Comments list */}
           <div className="d-flex flex-column gap-3 mb-4" data-testid="public-comments-list">
             {comments.length === 0 ? (
