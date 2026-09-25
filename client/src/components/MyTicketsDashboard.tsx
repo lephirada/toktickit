@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { BoltIcon, SearchIcon, TicketIcon, AlertTriangleIcon, CheckCircleIcon } from "./icons/index.js";
+import { BoltIcon, SearchIcon, TicketIcon, AlertTriangleIcon, CheckCircleIcon, FilterIcon, ChevronDownIcon } from "./icons/index.js";
 import { useAuth } from "../context/AuthContext.js";
 import {
   fetchTickets,
@@ -139,10 +139,12 @@ export function renderStatusBadge(status: string) {
             backgroundColor: "var(--zg-status-waiting-bg)",
             color: "var(--zg-status-waiting-text)",
             border: "1px solid #FEDF89",
-            maxWidth: "100%",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            fontSize: "0.66rem",
+            whiteSpace: "normal",
+            lineHeight: 1.25,
+            fontSize: "0.65rem",
+            padding: "0.22rem 0.45rem",
+            display: "inline-block",
+            textAlign: "center",
           }}
           title="WAITING FOR REQUESTER"
         >
@@ -239,6 +241,15 @@ export default function MyTicketsDashboard({
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedPriority, setSelectedPriority] = useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState<boolean>(false);
+
+  const activeDropdownCount = useMemo(() => {
+    let count = 0;
+    if (selectedCategory !== "ALL") count++;
+    if (selectedPriority !== "ALL") count++;
+    if (selectedStatus !== "ALL") count++;
+    return count;
+  }, [selectedCategory, selectedPriority, selectedStatus]);
 
   // Sorting state
   const [sortBy, setSortBy] = useState<string>("createdAt");
@@ -512,7 +523,7 @@ export default function MyTicketsDashboard({
         {/* 2. Search & Filters Toolbar */}
         <div className="zg-filter-toolbar mb-4" data-testid="filters-toolbar">
           {/* Search Input */}
-          <div className="zg-filter-search">
+          <div className="zg-filter-search position-relative">
             <label htmlFor="ticket-search-input" className="visually-hidden">
               Search by ticket number or summary
             </label>
@@ -530,18 +541,72 @@ export default function MyTicketsDashboard({
                 data-testid="ticket-search-input"
               />
             </div>
+            {searchInput && (
+              <button
+                type="button"
+                className="btn position-absolute top-50 translate-middle-y end-0 me-2 p-0 text-muted border-0 bg-transparent"
+                style={{ fontSize: "1.1rem", lineHeight: 1 }}
+                onClick={() => {
+                  setSearchInput("");
+                  setDebouncedSearch("");
+                }}
+                aria-label="Clear search input"
+              >
+                ×
+              </button>
+            )}
           </div>
 
-          {/* Filter Dropdowns Group */}
-          <div className="zg-filter-dropdown-group">
+          {/* Mobile/Tablet Filter Drawer Trigger Button */}
+          <button
+            type="button"
+            className={`btn btn-sm d-lg-none d-inline-flex align-items-center justify-content-center gap-2 zg-filter-toggle-btn ${
+              isFilterDrawerOpen ? "is-active" : ""
+            } ${activeDropdownCount > 0 ? "has-filters" : ""}`}
+            onClick={() => setIsFilterDrawerOpen((prev) => !prev)}
+            aria-expanded={isFilterDrawerOpen}
+            aria-label="Toggle filter dropdowns"
+            data-testid="my-tickets-filter-toggle-button"
+          >
+            <FilterIcon size={14} />
+            <span>Filters (3)</span>
+            {activeDropdownCount > 0 && (
+              <span
+                className="badge rounded-pill text-white ms-1"
+                style={{
+                  backgroundColor: "var(--zg-primary)",
+                  fontSize: "0.68rem",
+                  padding: "0.15rem 0.4rem",
+                }}
+                data-testid="my-tickets-filter-active-count"
+              >
+                {activeDropdownCount}
+              </span>
+            )}
+            <ChevronDownIcon
+              size={13}
+              style={{
+                transform: isFilterDrawerOpen ? "rotate(180deg)" : "none",
+                transition: "transform 0.2s ease",
+              }}
+            />
+          </button>
+
+          {/* Filter Dropdowns Container: Inline on Desktop, Drawer Box on Mobile */}
+          <div
+            className={`zg-filter-dropdown-group zg-filter-drawer-box ${
+              isFilterDrawerOpen ? "d-flex" : "d-none d-lg-flex"
+            } flex-wrap align-items-center gap-2`}
+            data-testid="my-tickets-filter-drawer"
+          >
             {/* Category Dropdown */}
-            <div className="zg-filter-select-wrapper zg-filter-category">
+            <div className="zg-filter-select-wrapper zg-filter-drawer-item zg-filter-category">
               <label htmlFor="category-filter-select" className="visually-hidden">
                 Filter by Category
               </label>
               <select
                 id="category-filter-select"
-                className="form-select zg-filter-select"
+                className="form-select zg-filter-select w-100"
                 value={selectedCategory}
                 onChange={(e) => {
                   setSelectedCategory(e.target.value);
@@ -559,13 +624,13 @@ export default function MyTicketsDashboard({
             </div>
 
             {/* Priority Dropdown */}
-            <div className="zg-filter-select-wrapper zg-filter-priority">
+            <div className="zg-filter-select-wrapper zg-filter-drawer-item zg-filter-priority">
               <label htmlFor="priority-filter-select" className="visually-hidden">
                 Filter by Priority
               </label>
               <select
                 id="priority-filter-select"
-                className="form-select zg-filter-select"
+                className="form-select zg-filter-select w-100"
                 value={selectedPriority}
                 onChange={(e) => {
                   setSelectedPriority(e.target.value);
@@ -582,13 +647,13 @@ export default function MyTicketsDashboard({
             </div>
 
             {/* Status Dropdown */}
-            <div className="zg-filter-select-wrapper zg-filter-status">
+            <div className="zg-filter-select-wrapper zg-filter-drawer-item zg-filter-status">
               <label htmlFor="status-filter-select" className="visually-hidden">
                 Filter by Status
               </label>
               <select
                 id="status-filter-select"
-                className="form-select zg-filter-select"
+                className="form-select zg-filter-select w-100"
                 value={selectedStatus}
                 onChange={(e) => {
                   setSelectedStatus(e.target.value);
@@ -606,6 +671,20 @@ export default function MyTicketsDashboard({
                 <option value="CANCELLED">Cancelled</option>
               </select>
             </div>
+
+            {/* Clear Filters (Mobile within Drawer) */}
+            {hasActiveFilters && (
+              <div className="d-lg-none w-100 pt-2 border-top text-end">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-link text-decoration-none text-muted p-0"
+                  style={{ fontSize: "0.8rem" }}
+                  onClick={handleClearFilters}
+                >
+                  Clear all filters
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -905,7 +984,7 @@ export default function MyTicketsDashboard({
               </div>
 
               {/* Mobile Card View (< 768px) */}
-              <div className="d-block d-md-none mb-3" data-testid="tickets-mobile-list">
+              <div className="d-block d-md-none mb-4" data-testid="tickets-mobile-list">
                 <div className="d-flex flex-column gap-3">
                   {tickets.map((ticket) => (
                     <div
@@ -913,12 +992,18 @@ export default function MyTicketsDashboard({
                       className="card zg-mobile-card p-3 shadow-sm border"
                       data-testid={`ticket-card-${ticket.id}`}
                       onClick={() => handleTicketClick(ticket.id)}
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: "pointer", borderRadius: "12px", borderColor: "#EAECF0" }}
                     >
+                      {/* Card Header: Ticket No & Status Badge */}
                       <div className="d-flex align-items-center justify-content-between mb-2">
                         <button
                           type="button"
                           className="btn btn-link font-monospace fw-bold text-success p-0 text-decoration-none"
+                          style={{
+                            fontSize: "0.9rem",
+                            whiteSpace: "nowrap",
+                            letterSpacing: "-0.01em",
+                          }}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleTicketClick(ticket.id);
@@ -927,23 +1012,66 @@ export default function MyTicketsDashboard({
                         >
                           {ticket.ticketNo}
                         </button>
-                        <span className="small text-muted">{formatTicketDate(ticket.createdAt)}</span>
-                      </div>
-                      <h3 className="h6 fw-semibold mb-2 text-dark">{ticket.summary}</h3>
-                      <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
                         {renderStatusBadge(ticket.status)}
-                        {renderPriorityBadge(ticket.requestedPriority || ticket.priority)}
+                      </div>
+
+                      {/* Resolution Indicator */}
+                      {ticket.resolutionIndicated && (
+                        <div className="mb-2">
+                          <span
+                            className="badge rounded-pill d-inline-flex align-items-center gap-1"
+                            style={{
+                              backgroundColor: "var(--zg-pale)",
+                              color: "var(--zg-primary)",
+                              border: "1px solid #12B76A",
+                              fontSize: "0.65rem",
+                              padding: "0.2rem 0.45rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            <CheckCircleIcon size={9} className="text-success" />
+                            <span>Confirmed Resolved by Requester</span>
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Summary */}
+                      <h3 className="h6 fw-semibold mb-2 text-dark" style={{ fontSize: "0.925rem", lineHeight: 1.35 }}>
+                        {ticket.summary}
+                      </h3>
+
+                      {/* Taxonomy: Category & Related System */}
+                      <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
                         {ticket.category && (
-                          <span className="badge bg-light text-dark border">
+                          <span className="badge bg-light text-dark border px-2 py-1" style={{ fontSize: "0.72rem" }}>
                             {ticket.category.name}
                           </span>
                         )}
+                        {ticket.relatedSystem && (
+                          <span className="text-secondary small" style={{ fontSize: "0.75rem" }}>
+                            • System: <span className="text-dark fw-medium">{ticket.relatedSystem.name}</span>
+                          </span>
+                        )}
+                        {renderPriorityBadge(ticket.requestedPriority || ticket.priority)}
                       </div>
-                      {ticket.resolutionIndicated && (
-                        <div className="small text-success fw-medium">
-                          ✓ Confirmed Resolved by Requester
+
+                      {/* Timestamps: 2-Row Key-Value Layout */}
+                      <div className="d-flex flex-column gap-1 text-muted pt-2 border-top" style={{ fontSize: "0.75rem" }}>
+                        <div className="d-flex justify-content-between align-items-center">
+                          <span className="text-secondary" style={{ fontSize: "0.74rem" }}>Created:</span>
+                          <span className="fw-medium text-dark" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>
+                            {formatTicketDate(ticket.createdAt)}
+                          </span>
                         </div>
-                      )}
+                        {ticket.updatedAt && (
+                          <div className="d-flex justify-content-between align-items-center">
+                            <span className="text-secondary" style={{ fontSize: "0.74rem" }}>Updated:</span>
+                            <span className="fw-medium text-dark" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>
+                              {formatTicketDate(ticket.updatedAt)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -955,114 +1083,114 @@ export default function MyTicketsDashboard({
                   className="d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 pt-3 border-top"
                   data-testid="pagination-controls"
                 >
-                  {/* Counter Text */}
-                  <div className="small text-muted" data-testid="pagination-counter">
-                    Showing <span className="fw-semibold text-dark">{startItem}</span> to{" "}
-                    <span className="fw-semibold text-dark">{endItem}</span> of{" "}
-                    <span className="fw-semibold text-dark">{pagination.totalItems}</span> tickets
+                  {/* Rows per page & Counter */}
+                  <div className="d-flex flex-wrap align-items-center gap-2 small text-muted">
+                    <span className="text-nowrap mb-0">Rows per page:</span>
+                    <select
+                      id="page-size-select"
+                      className="form-select form-select-sm"
+                      style={{ width: "70px", borderRadius: "6px" }}
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(parseInt(e.target.value, 10));
+                        setPage(1);
+                      }}
+                      data-testid="page-size-select"
+                      aria-label="Items per page"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                    <span className="ms-2" data-testid="pagination-counter">
+                      Showing <span className="fw-semibold text-dark">{startItem}</span> to{" "}
+                      <span className="fw-semibold text-dark">{endItem}</span> of{" "}
+                      <span className="fw-semibold text-dark">{pagination.totalItems}</span> tickets
+                    </span>
                   </div>
 
-                  <div className="d-flex flex-column flex-sm-row align-items-center justify-content-between gap-3 pt-3 border-top w-100">
-                    {/* Page Size Selector */}
-                    <div className="d-flex align-items-center gap-1 small text-muted">
-                      <label htmlFor="page-size-select" className="text-nowrap mb-0">
-                        Per page:
-                      </label>
-                      <select
-                        id="page-size-select"
-                        className="form-select form-select-sm"
-                        style={{ width: "auto" }}
-                        value={pageSize}
-                        onChange={(e) => {
-                          setPageSize(parseInt(e.target.value, 10));
-                          setPage(1);
-                        }}
-                        data-testid="page-size-select"
-                        aria-label="Items per page"
-                      >
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={50}>50</option>
-                      </select>
-                    </div>
-
-                    {/* Navigation buttons */}
-                    <nav aria-label="Ticket Pagination">
-                      <ul className="pagination pagination-sm mb-0 gap-1 flex-nowrap">
-                        <li className={`page-item ${pagination.page <= 1 ? "disabled" : ""}`}>
-                          <button
-                            type="button"
-                            className="page-link rounded-2"
-                            style={{
-                              borderColor: "#D0D5DD",
-                              color: pagination.page <= 1 ? "#98A2B3" : "#344054",
-                              fontWeight: 500,
-                            }}
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            disabled={pagination.page <= 1}
-                            data-testid="pagination-prev-btn"
-                          >
-                            &lt; Previous
-                          </button>
-                        </li>
-
-                        {Array.from({ length: pagination.totalPages || 1 }).map((_, idx) => {
-                          const pageNum = idx + 1;
-                          const isActive = pageNum === pagination.page;
-                          return (
-                            <li
-                              key={pageNum}
-                              className={`page-item ${isActive ? "active" : ""}`}
-                            >
-                              <button
-                                type="button"
-                                className="page-link rounded-2"
-                                style={
-                                  isActive
-                                    ? {
-                                        backgroundColor: "var(--zg-primary)",
-                                        borderColor: "var(--zg-primary)",
-                                        color: "#FFFFFF",
-                                        fontWeight: 600,
-                                      }
-                                    : {
-                                        borderColor: "#D0D5DD",
-                                        color: "#344054",
-                                        fontWeight: 500,
-                                      }
-                                }
-                                onClick={() => setPage(pageNum)}
-                                data-testid={`pagination-page-${pageNum}`}
-                              >
-                                {pageNum}
-                              </button>
-                            </li>
-                          );
-                        })}
-
-                        <li
-                          className={`page-item ${
-                            pagination.page >= pagination.totalPages ? "disabled" : ""
-                          }`}
+                  {/* Navigation buttons */}
+                  <nav aria-label="Ticket Pagination">
+                    <ul className="pagination pagination-sm mb-0 gap-1 flex-nowrap align-items-center">
+                      <li className={`page-item ${pagination.page <= 1 ? "disabled" : ""}`}>
+                        <button
+                          type="button"
+                          className="page-link rounded-2 px-3"
+                          style={{
+                            borderColor: "#D0D5DD",
+                            color: pagination.page <= 1 ? "#98A2B3" : "#344054",
+                            fontWeight: 500,
+                          }}
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          disabled={pagination.page <= 1}
+                          data-testid="pagination-prev-btn"
                         >
-                          <button
-                            type="button"
-                            className="page-link rounded-2"
-                            style={{
-                              borderColor: "#D0D5DD",
-                              color: pagination.page >= pagination.totalPages ? "#98A2B3" : "#344054",
-                              fontWeight: 500,
-                            }}
-                            onClick={() => setPage((p) => p + 1)}
-                            disabled={pagination.page >= pagination.totalPages}
-                            data-testid="pagination-next-btn"
+                          &lt; Previous
+                        </button>
+                      </li>
+
+                      {/* Numbered buttons */}
+                      {Array.from({ length: pagination.totalPages || 1 }).map((_, idx) => {
+                        const pageNum = idx + 1;
+                        const isActive = pageNum === pagination.page;
+                        return (
+                          <li
+                            key={pageNum}
+                            className={`page-item d-none d-sm-inline-block ${isActive ? "active" : ""}`}
                           >
-                            Next &gt;
-                          </button>
-                        </li>
-                      </ul>
-                    </nav>
-                  </div>
+                            <button
+                              type="button"
+                              className="page-link rounded-2"
+                              style={
+                                isActive
+                                  ? {
+                                      backgroundColor: "var(--zg-primary)",
+                                      borderColor: "var(--zg-primary)",
+                                      color: "#FFFFFF",
+                                      fontWeight: 600,
+                                    }
+                                  : {
+                                      borderColor: "#D0D5DD",
+                                      color: "#344054",
+                                      fontWeight: 500,
+                                    }
+                              }
+                              onClick={() => setPage(pageNum)}
+                              data-testid={`pagination-page-${pageNum}`}
+                            >
+                              {pageNum}
+                            </button>
+                          </li>
+                        );
+                      })}
+
+                      {/* Mobile compact page indicator */}
+                      <li className="page-item d-sm-none px-2 small fw-semibold text-dark">
+                        Page {pagination.page} of {Math.max(1, pagination.totalPages)}
+                      </li>
+
+                      <li
+                        className={`page-item ${
+                          pagination.page >= pagination.totalPages ? "disabled" : ""
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          className="page-link rounded-2 px-3"
+                          style={{
+                            borderColor: "#D0D5DD",
+                            color: pagination.page >= pagination.totalPages ? "#98A2B3" : "#344054",
+                            fontWeight: 500,
+                          }}
+                          onClick={() => setPage((p) => p + 1)}
+                          disabled={pagination.page >= pagination.totalPages}
+                          data-testid="pagination-next-btn"
+                        >
+                          Next &gt;
+                        </button>
+                      </li>
+                    </ul>
+                  </nav>
                 </div>
               )}
             </>

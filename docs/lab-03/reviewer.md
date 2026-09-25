@@ -14,7 +14,7 @@
 | `[PR #34]`              | `feature/12-authentication-authorization` | `[Request Changes -> Approved]` |
 | `[PR #35]`              | `feature/13-client-auth-shell`            | `[Approved]`                    |
 | `[PR #36]`              | `feature/14-staff-queue`                  | `[Approved]`                    |
-| `[PR #... Placeholder]` | `feature/15-staff-ticket-operations`      | `[Pending]`                     |
+| `[PR #37]`              | `feature/15-staff-ticket-operations`      | `[Request Changes -> Approved]` |
 | `[PR #... Placeholder]` | `feature/16-user-management`              | `[Pending]`                     |
 | `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Pending]`                     |
 
@@ -132,10 +132,35 @@
 - **Branch:** `feature/15-staff-ticket-operations`
 - **Reviewer comment I received:**
 
-  > `[Placeholder: Partner review comments for Issue 15 PR]`
+  > Reviewed PR #37 against the Issue 15 Acceptance Criteria. Most requirements are implemented and CI passes successfully, including the staff detail API/UI, assignment, priority, state machine, internal notes, attachments, atomic activity logging, tests, and screenshots.
+
+  > However, AC-15-08 is not fully enforced:
+
+  > POST /api/tickets/:id/comments still allows Public Comments on tickets in CLOSED state.
+
+  > AC-15-08 states that closed tickets cannot be modified unless explicitly reopened.
+
+  > The current tests cover closed-ticket assignment, priority, status, notes, and attachments, but do not cover closed-ticket public comments.
+  > Please block public comment creation on CLOSED tickets (and add a regression test) before approval.
+
+  > CI is currently passing, but this acceptance-criteria gap remains.
 
 - **How I responded:**
-  > `[Placeholder: Author response to partner feedback]`
+
+  > Thank you for catching this! I have addressed the issue by blocking public comment creation on both CLOSED and CANCELLED tickets (422 Unprocessable Entity), with double-check guards inside the database transaction. Added regression tests covering rejection on closed/cancelled tickets in server/tests/lab-03/comments-notes.api.test.ts. All 220 server tests and 104 client tests are now passing. Ready for your re-review!
+
+- **Reviewer comment I received:**
+
+  > Re-reviewed PR #37 against the Issue 15 Acceptance Criteria.
+
+  > The previous AC-15-08 gap has been fixed: public comments are now blocked on CLOSED and CANCELLED tickets, with regression tests and transaction-level guards added.
+
+  > CI also passes successfully with no remaining blocking issues.
+
+  > Approve.
+
+- **How I responded:**
+  > Thank you for the review and approval Ka. I have updated docs/lab-03. You can merge this PR into lab3-staging now.
 
 ---
 

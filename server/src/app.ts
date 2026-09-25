@@ -28,6 +28,7 @@ import {
   UPLOAD_DIR,
 } from "./middleware/upload.js";
 import { createErrorEnvelope, FieldError } from "./utils/errors.js";
+import { validateStatusTransition } from "./utils/ticketStateMachine.js";
 
 export const app = express();
 
@@ -693,6 +694,869 @@ app.get(
       res
         .status(500)
         .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to fetch staff tickets."));
+    }
+  }
+);
+
+// ===========================================================================
+// Issue 15 — Staff Ticket Operations Endpoints
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Section 7 — Active Staff & Administrator Users for Owner Assignment
+// GET /api/staff/users
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/staff/users",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+      const staffUsers = await getPrisma().user.findMany({
+        where: {
+          isActive: true,
+          role: { in: ["IT_STAFF", "ADMINISTRATOR"] },
+        },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+        },
+        orderBy: { fullName: "asc" },
+      });
+      res.status(200).json({ data: staffUsers });
+    } catch {
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to fetch staff users."));
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Section 10 — Staff Ticket Detail Query
+// GET /api/staff/tickets/:id
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/staff/tickets/:id",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+        include: {
+          category: { select: { id: true, name: true } },
+          relatedSystem: { select: { id: true, name: true } },
+          requester: {
+            select: { id: true, fullName: true, email: true, department: true },
+          },
+          owner: {
+            select: { id: true, fullName: true, email: true, role: true },
+          },
+          attachments: {
+            orderBy: { id: "asc" },
+            select: {
+              id: true,
+              originalName: true,
+              storageKey: true,
+              mimeType: true,
+              sizeBytes: true,
+              isSoftDeleted: true,
+              deletedAt: true,
+              deletedBy: true,
+              deletionReason: true,
+              createdAt: true,
+            },
+          },
+          activities: { orderBy: { createdAt: "asc" } },
+          comments: {
+            where: { isInternal: false },
+            orderBy: { createdAt: "asc" },
+            include: {
+              author: { select: { id: true, fullName: true, role: true } },
+            },
+          },
+        },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const timeline = (ticket.activities || []).map((act) => ({
+        id: `activity_${act.id}`,
+        type: act.type,
+        action: act.action,
+        message: act.message,
+        timestamp: act.createdAt,
+        actor: act.actorName,
+        metadata: (act.metadata as Record<string, unknown>) || undefined,
+      }));
+
+      const formattedAttachments = ticket.attachments.map((att) => ({
+        id: att.id,
+        originalName: att.originalName,
+        mimeType: att.mimeType,
+        sizeBytes: att.sizeBytes,
+        status: att.isSoftDeleted ? "REMOVED" : "ACTIVE",
+        isSoftDeleted: att.isSoftDeleted,
+        deletedAt: att.deletedAt,
+        deletedBy: att.deletedBy,
+        deletionReason: att.deletionReason,
+        createdAt: att.createdAt,
+      }));
+
+      const formattedComments = (ticket.comments || []).map((c) => ({
+        id: c.id,
+        ticketId: c.ticketId,
+        authorId: c.authorId,
+        authorName: c.author.fullName,
+        authorRole: c.author.role,
+        content: c.body,
+        body: c.body,
+        createdAt: c.createdAt,
+      }));
+
+      res.status(200).json({
+        data: {
+          id: ticket.id,
+          ticketNo: ticket.ticketNo,
+          summary: ticket.summary,
+          description: ticket.description,
+          priority: ticket.requestedPriority,
+          requestedPriority: ticket.requestedPriority,
+          itPriority: ticket.itPriority,
+          status: ticket.status,
+          resolutionIndicated: ticket.resolutionIndicated,
+          resolutionSummary: ticket.resolutionSummary,
+          cancellationReason: ticket.cancellationReason,
+          reopenReason: ticket.reopenReason,
+          requesterId: ticket.requesterId,
+          requester: ticket.requester,
+          ownerId: ticket.ownerId,
+          owner: ticket.owner,
+          category: ticket.category,
+          relatedSystem: ticket.relatedSystem,
+          attachments: formattedAttachments,
+          comments: formattedComments,
+          activityTimeline: timeline,
+          createdAt: ticket.createdAt,
+          updatedAt: ticket.updatedAt,
+        },
+      });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to fetch staff ticket details."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Section 6 — Claim or Reassign Ticket (Concurrency-Safe)
+// PATCH /api/staff/tickets/:id/assign
+// ---------------------------------------------------------------------------
+app.patch(
+  "/api/staff/tickets/:id/assign",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+        include: { owner: true },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      if (ticket.status === "CLOSED") {
+        res
+          .status(422)
+          .json(createErrorEnvelope("TICKET_CLOSED", "Cannot reassign a closed ticket."));
+        return;
+      }
+      if (ticket.status === "CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope("TICKET_CANCELLED", "Cannot reassign a cancelled ticket.")
+          );
+        return;
+      }
+
+      const isClaim = req.body?.ownerId === undefined || req.body?.ownerId === null;
+      const targetOwnerId = isClaim
+        ? req.user!.id
+        : parseInt(String(req.body.ownerId), 10);
+
+      if (isNaN(targetOwnerId) || targetOwnerId <= 0) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Target owner ID must be a positive integer."
+            )
+          );
+        return;
+      }
+
+      const targetUser = await getPrisma().user.findUnique({
+        where: { id: targetOwnerId },
+      });
+
+      if (!targetUser) {
+        res
+          .status(404)
+          .json(createErrorEnvelope("USER_NOT_FOUND", "Target user does not exist."));
+        return;
+      }
+
+      if (!targetUser.isActive) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "INACTIVE_OWNER",
+              "Cannot assign ticket to an inactive user."
+            )
+          );
+        return;
+      }
+
+      if (targetUser.role !== "IT_STAFF" && targetUser.role !== "ADMINISTRATOR") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "INVALID_OWNER_ROLE",
+              "Ticket owner must have role IT_STAFF or ADMINISTRATOR."
+            )
+          );
+        return;
+      }
+
+      // Claim rules & Concurrency guard: If caller is attempting self-claim on an already assigned ticket
+      if (isClaim && ticket.ownerId !== null) {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "TICKET_ALREADY_CLAIMED",
+              "Ticket has already been claimed or assigned to another staff member."
+            )
+          );
+        return;
+      }
+
+      // Concurrency guard for explicit reassignment: verify expected owner if provided
+      const expectedOwnerId =
+        req.body?.expectedOwnerId !== undefined
+          ? req.body.expectedOwnerId === null
+            ? null
+            : parseInt(String(req.body.expectedOwnerId), 10)
+          : ticket.ownerId;
+
+      if (
+        req.body?.expectedOwnerId !== undefined &&
+        req.body.expectedOwnerId !== ticket.ownerId
+      ) {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "TICKET_MODIFIED_CONCURRENTLY",
+              "Ticket assignment has been modified concurrently by another user."
+            )
+          );
+        return;
+      }
+
+      // Atomic update + activity in same transaction
+      const result = await getPrisma().$transaction(async (tx) => {
+        if (isClaim) {
+          // Conditional update to guard against concurrent claim races
+          const updateResult = await tx.ticket.updateMany({
+            where: {
+              id: ticket.id,
+              ownerId: null,
+              status: { notIn: ["CLOSED", "CANCELLED"] },
+            },
+            data: {
+              ownerId: targetOwnerId,
+              status: ticket.status === "NEW" ? "OPEN" : ticket.status,
+            },
+          });
+
+          if (updateResult.count === 0) {
+            throw new Error("RACE_LOST");
+          }
+        } else {
+          // Explicit reassignment: atomic conditional update ensuring ticket is not locked or closed
+          // and guarding against concurrent stale reassignments
+          const updateResult = await tx.ticket.updateMany({
+            where: {
+              id: ticket.id,
+              ownerId: expectedOwnerId,
+              status: { notIn: ["CLOSED", "CANCELLED"] },
+            },
+            data: {
+              ownerId: targetOwnerId,
+              status: ticket.status === "NEW" ? "OPEN" : ticket.status,
+            },
+          });
+
+          if (updateResult.count === 0) {
+            const currentCheck = await tx.ticket.findUnique({
+              where: { id: ticket.id },
+              select: { status: true, ownerId: true },
+            });
+            if (currentCheck?.status === "CLOSED" || currentCheck?.status === "CANCELLED") {
+              throw new Error("TICKET_LOCKED");
+            }
+            throw new Error("REASSIGN_RACE_LOST");
+          }
+        }
+
+        const activityType =
+          isClaim && ticket.status === "NEW"
+            ? "TICKET_CLAIMED"
+            : ticket.ownerId === null
+            ? "TICKET_ASSIGNED"
+            : "ASSIGNMENT_CHANGED";
+        const activityAction =
+          isClaim && ticket.status === "NEW" ? "Ticket claimed" : "Owner reassigned";
+        const activityMessage =
+          isClaim && ticket.status === "NEW"
+            ? `Ticket claimed by ${req.user!.fullName}.`
+            : `Ticket reassigned to ${targetUser.fullName} by ${req.user!.fullName}.`;
+
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: ticket.id,
+            type: activityType,
+            action: activityAction,
+            message: activityMessage,
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
+            metadata: {
+              previousOwnerId: ticket.ownerId,
+              newOwnerId: targetOwnerId,
+              newOwnerName: targetUser.fullName,
+              isClaim,
+            },
+          },
+        });
+
+        return tx.ticket.findUniqueOrThrow({
+          where: { id: ticket.id },
+          include: {
+            owner: { select: { id: true, fullName: true, email: true, role: true } },
+          },
+        });
+      });
+
+      res.status(200).json({ data: result });
+    } catch (error: any) {
+      if (error?.message === "RACE_LOST") {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "TICKET_ALREADY_CLAIMED",
+              "Ticket has already been claimed or assigned to another staff member."
+            )
+          );
+        return;
+      }
+      if (error?.message === "REASSIGN_RACE_LOST") {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "TICKET_MODIFIED_CONCURRENTLY",
+              "Ticket assignment has been modified concurrently by another user."
+            )
+          );
+        return;
+      }
+      if (error?.message === "TICKET_LOCKED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope("TICKET_LOCKED", "Cannot reassign a closed or cancelled ticket.")
+          );
+        return;
+      }
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to assign ticket."));
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Section 10 — Update IT Priority
+// PATCH /api/staff/tickets/:id/priority
+// ---------------------------------------------------------------------------
+app.patch(
+  "/api/staff/tickets/:id/priority",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      if (ticket.status === "CLOSED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CLOSED",
+              "Cannot update priority of a closed ticket."
+            )
+          );
+        return;
+      }
+      if (ticket.status === "CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CANCELLED",
+              "Cannot update priority of a cancelled ticket."
+            )
+          );
+        return;
+      }
+
+      const { itPriority } = req.body || {};
+      const validPriorities: Priority[] = [
+        "P0_URGENT",
+        "P1_HIGH",
+        "P2_MEDIUM",
+        "P3_LOW",
+      ];
+      if (!itPriority || !validPriorities.includes(itPriority)) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "itPriority must be one of: P0_URGENT, P1_HIGH, P2_MEDIUM, P3_LOW."
+            )
+          );
+        return;
+      }
+
+      const result = await getPrisma().$transaction(async (tx) => {
+        const updated = await tx.ticket.update({
+          where: { id: ticket.id },
+          data: { itPriority },
+        });
+
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: ticket.id,
+            type: "PRIORITY_CHANGED",
+            action: "IT Priority updated",
+            message: `IT Priority changed to ${itPriority} by ${req.user!.fullName}.`,
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
+            metadata: {
+              previousPriority: ticket.itPriority,
+              newPriority: itPriority,
+            },
+          },
+        });
+
+        return updated;
+      });
+
+      res.status(200).json({ data: result });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to update IT priority.")
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Section 4 — Transition Ticket Status
+// PATCH /api/staff/tickets/:id/status
+// ---------------------------------------------------------------------------
+app.patch(
+  "/api/staff/tickets/:id/status",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const requestedStatus = req.body?.status as TicketStatus;
+      if (!requestedStatus) {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "Status is required."));
+        return;
+      }
+
+      // State machine validation
+      const validation = validateStatusTransition(
+        ticket.status,
+        requestedStatus,
+        ticket.ownerId,
+        req.body
+      );
+
+      if (!validation.isValid) {
+        res.status(validation.statusCode).json(validation.errorEnvelope);
+        return;
+      }
+
+      const cleaned = validation.cleanedPayload;
+
+      const result = await getPrisma().$transaction(async (tx) => {
+        const updateData: Prisma.TicketUpdateInput = {
+          status: cleaned.status,
+        };
+
+        if (cleaned.status === "RESOLVED") {
+          updateData.resolutionSummary = cleaned.resolutionSummary;
+        } else if (cleaned.status === "CANCELLED") {
+          updateData.cancellationReason = cleaned.cancellationReason;
+        } else if (cleaned.status === "REOPENED") {
+          updateData.reopenReason = cleaned.reopenReason;
+        }
+
+        const updated = await tx.ticket.update({
+          where: { id: ticket.id },
+          data: updateData,
+        });
+
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: ticket.id,
+            type: "STATUS_CHANGED",
+            action: "Status updated",
+            message: `Status changed from ${ticket.status} to ${cleaned.status} by ${req.user!.fullName}.`,
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
+            metadata: {
+              fromStatus: ticket.status,
+              toStatus: cleaned.status,
+              resolutionSummary: cleaned.resolutionSummary || null,
+              cancellationReason: cleaned.cancellationReason || null,
+              reopenReason: cleaned.reopenReason || null,
+            },
+          },
+        });
+
+        return updated;
+      });
+
+      res.status(200).json({ data: result });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to update ticket status.")
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Section 9 — Internal Notes Endpoints
+// GET /api/staff/tickets/:id/notes
+// POST /api/staff/tickets/:id/notes
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/staff/tickets/:id/notes",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const notes = await getPrisma().comment.findMany({
+        where: { ticketId, isInternal: true },
+        orderBy: { createdAt: "asc" },
+        include: {
+          author: { select: { id: true, fullName: true, role: true } },
+        },
+      });
+
+      const formatted = notes.map((n) => ({
+        id: n.id,
+        ticketId: n.ticketId,
+        authorId: n.authorId,
+        authorName: n.author.fullName,
+        authorRole: n.author.role,
+        content: n.body,
+        body: n.body,
+        createdAt: n.createdAt,
+      }));
+
+      res.status(200).json({ data: formatted });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to fetch internal notes.")
+        );
+    }
+  }
+);
+
+app.post(
+  "/api/staff/tickets/:id/notes",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      if (ticket.status === "CLOSED") {
+        res
+          .status(422)
+          .json(createErrorEnvelope("TICKET_CLOSED", "Cannot add notes to a closed ticket."));
+        return;
+      }
+      if (ticket.status === "CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CANCELLED",
+              "Cannot add notes to a cancelled ticket."
+            )
+          );
+        return;
+      }
+
+      const rawContent = req.body?.content ?? req.body?.body;
+      if (
+        typeof rawContent !== "string" ||
+        rawContent.trim().length < 1 ||
+        rawContent.trim().length > 2000
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Internal note content must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      const noteContent = rawContent.trim();
+      const author = req.user!;
+
+      const note = await getPrisma().$transaction(async (tx) => {
+        const createdNote = await tx.comment.create({
+          data: {
+            ticketId: ticket.id,
+            authorId: author.id,
+            body: noteContent,
+            isInternal: true,
+          },
+          include: {
+            author: { select: { id: true, fullName: true, role: true } },
+          },
+        });
+
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: ticket.id,
+            type: "INTERNAL_NOTE_ADDED",
+            action: "Internal note added",
+            message: `Internal note added by ${author.fullName}.`,
+            actorId: author.id,
+            actorName: author.fullName,
+          },
+        });
+
+        return createdNote;
+      });
+
+      res.status(201).json({
+        data: {
+          id: note.id,
+          ticketId: note.ticketId,
+          authorId: note.authorId,
+          authorName: note.author.fullName,
+          authorRole: note.author.role,
+          content: note.body,
+          body: note.body,
+          createdAt: note.createdAt,
+        },
+      });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to post internal note.")
+        );
     }
   }
 );
@@ -1722,6 +2586,31 @@ app.post(
         return;
       }
 
+      // AC-15-08 / AC-15-09: Closed tickets cannot be modified unless explicitly reopened
+      if (ticket.status === "CLOSED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CLOSED",
+              "Cannot add comments to a closed ticket."
+            )
+          );
+        return;
+      }
+
+      if (ticket.status === "CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CANCELLED",
+              "Cannot add comments to a cancelled ticket."
+            )
+          );
+        return;
+      }
+
       const rawContent = req.body?.content ?? req.body?.body;
       if (
         typeof rawContent !== "string" ||
@@ -1748,7 +2637,17 @@ app.post(
         ticket.status === "WAITING_FOR_REQUESTER" && ticket.requesterId === author.id;
 
       const result = await getPrisma().$transaction(async (tx) => {
-        if (shouldTransition) {
+        // Guard against concurrent status transition to closed/cancelled
+        const currentTicket = await tx.ticket.findUnique({
+          where: { id: ticket.id },
+          select: { status: true },
+        });
+
+        if (currentTicket?.status === "CLOSED" || currentTicket?.status === "CANCELLED") {
+          throw new Error(`TICKET_${currentTicket.status}`);
+        }
+
+        if (shouldTransition && currentTicket?.status === "WAITING_FOR_REQUESTER") {
           await tx.ticket.update({
             where: { id: ticket.id },
             data: { status: "IN_PROGRESS" },
@@ -1811,7 +2710,29 @@ app.post(
           createdAt: result.createdAt,
         },
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.message === "TICKET_CLOSED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CLOSED",
+              "Cannot add comments to a closed ticket."
+            )
+          );
+        return;
+      }
+      if (error?.message === "TICKET_CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CANCELLED",
+              "Cannot add comments to a cancelled ticket."
+            )
+          );
+        return;
+      }
       res
         .status(500)
         .json(
@@ -1874,8 +2795,31 @@ app.post(
         return;
       }
 
+      if (ticket.status === "CLOSED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CLOSED",
+              "Cannot add attachments to a closed ticket."
+            )
+          );
+        return;
+      }
+      if (ticket.status === "CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CANCELLED",
+              "Cannot add attachments to a cancelled ticket."
+            )
+          );
+        return;
+      }
+
       // Check ownership (AC-12-12 anti-leakage: 404 for non-owning requester)
-      if (req.user!.role === "REQUESTER" && ticket.requesterId !== requesterId) {
+      if (req.user!.role === "REQUESTER" && ticket.requesterId !== req.user!.id) {
         res
           .status(404)
           .json(
@@ -1920,48 +2864,62 @@ app.post(
       const mimeType =
         file.mimetype === "image/jpg" ? "image/jpeg" : file.mimetype;
 
-      const attachment = await getPrisma().$transaction(async (tx) => {
-        const createdAtt = await tx.attachment.create({
-          data: {
-            originalName: file.originalname,
-            storageKey,
-            mimeType,
-            sizeBytes: file.size,
-            uploadedById: requesterId,
-            ticketId: ticket.id,
-            isSoftDeleted: false,
-          },
-          select: {
-            id: true,
-            originalName: true,
-            mimeType: true,
-            sizeBytes: true,
-            ticketId: true,
-            isSoftDeleted: true,
-            createdAt: true,
-          },
-        });
-
-        // Append audit timeline entry inside the same transaction
-        await auditService.appendTicketAuditLog(
-          ticket.id,
-          {
-            type: "ATTACHMENT_ADDED",
-            action: "Attachment uploaded",
-            message: `Attachment ${file.originalname} added by requester.`,
-            timestamp: new Date(),
-            actorId: requesterId,
-            actorName: ticket.requester.fullName,
-            metadata: {
-              attachmentId: createdAtt.id,
+      let attachment;
+      try {
+        attachment = await getPrisma().$transaction(async (tx) => {
+          const createdAtt = await tx.attachment.create({
+            data: {
               originalName: file.originalname,
+              storageKey,
+              mimeType,
+              sizeBytes: file.size,
+              uploadedById: req.user!.id,
+              ticketId: ticket.id,
+              isSoftDeleted: false,
             },
-          },
-          tx
-        );
+            select: {
+              id: true,
+              originalName: true,
+              mimeType: true,
+              sizeBytes: true,
+              ticketId: true,
+              isSoftDeleted: true,
+              createdAt: true,
+            },
+          });
 
-        return createdAtt;
-      });
+          // Append audit timeline entry inside the same transaction
+          await auditService.appendTicketAuditLog(
+            ticket.id,
+            {
+              type: "ATTACHMENT_ADDED",
+              action: "Attachment uploaded",
+              message:
+                req.user!.role === "REQUESTER"
+                  ? `Attachment ${file.originalname} added by requester.`
+                  : `Attachment ${file.originalname} attached to ticket.`,
+              timestamp: new Date(),
+              actorId: req.user!.id,
+              actorName: req.user!.fullName,
+              metadata: {
+                attachmentId: createdAtt.id,
+                originalName: file.originalname,
+              },
+            },
+            tx
+          );
+
+          return createdAtt;
+        });
+      } catch (txError) {
+        // Clean up orphan file from filesystem if database transaction fails
+        try {
+          await fs.promises.unlink(filePath);
+        } catch {
+          // ignore unlink error
+        }
+        throw txError;
+      }
 
       res.status(201).json({
         data: {
@@ -2161,6 +3119,7 @@ async function handleAttachmentRemoval(
             id: true,
             ticketNo: true,
             requesterId: true,
+            status: true,
           },
         },
       },
@@ -2178,21 +3137,53 @@ async function handleAttachmentRemoval(
       return;
     }
 
-    // Ownership check (AC-12-12 anti-leakage: 404 for unauthorized requester)
-    const ownerId = attachment.ticket
-      ? attachment.ticket.requesterId
-      : attachment.uploadedById;
-
-    if (req.user!.role === "REQUESTER" && ownerId !== requesterId) {
+    if (attachment.ticket?.status === "CLOSED") {
       res
-        .status(404)
+        .status(422)
         .json(
           createErrorEnvelope(
-            "ATTACHMENT_NOT_FOUND",
-            "The requested attachment does not exist."
+            "TICKET_CLOSED",
+            "Cannot remove attachments from a closed ticket."
           )
         );
       return;
+    }
+    if (attachment.ticket?.status === "CANCELLED") {
+      res
+        .status(422)
+        .json(
+          createErrorEnvelope(
+            "TICKET_CANCELLED",
+            "Cannot remove attachments from a cancelled ticket."
+          )
+        );
+      return;
+    }
+
+    // Ownership check (AC-12-12 anti-leakage: 404 for unauthorized requester)
+    if (req.user!.role === "REQUESTER") {
+      if (attachment.ticket && attachment.ticket.requesterId !== req.user!.id) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "ATTACHMENT_NOT_FOUND",
+              "The requested attachment does not exist."
+            )
+          );
+        return;
+      }
+      if (attachment.uploadedById !== req.user!.id) {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN",
+              "Requesters can only remove attachments they personally uploaded."
+            )
+          );
+        return;
+      }
     }
 
     if (attachment.isSoftDeleted) {
@@ -2267,7 +3258,7 @@ async function handleAttachmentRemoval(
         data: {
           isSoftDeleted: true,
           deletedAt: now,
-          deletedBy: requesterId,
+          deletedBy: req.user!.id,
           deletionReason: resolvedReason,
         },
       });
@@ -2279,10 +3270,13 @@ async function handleAttachmentRemoval(
           {
             type: "ATTACHMENT_REMOVED",
             action: "Attachment removed",
-            message: `Attachment ${attachment.originalName} removed by requester. Reason: ${resolvedReason}`,
+            message:
+              req.user!.role === "REQUESTER"
+                ? `Attachment ${attachment.originalName} removed by requester. Reason: ${resolvedReason}`
+                : `Attachment ${attachment.originalName} removed. Reason: ${resolvedReason}`,
             timestamp: now,
-            actorId: requesterId,
-            actorName: req.requester?.fullName || "Requester",
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
             metadata: {
               attachmentId: attachment.id,
               originalName: attachment.originalName,

@@ -176,5 +176,25 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
         });
       }
     });
+
+    test(`captures Staff Ticket Detail screen (${vp.name})`, async ({ page }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.goto("http://localhost:5173/login");
+      await page.waitForSelector('[data-testid="login-screen"]');
+
+      // Login with David Lee (active IT Staff, mustChangePassword: false)
+      await page.fill('[data-testid="login-email-input"]', "david.lee@toktickit.com");
+      await page.fill('[data-testid="login-password-input"]', "Password123!");
+      await page.click('[data-testid="login-submit-btn"]');
+
+      await page.waitForSelector('[data-testid="staff-ticket-queue-view"]');
+      await page.goto(`http://localhost:5173/staff/tickets/${ticketId}`);
+      await page.waitForSelector('[data-testid="staff-ticket-detail-section"]');
+
+      await page.screenshot({
+        path: path.join(SCREENSHOT_DIR, `07-staff-ticket-detail-${vp.name}.png`),
+        fullPage: true,
+      });
+    });
   }
 });

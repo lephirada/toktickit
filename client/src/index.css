@@ -331,6 +331,24 @@ body {
   }
 }
 
+@media (max-width: 991px) {
+  .zg-filter-drawer-box .zg-filter-drawer-item {
+    flex: 1 1 calc(50% - 6px) !important;
+    min-width: 130px !important;
+    width: auto !important;
+    height: 38px !important;
+  }
+  .zg-filter-drawer-box .zg-filter-select-wrapper {
+    height: 38px !important;
+  }
+  .zg-filter-drawer-box .zg-filter-select {
+    height: 38px !important;
+    font-size: 0.85rem !important;
+    border-radius: 8px !important;
+    padding: 0.35rem 1.8rem 0.35rem 0.75rem !important;
+  }
+}
+
 .zg-assignment-capsule {
   background-color: #F2F4F7;
   gap: 3px;
@@ -861,6 +879,12 @@ textarea:focus-visible {
 .zg-table-fixed [data-testid="queue-status"] .zg-status-badge {
   font-size: 0.65rem !important;
   padding: 0.22rem 0.42rem !important;
+}
+
+.zg-table-fixed [data-testid="queue-req-priority"] .badge,
+.zg-table-fixed [data-testid="queue-it-priority"] .badge {
+  font-size: 0.65rem !important;
+  padding: 0.2rem 0.4rem !important;
 }
 
 .zg-mobile-card {
