@@ -2586,6 +2586,31 @@ app.post(
         return;
       }
 
+      // AC-15-08 / AC-15-09: Closed tickets cannot be modified unless explicitly reopened
+      if (ticket.status === "CLOSED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CLOSED",
+              "Cannot add comments to a closed ticket."
+            )
+          );
+        return;
+      }
+
+      if (ticket.status === "CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CANCELLED",
+              "Cannot add comments to a cancelled ticket."
+            )
+          );
+        return;
+      }
+
       const rawContent = req.body?.content ?? req.body?.body;
       if (
         typeof rawContent !== "string" ||
@@ -2612,7 +2637,17 @@ app.post(
         ticket.status === "WAITING_FOR_REQUESTER" && ticket.requesterId === author.id;
 
       const result = await getPrisma().$transaction(async (tx) => {
-        if (shouldTransition) {
+        // Guard against concurrent status transition to closed/cancelled
+        const currentTicket = await tx.ticket.findUnique({
+          where: { id: ticket.id },
+          select: { status: true },
+        });
+
+        if (currentTicket?.status === "CLOSED" || currentTicket?.status === "CANCELLED") {
+          throw new Error(`TICKET_${currentTicket.status}`);
+        }
+
+        if (shouldTransition && currentTicket?.status === "WAITING_FOR_REQUESTER") {
           await tx.ticket.update({
             where: { id: ticket.id },
             data: { status: "IN_PROGRESS" },
@@ -2675,7 +2710,29 @@ app.post(
           createdAt: result.createdAt,
         },
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.message === "TICKET_CLOSED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CLOSED",
+              "Cannot add comments to a closed ticket."
+            )
+          );
+        return;
+      }
+      if (error?.message === "TICKET_CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_CANCELLED",
+              "Cannot add comments to a cancelled ticket."
+            )
+          );
+        return;
+      }
       res
         .status(500)
         .json(

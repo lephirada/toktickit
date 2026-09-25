@@ -206,6 +206,48 @@ describe("Issue 15 — Public Comments & Internal Notes Suite (comments-notes.ap
       expect(res2001.status).toBe(422);
       expect(res2001.body.error.code).toBe("VALIDATION_ERROR");
     });
+
+    it("rejects public comment on CLOSED ticket with 422 TICKET_CLOSED (AC-15-08)", async () => {
+      const ticket = await createTestTicket(TicketStatus.CLOSED);
+
+      const res = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Cookie", cookieStaff)
+        .send({ content: "Attempting to comment on closed ticket." });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe("TICKET_CLOSED");
+      expect(res.body.error.message).toContain("closed");
+
+      // Verify no comment created in database
+      const dbComments = await prisma.comment.findMany({ where: { ticketId: ticket.id } });
+      expect(dbComments.length).toBe(0);
+
+      // Verify ticket status remains unchanged
+      const dbTicket = await prisma.ticket.findUnique({ where: { id: ticket.id } });
+      expect(dbTicket?.status).toBe("CLOSED");
+    });
+
+    it("rejects public comment on CANCELLED ticket with 422 TICKET_CANCELLED (AC-15-08)", async () => {
+      const ticket = await createTestTicket(TicketStatus.CANCELLED);
+
+      const res = await request(app)
+        .post(`/api/tickets/${ticket.id}/comments`)
+        .set("Cookie", cookieRequester)
+        .send({ content: "Attempting to comment on cancelled ticket." });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe("TICKET_CANCELLED");
+      expect(res.body.error.message).toContain("cancelled");
+
+      // Verify no comment created in database
+      const dbComments = await prisma.comment.findMany({ where: { ticketId: ticket.id } });
+      expect(dbComments.length).toBe(0);
+
+      // Verify ticket status remains unchanged
+      const dbTicket = await prisma.ticket.findUnique({ where: { id: ticket.id } });
+      expect(dbTicket?.status).toBe("CANCELLED");
+    });
   });
 
   // =========================================================================
