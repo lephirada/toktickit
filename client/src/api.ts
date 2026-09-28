@@ -967,3 +967,138 @@ export async function postInternalNote(
   return body;
 }
 
+export interface AdminUserItem {
+  id: number;
+  fullName: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAdminUserDTO {
+  fullName: string;
+  email: string;
+  role: UserRole;
+  initialPassword: string;
+}
+
+export interface UpdateAdminUserDTO {
+  fullName?: string;
+  role?: UserRole;
+  isActive?: boolean;
+}
+
+export async function fetchAdminUsers(params?: {
+  search?: string;
+  role?: string;
+}): Promise<{ data: AdminUserItem[] }> {
+  const query = new URLSearchParams();
+  if (params?.search && params.search.trim()) {
+    query.set("search", params.search.trim());
+  }
+  if (params?.role && params.role.trim() && params.role !== "ALL") {
+    query.set("role", params.role.trim());
+  }
+
+  const queryString = query.toString();
+  const url = `${API_URL}/api/admin/users${queryString ? `?${queryString}` : ""}`;
+
+  const res = await fetch(url, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch admin users with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function createAdminUser(
+  payload: CreateAdminUserDTO
+): Promise<{ data: AdminUserItem }> {
+  const res = await fetch(`${API_URL}/api/admin/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to create user with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function updateAdminUser(
+  userId: number,
+  payload: UpdateAdminUserDTO
+): Promise<{ data: AdminUserItem }> {
+  const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to update user with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+
+export async function resetAdminUserInitialPassword(
+  userId: number,
+  initialPassword: string
+): Promise<{ data: { message: string } }> {
+  const res = await fetch(`${API_URL}/api/admin/users/${userId}/initial-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ initialPassword }),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to reset initial password with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status
+    );
+  }
+
+  return body;
+}
+

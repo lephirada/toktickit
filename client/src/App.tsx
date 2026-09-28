@@ -10,6 +10,7 @@ import LoginScreen from "./components/LoginScreen.js";
 import ChangePasswordScreen from "./components/ChangePasswordScreen.js";
 import StaffTicketQueue from "./components/StaffTicketQueue.js";
 import { StaffTicketDetail } from "./components/StaffTicketDetail.js";
+import UserManagement from "./components/UserManagement.js";
 import { CheckCircleIcon, TicketIcon, UserIcon } from "./components/icons/index.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
@@ -462,35 +463,7 @@ export function AppContent() {
         {/* Administrator User Management View (Issue 16 Destination) */}
         {effectiveView === "admin-users" && (
           <section data-testid="admin-users-section" className="w-full">
-            <div
-              className="bg-white border shadow-sm p-4 p-md-5 text-center mx-auto"
-              style={{
-                maxWidth: 800,
-                borderRadius: "16px",
-                borderColor: "#EAECF0",
-                boxShadow: "0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04)",
-              }}
-            >
-              <div
-                className="d-inline-flex align-items-center justify-content-center rounded-circle p-3 mb-3"
-                style={{ backgroundColor: "#F4EBFF" }}
-              >
-                <UserIcon size={32} color="#5925DC" />
-              </div>
-              <h2 className="h4 fw-bold text-dark mb-2">User Management</h2>
-              <p className="text-muted small mb-4" style={{ maxWidth: 500, margin: "0 auto" }}>
-                User directory, account creation, role assignments, and security guardrails are being developed in Issue 16.
-              </p>
-              <div className="d-flex justify-content-center gap-2">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-sm fw-semibold px-3 py-2 rounded-2"
-                  onClick={() => handleNavigate("staff-queue")}
-                >
-                  Back to Ticket Queue
-                </button>
-              </div>
-            </div>
+            <UserManagement />
           </section>
         )}
 

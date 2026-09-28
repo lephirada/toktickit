@@ -19,7 +19,7 @@
 | **Issue 13** | `feature/13-client-auth-shell`            | Client Auth Shell & Requester Discussion  | `[PR #35]`              | `[Approved]`                    | `[Merge]`    |
 | **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #36]`              | `[Approved]`                    | `[Merged]`   |
 | **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #37]`              | `[Request Changes -> Approved]` | `[Merge]`    |
-| **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #38]`              | `[Implemented & Verified]`      | `[Pending]`  |
 | **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
 
 ---
@@ -137,27 +137,78 @@
 - **Test Log Output:**
 
 ```text
- ✓ tests/lab-03/staff-ticket-detail.api.test.ts (52)
-   ✓ Issue 15 — Staff Ticket Operations API Suite (staff-ticket-detail.api.test.ts) (52)
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (54)
+   ✓ Issue 15 — Staff Ticket Operations API Suite (staff-ticket-detail.api.test.ts) (54)
      ✓ 1. RBAC & Security Access (AC-15-02) (5)
      ✓ 2. Active Staff Users List (GET /api/staff/users) (2)
      ✓ 3. Operational Ticket Detail (GET /api/staff/tickets/:id - AC-15-01) (2)
-     ✓ 4. Claim & Assignment Operations (AC-15-03, AC-15-04, AC-15-05) (9)
+     ✓ 4. Claim & Assignment Operations (AC-15-03, AC-15-04, AC-15-05) (11)
      ✓ 5. IT Priority Updates (AC-15-16) (3)
      ✓ 6. State Machine & Status Transitions (AC-15-06, AC-15-07, AC-15-13) (18)
      ✓ 7. Transaction Atomicity & Rollback (AC-15-17) (1)
      ✓ 8. Attachment Access Matrix (AC-15-14, AC-15-15, ATT-01..12) (12)
- ✓ tests/lab-03/comments-notes.api.test.ts (12)
-   ✓ Issue 15 — Public Comments & Internal Notes Suite (comments-notes.api.test.ts) (12)
-     ✓ 1. Public Comments (AC-15-09) (2)
+ ✓ tests/lab-03/comments-notes.api.test.ts (16)
+   ✓ Issue 15 — Public Comments & Internal Notes Suite (comments-notes.api.test.ts) (16)
+     ✓ 1. Public Comments (AC-15-09) (4)
      ✓ 2. Internal Notes Creation & Retrieval (AC-15-10) (8)
      ✓ 3. Internal Notes Privacy & Leakage Prevention (AC-15-11) (2)
 
  Test Files  2 passed (2)
-      Tests  64 passed (64)
+      Tests  70 passed (70)
 ```
 
-- **Full Server Suite Verification:** `npm --prefix server test` (15/15 test files passed, 214/214 tests passed).
+### 2.2.4 Issue 16 Administrator User Management API Suite (`users-admin.api.test.ts`)
+
+- **Target Command:** `npm --prefix server run test -- tests/lab-03/users-admin.api.test.ts`
+- **Test Log Output:**
+
+```text
+ ✓ tests/lab-03/users-admin.api.test.ts (29) 1616ms
+   ✓ Issue 16 — Administrator User Management API Suite (users-admin.api.test.ts) (29)
+     ✓ 1. RBAC & Authentication Enforcement (6)
+       ✓ AC-16-01: returns 200 for active ADMINISTRATOR on GET /api/admin/users
+       ✓ AC-16-01: returns 403 FORBIDDEN_ROLE for IT_STAFF
+       ✓ AC-16-01: returns 403 FORBIDDEN_ROLE for REQUESTER
+       ✓ AC-16-01: returns 401 UNAUTHORIZED when no session cookie is provided
+       ✓ AC-16-01: returns 401 ACCOUNT_DEACTIVATED for deactivated admin session
+       ✓ AC-16-01: returns 403 PASSWORD_CHANGE_REQUIRED for admin with mustChangePassword=true
+     ✓ 2. GET /api/admin/users (Listing, Filters, Projection) (5)
+       ✓ AC-16-02: returns required fields without passwordHash
+       ✓ AC-16-02: lists both active and inactive users
+       ✓ AC-16-02: filters by role accurately
+       ✓ AC-16-02: returns 422 VALIDATION_ERROR for invalid role filter
+       ✓ AC-16-02: performs case-insensitive search by name and email
+     ✓ 3. POST /api/admin/users (Account Creation) (6)
+       ✓ AC-16-03: creates active account with mustChangePassword=true and returns projection without passwordHash
+       ✓ AC-16-03: ignores isActive=false in POST body and creates user as active
+       ✓ AC-16-03: rejects duplicate email with 409 DUPLICATE_EMAIL
+       ✓ AC-16-03: rejects duplicate email with case-insensitive check
+       ✓ AC-16-03: rejects weak initial password with 422 VALIDATION_ERROR
+       ✓ AC-16-03: rejects invalid role with 422 VALIDATION_ERROR
+     ✓ 4. PATCH /api/admin/users/:id (Profile Updates & Status) (4)
+       ✓ AC-16-04: updates fullName, role, and isActive successfully
+       ✓ AC-16-04: returns 422 VALIDATION_ERROR when email modification is attempted
+       ✓ AC-16-04: returns 422 VALIDATION_ERROR when department modification is attempted
+       ✓ AC-16-04: returns 404 USER_NOT_FOUND when updating non-existent user
+     ✓ 5. Self-Deactivation Guard (1)
+       ✓ AC-16-05: blocks administrator from deactivating self with 400 CANNOT_DEACTIVATE_SELF
+     ✓ 6. Self-Demotion Session Revocation (1)
+       ✓ AC-16-06: demoting self to IT_STAFF succeeds, but immediately revokes admin access on next call
+     ✓ 7. Last Active Administrator Protection & Concurrency (2)
+       ✓ AC-16-07: prevents deactivating or demoting the last remaining active admin with 409 LAST_ADMIN_PROTECTED
+       ✓ AC-16-07: handles simultaneous demotion race gracefully (last-admin protection under concurrency)
+     ✓ 8. POST /api/admin/users/:id/initial-password (Reset Password) (3)
+       ✓ AC-16-08: resets password, enforces mustChangePassword=true, and leaves isActive unchanged
+       ✓ AC-16-08: validates password policy on initial password reset
+       ✓ AC-16-08: returns 404 USER_NOT_FOUND when resetting password for non-existent user
+     ✓ 9. Inactive Staff Assignment & Queue Guardrails (1)
+       ✓ AC-16-09: deactivated staff cannot be assigned to tickets (422 INACTIVE_OWNER) and is excluded from /api/staff/users
+
+ Test Files  1 passed (1)
+      Tests  29 passed (29)
+```
+
+- **Full Lab 3 Server Test Suites Verification:** `npx vitest run tests/lab-03 --fileParallelism=false` (9/9 test files passed, 185/185 tests passed).
 
 ### 2.3 Frontend React Testing Library Component Suites
 
@@ -243,7 +294,26 @@
       Tests  9 passed (9)
 ```
 
-- **Full Client Suite Verification:** `npm --prefix client test` (11/11 test files passed, 103/103 tests passed).
+### 2.3.3 Issue 16 Administrator User Management Component Suite (`UserManagement.test.tsx`)
+
+- **Target Command:** `npm --prefix client run test -- tests/lab-03/UserManagement.test.tsx`
+- **Test Log Output:**
+
+```text
+ ✓ tests/lab-03/UserManagement.test.tsx (6)
+   ✓ Issue 16 — UserManagement Component Suite (UserManagement.test.tsx) (6)
+     ✓ Scenario 1: renders 8-column table with users and badges
+     ✓ Scenario 2: filters users by role and search input
+     ✓ Scenario 3: displays empty state when user list is empty
+     ✓ Scenario 4: opens Create User modal, toggles password visibility, and submits payload
+     ✓ Scenario 5: edits user profile and enforces self-deactivation guardrail
+     ✓ Scenario 6: resets initial password through modal
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+```
+
+- **Full Client Suite Verification:** `npm --prefix client test` (12/12 test files passed, 110/110 tests passed).
 
 ### 2.4 Playwright 20-Step End-to-End Browser Journey
 
@@ -300,11 +370,11 @@
 
 ---
 
-## 3. UI State & Responsive Screenshot Catalog (24 Baseline Images)
+## 3. UI State & Responsive Screenshot Catalog (30 Verified Images)
 
-Screenshots will be captured automatically by `e2e/lab-03/capture-screenshots.spec.ts` and stored in `artifacts/lab-03/screenshots/`.
+Screenshots captured automatically by `e2e/lab-03/capture-screenshots.spec.ts` and stored in `artifacts/lab-03/screenshots/`.
 
-| Image Identifier | Screen View                  | Viewport & Resolution       | File Path Placeholder                                                |
+| Image Identifier | Screen View                  | Viewport & Resolution       | File Path Verified                                                   |
 | :--------------- | :--------------------------- | :-------------------------- | :------------------------------------------------------------------- |
 | `SCR-01-D`       | Login Screen                 | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/01-login-desktop.png`                  |
 | `SCR-01-T`       | Login Screen                 | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/01-login-tablet.png`                   |
@@ -332,6 +402,9 @@ Screenshots will be captured automatically by `e2e/lab-03/capture-screenshots.sp
 | `SCR-08-D`       | Admin User Management Table  | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/08-admin-users-desktop.png`            |
 | `SCR-08-T`       | Admin User Management Table  | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/08-admin-users-tablet.png`             |
 | `SCR-08-M`       | Admin User Management Table  | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/08-admin-users-mobile.png`             |
+| `SCR-09-MOD-CR`  | Create User Modal            | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-create.png`              |
+| `SCR-09-MOD-ED`  | Edit User Profile Modal      | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-edit.png`                |
+| `SCR-09-MOD-PW`  | Reset Password Modal         | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-reset-password.png`      |
 
 ---
 

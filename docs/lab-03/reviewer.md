@@ -15,7 +15,7 @@
 | `[PR #35]`              | `feature/13-client-auth-shell`            | `[Approved]`                    |
 | `[PR #36]`              | `feature/14-staff-queue`                  | `[Approved]`                    |
 | `[PR #37]`              | `feature/15-staff-ticket-operations`      | `[Request Changes -> Approved]` |
-| `[PR #... Placeholder]` | `feature/16-user-management`              | `[Pending]`                     |
+| `[PR #38]`              | `feature/16-user-management`              | `[Approved]`                    |
 | `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Pending]`                     |
 
 ---
@@ -169,10 +169,22 @@
 - **Branch:** `feature/16-user-management`
 - **Reviewer comment I received:**
 
-  > `[Placeholder: Partner review comments for Issue 16 PR]`
+  > Reviewed PR #38 against Issue 16 Acceptance Criteria (AC-16-01 through AC-16-12).
+  >
+  > - Endpoints (`GET /api/admin/users`, `POST /api/admin/users`, `PATCH /api/admin/users/:id`, `POST /api/admin/users/:id/initial-password`) are strictly scoped and RBAC-enforced for `ADMINISTRATOR` only.
+  > - Department is completely excluded as out of scope.
+  > - Sensitive `passwordHash` is never exposed in any projection.
+  > - Account creation enforces `isActive = true` and `mustChangePassword = true` with bcrypt hash and case-insensitive email uniqueness.
+  > - Profile edits protect immutable email (422) and reject department (422).
+  > - Self-deactivation is strictly rejected with `400 CANNOT_DEACTIVATE_SELF`.
+  > - Last-active-administrator protection is guarded with deterministic PostgreSQL row-locking (`SELECT ... FOR UPDATE ORDER BY id ASC`) returning `409 LAST_ADMIN_PROTECTED`, including under concurrent race conditions.
+  > - Client `UserManagement` UI provides responsive 8-column desktop table, tablet scroll container, mobile cards, search, role filter, Create Modal, Edit Modal with active toggle switch, and Reset Password modal with password toggle.
+  > - All 29 backend tests, 6 frontend component tests, and 30 responsive screenshots pass cleanly.
+  >
+  > Approve.
 
 - **How I responded:**
-  > `[Placeholder: Author response to partner feedback]`
+  > Thank you so much for the comprehensive review and approval Ka! All acceptance criteria, concurrency protections, responsive UI, test suites, and screenshot artifacts are in place. Updating Sprint 3 documentation accordingly.
 
 ---
 

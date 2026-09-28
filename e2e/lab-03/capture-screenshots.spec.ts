@@ -16,7 +16,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
     try {
       execSync("npm --prefix server run db:seed", { stdio: "ignore" });
       execSync(
-        `node -e 'const { PrismaClient } = require("./server/node_modules/@prisma/client"); const p = new PrismaClient({ datasources: { db: { url: "postgresql://toktickit:toktickit@localhost:5432/toktickit?schema=public" } } }); p.user.update({ where: { email: "sarah.connor@toktickit.com" }, data: { passwordHash: "$2b$10$Darja.Q6FT2ivIiXVxb0V.S96Mw20uhnhV.UkhZVw7Jm91AWU5h4q", mustChangePassword: true } }).catch(() => {}).finally(() => p.$disconnect());'`,
+        `node -e 'const { PrismaClient } = require("./server/node_modules/@prisma/client"); const p = new PrismaClient({ datasources: { db: { url: "postgresql://toktickit:toktickit@localhost:5432/toktickit?schema=public" } } }); Promise.all([p.user.update({ where: { email: "sarah.connor@toktickit.com" }, data: { passwordHash: "$2b$10$Darja.Q6FT2ivIiXVxb0V.S96Mw20uhnhV.UkhZVw7Jm91AWU5h4q", mustChangePassword: true } }), p.user.update({ where: { email: "admin@toktickit.com" }, data: { mustChangePassword: false } })]).catch(() => {}).finally(() => p.$disconnect());'`,
         { stdio: "ignore" }
       );
     } catch {
@@ -195,6 +195,62 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
         path: path.join(SCREENSHOT_DIR, `07-staff-ticket-detail-${vp.name}.png`),
         fullPage: true,
       });
+    });
+
+    test(`captures Administrator User Management screen (${vp.name})`, async ({ page }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.goto("http://localhost:5173/login");
+      await page.waitForSelector('[data-testid="login-screen"]');
+
+      // Login with System Admin (mustChangePassword set to false in beforeAll)
+      await page.fill('[data-testid="login-email-input"]', "admin@toktickit.com");
+      await page.fill('[data-testid="login-password-input"]', "Admin123!");
+      await page.click('[data-testid="login-submit-btn"]');
+
+      await page.waitForSelector('[data-testid="app-header"]');
+      await page.goto("http://localhost:5173/admin/users");
+      await page.waitForSelector('[data-testid="user-management-container"]');
+
+      if (vp.name === "mobile") {
+        await page.waitForSelector('[data-testid="admin-users-mobile-list"]');
+      } else {
+        await page.waitForSelector('[data-testid="admin-users-table"]');
+      }
+
+      await page.screenshot({
+        path: path.join(SCREENSHOT_DIR, `08-admin-users-${vp.name}.png`),
+        fullPage: true,
+      });
+
+      // On desktop, capture modals
+      if (vp.name === "desktop") {
+        // 1. Create User Modal
+        await page.click('[data-testid="create-user-button"]');
+        await page.waitForSelector('[data-testid="create-user-modal"]');
+        await page.screenshot({
+          path: path.join(SCREENSHOT_DIR, "09-user-modal-create.png"),
+        });
+        await page.click('[data-testid="create-user-cancel-btn"]');
+        await page.waitForSelector('[data-testid="create-user-modal"]', { state: "detached" });
+
+        // 2. Edit User Modal
+        await page.locator('button[data-testid^="edit-user-btn-"]').first().click();
+        await page.waitForSelector('[data-testid="edit-user-modal"]');
+        await page.screenshot({
+          path: path.join(SCREENSHOT_DIR, "09-user-modal-edit.png"),
+        });
+        await page.click('[data-testid="edit-user-cancel-btn"]');
+        await page.waitForSelector('[data-testid="edit-user-modal"]', { state: "detached" });
+
+        // 3. Reset Password Modal
+        await page.locator('button[data-testid^="reset-pwd-btn-"]').first().click();
+        await page.waitForSelector('[data-testid="reset-password-modal"]');
+        await page.screenshot({
+          path: path.join(SCREENSHOT_DIR, "09-user-modal-reset-password.png"),
+        });
+        await page.click('[data-testid="reset-password-cancel-btn"]');
+        await page.waitForSelector('[data-testid="reset-password-modal"]', { state: "detached" });
+      }
     });
   }
 });
