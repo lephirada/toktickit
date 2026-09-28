@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
@@ -8,6 +8,9 @@ import { Priority, TicketStatus, UserRole } from "@prisma/client";
 
 describe("Issue 16 — Administrator User Management API Suite (users-admin.api.test.ts)", () => {
   const prisma = getPrisma();
+
+  const createdUserIds: number[] = [];
+  const createdTicketIds: number[] = [];
 
   let adminA: any;
   let adminB: any;
@@ -39,6 +42,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
         mustChangePassword: false,
       },
     });
+    createdUserIds.push(adminA.id);
     cookieAdminA = createTestSessionCookie(adminA);
 
     adminB = await prisma.user.create({
@@ -51,6 +55,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
         mustChangePassword: false,
       },
     });
+    createdUserIds.push(adminB.id);
     cookieAdminB = createTestSessionCookie(adminB);
 
     staffUser = await prisma.user.create({
@@ -63,17 +68,11 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
         mustChangePassword: false,
       },
     });
+    createdUserIds.push(staffUser.id);
     cookieStaff = createTestSessionCookie(staffUser);
 
-    requesterUser = await prisma.user.create({
-      data: {
-        email: `admin_req_${now}@toktickit.com`,
-        fullName: "Standard Requester",
-        role: UserRole.REQUESTER,
-        passwordHash: dummyHash,
-        isActive: true,
-        mustChangePassword: false,
-      },
+    requesterUser = await prisma.user.findFirstOrThrow({
+      where: { email: "john.doe@toktickit.com" },
     });
     cookieRequester = createTestSessionCookie(requesterUser);
 
@@ -87,6 +86,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
         mustChangePassword: false,
       },
     });
+    createdUserIds.push(inactiveAdminUser.id);
     cookieInactiveAdmin = createTestSessionCookie(inactiveAdminUser);
 
     mustChangePasswordAdminUser = await prisma.user.create({
@@ -99,7 +99,19 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
         mustChangePassword: true,
       },
     });
+    createdUserIds.push(mustChangePasswordAdminUser.id);
     cookieMustChangeAdmin = createTestSessionCookie(mustChangePasswordAdminUser);
+  });
+
+  afterAll(async () => {
+    if (createdTicketIds.length > 0) {
+      await prisma.ticketActivity.deleteMany({ where: { ticketId: { in: createdTicketIds } } });
+      await prisma.ticket.deleteMany({ where: { id: { in: createdTicketIds } } });
+    }
+    if (createdUserIds.length > 0) {
+      await prisma.ticketActivity.deleteMany({ where: { actorId: { in: createdUserIds } } });
+      await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    }
   });
 
   // ==========================================
@@ -268,6 +280,9 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
         .send(newUserPayload);
 
       expect(res.status).toBe(201);
+      if (res.body.data?.id) {
+        createdUserIds.push(res.body.data.id);
+      }
       expect(res.body.data).toBeDefined();
       expect(res.body.data.fullName).toBe(newUserPayload.fullName);
       expect(res.body.data.email).toBe(newUserPayload.email.toLowerCase());
@@ -291,7 +306,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
       const newUserPayload = {
         fullName: "Always Active User",
         email: `always_active_${Date.now()}@toktickit.com`,
-        role: "REQUESTER",
+        role: "IT_STAFF",
         initialPassword: "InitialSecurePassword123!",
         isActive: false, // attempt to create inactive user
       };
@@ -302,6 +317,9 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
         .send(newUserPayload);
 
       expect(res.status).toBe(201);
+      if (res.body.data?.id) {
+        createdUserIds.push(res.body.data.id);
+      }
       expect(res.body.data.isActive).toBe(true);
 
       const dbUser = await prisma.user.findUnique({
@@ -389,31 +407,32 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
         data: {
           email: `patch_target_${Date.now()}@toktickit.com`,
           fullName: "Original Name",
-          role: UserRole.REQUESTER,
+          role: UserRole.IT_STAFF,
           passwordHash: await hashPassword("ValidPass123!"),
           isActive: true,
           mustChangePassword: false,
         },
       });
+      createdUserIds.push(target.id);
 
       const res = await request(app)
         .patch(`/api/admin/users/${target.id}`)
         .set("Cookie", cookieAdminA)
         .send({
           fullName: "Updated Full Name",
-          role: "IT_STAFF",
+          role: "ADMINISTRATOR",
           isActive: false,
         });
 
       expect(res.status).toBe(200);
       expect(res.body.data.fullName).toBe("Updated Full Name");
-      expect(res.body.data.role).toBe("IT_STAFF");
+      expect(res.body.data.role).toBe("ADMINISTRATOR");
       expect(res.body.data.isActive).toBe(false);
       expect(res.body.data).not.toHaveProperty("passwordHash");
 
       const dbUser = await prisma.user.findUnique({ where: { id: target.id } });
       expect(dbUser!.fullName).toBe("Updated Full Name");
-      expect(dbUser!.role).toBe(UserRole.IT_STAFF);
+      expect(dbUser!.role).toBe(UserRole.ADMINISTRATOR);
       expect(dbUser!.isActive).toBe(false);
     });
 
@@ -489,6 +508,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
           mustChangePassword: false,
         },
       });
+      createdUserIds.push(adminC.id);
       const cookieAdminC = createTestSessionCookie(adminC);
 
       // Verify adminC can access admin endpoint
@@ -571,6 +591,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
           mustChangePassword: false,
         },
       });
+      createdUserIds.push(adminRace1.id);
 
       const adminRace2 = await prisma.user.create({
         data: {
@@ -582,6 +603,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
           mustChangePassword: false,
         },
       });
+      createdUserIds.push(adminRace2.id);
 
       // Deactivate all OTHER active admins so exactly adminRace1 and adminRace2 are active
       const allActive = await prisma.user.findMany({
@@ -644,12 +666,13 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
         data: {
           email: `reset_target_${Date.now()}@toktickit.com`,
           fullName: "Reset Target Inactive",
-          role: UserRole.REQUESTER,
+          role: UserRole.IT_STAFF,
           passwordHash: await hashPassword("OldPass123!"),
           isActive: false, // remains false!
           mustChangePassword: false,
         },
       });
+      createdUserIds.push(inactiveTarget.id);
 
       const newPassword = "BrandNewSecurePassword123!";
       const res = await request(app)
@@ -707,6 +730,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
           mustChangePassword: false,
         },
       });
+      createdUserIds.push(techUser.id);
 
       // Create a category and open ticket
       const category = await prisma.category.findFirstOrThrow();
@@ -721,6 +745,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
           requesterId: requesterUser.id,
         },
       });
+      createdTicketIds.push(ticket.id);
 
       // Verify techUser is present in /api/staff/users
       const staffListBefore = await request(app)
