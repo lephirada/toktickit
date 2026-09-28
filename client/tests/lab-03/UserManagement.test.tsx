@@ -248,6 +248,17 @@ describe("Issue 16 — UserManagement Component Suite (UserManagement.test.tsx)"
     const activeToggle = screen.getByTestId("edit-user-active-toggle");
     fireEvent.click(activeToggle); // uncheck active
 
+    // Interception safety dialog is shown
+    expect(screen.getByTestId("safety-alert-dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("safety-dialog-title")).toHaveTextContent("Cannot Deactivate Account");
+    expect(screen.getByTestId("safety-dialog-message")).toHaveTextContent(
+      "Administrators cannot deactivate their own account."
+    );
+
+    // Dismiss dialog via OK button
+    fireEvent.click(screen.getByTestId("safety-dialog-ok-btn"));
+    expect(screen.queryByTestId("safety-alert-dialog")).not.toBeInTheDocument();
+
     // Guard warning is shown and save button is disabled
     expect(screen.getByTestId("edit-user-self-deactivate-warning")).toBeInTheDocument();
     const saveBtn = screen.getByTestId("edit-user-save-btn") as HTMLButtonElement;
@@ -286,5 +297,48 @@ describe("Issue 16 — UserManagement Component Suite (UserManagement.test.tsx)"
       expect(screen.queryByTestId("reset-password-modal")).not.toBeInTheDocument();
       expect(screen.getByTestId("admin-users-success-banner")).toBeInTheDocument();
     });
+  });
+
+  // 7. Last Administrator Protection Interception Dialog
+  it("Scenario 7: intercepts LAST_ADMIN_PROTECTED error with safety alert dialog and supports dismissal", async () => {
+    vi.spyOn(api, "updateAdminUser").mockRejectedValue({
+      status: 409,
+      code: "LAST_ADMIN_PROTECTED",
+      message: "Cannot deactivate or demote the last remaining active Administrator.",
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("edit-user-btn-2")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("edit-user-btn-2"));
+    expect(screen.getByTestId("edit-user-modal")).toBeInTheDocument();
+
+    // Demote role to REQUESTER
+    fireEvent.change(screen.getByTestId("edit-user-role-select"), {
+      target: { value: "REQUESTER" },
+    });
+
+    // Save changes
+    fireEvent.click(screen.getByTestId("edit-user-save-btn"));
+
+    // Interception dialog appears
+    await waitFor(() => {
+      expect(screen.getByTestId("safety-alert-dialog")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("safety-dialog-title")).toHaveTextContent("Last Administrator Protected");
+    expect(screen.getByTestId("safety-dialog-message")).toHaveTextContent(
+      "This account cannot be deactivated or demoted because it is the last active Administrator."
+    );
+
+    // Dismiss dialog with OK button
+    fireEvent.click(screen.getByTestId("safety-dialog-ok-btn"));
+    expect(screen.queryByTestId("safety-alert-dialog")).not.toBeInTheDocument();
+
+    // Edit modal remains open so administrator can choose another action
+    expect(screen.getByTestId("edit-user-modal")).toBeInTheDocument();
   });
 });

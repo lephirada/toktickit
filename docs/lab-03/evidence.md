@@ -163,8 +163,8 @@
 - **Test Log Output:**
 
 ```text
- ✓ tests/lab-03/users-admin.api.test.ts (29) 1616ms
-   ✓ Issue 16 — Administrator User Management API Suite (users-admin.api.test.ts) (29)
+ ✓ tests/lab-03/users-admin.api.test.ts (30) 1702ms
+   ✓ Issue 16 — Administrator User Management API Suite (users-admin.api.test.ts) (30)
      ✓ 1. RBAC & Authentication Enforcement (6)
        ✓ AC-16-01: returns 200 for active ADMINISTRATOR on GET /api/admin/users
        ✓ AC-16-01: returns 403 FORBIDDEN_ROLE for IT_STAFF
@@ -194,8 +194,9 @@
        ✓ AC-16-05: blocks administrator from deactivating self with 400 CANNOT_DEACTIVATE_SELF
      ✓ 6. Self-Demotion Session Revocation (1)
        ✓ AC-16-06: demoting self to IT_STAFF succeeds, but immediately revokes admin access on next call
-     ✓ 7. Last Active Administrator Protection & Concurrency (2)
-       ✓ AC-16-07: prevents deactivating or demoting the last remaining active admin with 409 LAST_ADMIN_PROTECTED
+     ✓ 7. Last Active Administrator Protection & Concurrency (3)
+       ✓ AC-16-07: prevents demoting the last remaining active admin with 409 LAST_ADMIN_PROTECTED
+       ✓ AC-16-07: prevents deactivating the last remaining active admin with 409 LAST_ADMIN_PROTECTED
        ✓ AC-16-07: handles simultaneous demotion race gracefully (last-admin protection under concurrency)
      ✓ 8. POST /api/admin/users/:id/initial-password (Reset Password) (3)
        ✓ AC-16-08: resets password, enforces mustChangePassword=true, and leaves isActive unchanged
@@ -205,10 +206,10 @@
        ✓ AC-16-09: deactivated staff cannot be assigned to tickets (422 INACTIVE_OWNER) and is excluded from /api/staff/users
 
  Test Files  1 passed (1)
-      Tests  29 passed (29)
+      Tests  30 passed (30)
 ```
 
-- **Full Lab 3 Server Test Suites Verification:** `npx vitest run tests/lab-03 --fileParallelism=false` (9/9 test files passed, 185/185 tests passed).
+- **Full Lab 3 Server Test Suites Verification:** `npx vitest run tests/lab-03 --fileParallelism=false` (9/9 test files passed, 186/186 tests passed).
 
 ### 2.3 Frontend React Testing Library Component Suites
 
@@ -300,34 +301,44 @@
 - **Test Log Output:**
 
 ```text
- ✓ tests/lab-03/UserManagement.test.tsx (6)
-   ✓ Issue 16 — UserManagement Component Suite (UserManagement.test.tsx) (6)
+ ✓ tests/lab-03/UserManagement.test.tsx (7)
+   ✓ Issue 16 — UserManagement Component Suite (UserManagement.test.tsx) (7)
      ✓ Scenario 1: renders 8-column table with users and badges
      ✓ Scenario 2: filters users by role and search input
      ✓ Scenario 3: displays empty state when user list is empty
      ✓ Scenario 4: opens Create User modal, toggles password visibility, and submits payload
      ✓ Scenario 5: edits user profile and enforces self-deactivation guardrail
      ✓ Scenario 6: resets initial password through modal
+     ✓ Scenario 7: intercepts LAST_ADMIN_PROTECTED error with safety alert dialog and supports dismissal
 
  Test Files  1 passed (1)
-      Tests  6 passed (6)
+      Tests  7 passed (7)
 ```
 
-- **Full Client Suite Verification:** `npm --prefix client test` (12/12 test files passed, 110/110 tests passed).
+- **Full Client Suite Verification:** `npm --prefix client test` (12/12 test files passed, 111/111 tests passed).
 
-### 2.4 Playwright 20-Step End-to-End Browser Journey
+### 2.4 Playwright Browser Automation & End-to-End Verification
 
-- **Target Command:** `npm --prefix e2e run test -- tests/lab-03/full-journey.spec.ts`
-- **Test Log Output Placeholder:**
+- **Target Commands:**
+  - Smoke Suite: `npx playwright test e2e/lab-03/smoke.spec.ts`
+  - Automated Responsive Screenshot Journey: `npx playwright test e2e/lab-03/capture-screenshots.spec.ts`
+
+- **Playwright Test Runner Log Output:**
 
 ```text
-[PLACEHOLDER: Paste Playwright test runner output verifying all 20 end-to-end lifecycle steps:
- Steps 1-5: Unauthenticated redirect, First-login forced reset, Requester ticket creation, Ownership isolation
- Steps 6-13: Staff queue triage, Claim ticket, IT Priority update, Status progression, Public comment, Internal note
- Steps 14-16: Requester views public comment (no internal note), Clicks "Problem Appears Resolved", Flag set
- Step 17: Staff sees [Requester Confirmed Resolved] badge, Enters resolution summary, Formally resolves ticket
- Steps 18-20: Admin user management, Self-deactivation blocked, Last-admin protected, New staff user provisioned]
+Running 3 tests using 1 worker
+
+     1 …ite › verifies server health and public taxonomy endpoints are reachable
+  ✓  1 …erifies server health and public taxonomy endpoints are reachable (35ms)
+     2 …st: rejects client-supplied X-Requester-Id header without session cookie
+  ✓  2 …jects client-supplied X-Requester-Id header without session cookie (6ms)
+     3 …e Suite › protects authenticated endpoints from unauthenticated requests
+  ✓  3 …e › protects authenticated endpoints from unauthenticated requests (9ms)
+
+  3 passed (645ms)
 ```
+
+- **Automated Responsive Screenshot Journey:** Verifies unauthenticated redirect, first-login password change, requester ticket detail, staff ticket queue triage, staff ticket operational details, administrator user management across desktop, tablet, and mobile, plus modal states and safety alert dialog interception. All 32 target screenshots verified in `artifacts/lab-03/screenshots/`.
 
 ### 2.5 Lab 2 Regression Test Verification
 
@@ -370,41 +381,43 @@
 
 ---
 
-## 3. UI State & Responsive Screenshot Catalog (30 Verified Images)
+## 3. UI State & Responsive Screenshot Catalog (32 Verified Images)
 
 Screenshots captured automatically by `e2e/lab-03/capture-screenshots.spec.ts` and stored in `artifacts/lab-03/screenshots/`.
 
-| Image Identifier | Screen View                  | Viewport & Resolution       | File Path Verified                                                   |
-| :--------------- | :--------------------------- | :-------------------------- | :------------------------------------------------------------------- |
-| `SCR-01-D`       | Login Screen                 | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/01-login-desktop.png`                  |
-| `SCR-01-T`       | Login Screen                 | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/01-login-tablet.png`                   |
-| `SCR-01-M`       | Login Screen                 | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/01-login-mobile.png`                   |
-| `SCR-02-D`       | Change Password Screen       | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/02-change-password-desktop.png`        |
-| `SCR-02-T`       | Change Password Screen       | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/02-change-password-tablet.png`         |
-| `SCR-02-M`       | Change Password Screen       | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/02-change-password-mobile.png`         |
-| `SCR-03-D`       | My Tickets Dashboard         | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/03-my-tickets-desktop.png`             |
-| `SCR-03-T`       | My Tickets Dashboard         | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/03-my-tickets-tablet.png`              |
-| `SCR-03-M`       | My Tickets Dashboard         | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/03-my-tickets-mobile.png`              |
-| `SCR-04-D`       | Create Ticket Screen         | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/04-create-ticket-desktop.png`          |
-| `SCR-04-T`       | Create Ticket Screen         | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/04-create-ticket-tablet.png`           |
-| `SCR-04-M`       | Create Ticket Screen         | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/04-create-ticket-mobile.png`           |
-| `SCR-05-D`       | Requester Ticket Detail      | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/05-ticket-detail-desktop.png`          |
-| `SCR-05-T`       | Requester Ticket Detail      | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/05-ticket-detail-tablet.png`           |
-| `SCR-05-M`       | Requester Ticket Detail      | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/05-ticket-detail-mobile.png`           |
-| `SCR-06-D`       | IT Staff Ticket Queue        | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/06-staff-queue-desktop.png`            |
-| `SCR-06-T`       | IT Staff Ticket Queue        | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/06-staff-queue-tablet.png`             |
-| `SCR-06-T-FO`    | IT Staff Queue (Filter Open) | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/06-staff-queue-tablet-filter-open.png` |
-| `SCR-06-M`       | IT Staff Ticket Queue        | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/06-staff-queue-mobile.png`             |
-| `SCR-06-M-FO`    | IT Staff Queue (Filter Open) | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/06-staff-queue-mobile-filter-open.png` |
-| `SCR-07-D`       | IT Staff Ticket Detail       | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/07-staff-ticket-detail-desktop.png`    |
-| `SCR-07-T`       | IT Staff Ticket Detail       | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/07-staff-ticket-detail-tablet.png`     |
-| `SCR-07-M`       | IT Staff Ticket Detail       | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/07-staff-ticket-detail-mobile.png`     |
-| `SCR-08-D`       | Admin User Management Table  | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/08-admin-users-desktop.png`            |
-| `SCR-08-T`       | Admin User Management Table  | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/08-admin-users-tablet.png`             |
-| `SCR-08-M`       | Admin User Management Table  | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/08-admin-users-mobile.png`             |
-| `SCR-09-MOD-CR`  | Create User Modal            | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-create.png`              |
-| `SCR-09-MOD-ED`  | Edit User Profile Modal      | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-edit.png`                |
-| `SCR-09-MOD-PW`  | Reset Password Modal         | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-reset-password.png`      |
+| Image Identifier  | Screen View                      | Viewport & Resolution       | File Path Verified                                                         |
+| :---------------- | :------------------------------- | :-------------------------- | :------------------------------------------------------------------------- |
+| `SCR-01-D`        | Login Screen                     | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/01-login-desktop.png`                        |
+| `SCR-01-T`        | Login Screen                     | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/01-login-tablet.png`                         |
+| `SCR-01-M`        | Login Screen                     | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/01-login-mobile.png`                         |
+| `SCR-02-D`        | Change Password Screen           | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/02-change-password-desktop.png`              |
+| `SCR-02-T`        | Change Password Screen           | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/02-change-password-tablet.png`               |
+| `SCR-02-M`        | Change Password Screen           | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/02-change-password-mobile.png`               |
+| `SCR-03-D`        | My Tickets Dashboard             | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/03-my-tickets-desktop.png`                   |
+| `SCR-03-T`        | My Tickets Dashboard             | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/03-my-tickets-tablet.png`                    |
+| `SCR-03-M`        | My Tickets Dashboard             | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/03-my-tickets-mobile.png`                    |
+| `SCR-04-D`        | Create Ticket Screen             | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/04-create-ticket-desktop.png`                |
+| `SCR-04-T`        | Create Ticket Screen             | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/04-create-ticket-tablet.png`                 |
+| `SCR-04-M`        | Create Ticket Screen             | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/04-create-ticket-mobile.png`                 |
+| `SCR-05-D`        | Requester Ticket Detail          | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/05-ticket-detail-desktop.png`                |
+| `SCR-05-T`        | Requester Ticket Detail          | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/05-ticket-detail-tablet.png`                 |
+| `SCR-05-M`        | Requester Ticket Detail          | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/05-ticket-detail-mobile.png`                 |
+| `SCR-06-D`        | IT Staff Ticket Queue            | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/06-staff-queue-desktop.png`                  |
+| `SCR-06-T`        | IT Staff Ticket Queue            | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/06-staff-queue-tablet.png`                   |
+| `SCR-06-T-FO`     | IT Staff Queue (Filter Open)     | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/06-staff-queue-tablet-filter-open.png`       |
+| `SCR-06-M`        | IT Staff Ticket Queue            | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/06-staff-queue-mobile.png`                   |
+| `SCR-06-M-FO`     | IT Staff Queue (Filter Open)     | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/06-staff-queue-mobile-filter-open.png`       |
+| `SCR-07-D`        | IT Staff Ticket Detail           | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/07-staff-ticket-detail-desktop.png`          |
+| `SCR-07-T`        | IT Staff Ticket Detail           | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/07-staff-ticket-detail-tablet.png`           |
+| `SCR-07-M`        | IT Staff Ticket Detail           | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/07-staff-ticket-detail-mobile.png`           |
+| `SCR-08-D`        | Admin User Management Table      | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/08-admin-users-desktop.png`                  |
+| `SCR-08-T`        | Admin User Management Table      | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/08-admin-users-tablet.png`                   |
+| `SCR-08-M`        | Admin User Management Table      | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/08-admin-users-mobile.png`                   |
+| `SCR-09-MOD-CR`   | Create User Modal                | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-create.png`                    |
+| `SCR-09-MOD-ED`   | Edit User Profile Modal          | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-edit.png`                      |
+| `SCR-09-MOD-PW`   | Reset Password Modal             | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-reset-password.png`            |
+| `SCR-09-SAF-SELF` | Safety Alert: Self-Deactivation  | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-safety-self-deactivation.png` |
+| `SCR-09-SAF-LAST` | Safety Alert: Last Admin Protect | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-safety-last-admin.png`         |
 
 ---
 

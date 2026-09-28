@@ -540,7 +540,7 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
   // 7. Last Active Administrator Protection & Concurrency
   // ==========================================
   describe("7. Last Active Administrator Protection & Concurrency", () => {
-    it("AC-16-07: prevents deactivating or demoting the last remaining active admin with 409 LAST_ADMIN_PROTECTED", async () => {
+    it("AC-16-07: prevents demoting the last remaining active admin with 409 LAST_ADMIN_PROTECTED", async () => {
       // Find all currently active administrators with mustChangePassword=false
       const currentActiveAdmins = await prisma.user.findMany({
         where: { role: UserRole.ADMINISTRATOR, isActive: true, mustChangePassword: false },
@@ -569,6 +569,45 @@ describe("Issue 16 — Administrator User Management API Suite (users-admin.api.
 
         expect(demoteRes.status).toBe(409);
         expect(demoteRes.body.error.code).toBe("LAST_ADMIN_PROTECTED");
+      } finally {
+        // Restore others to active
+        await prisma.user.updateMany({
+          where: { id: { in: allOtherActive.map((u) => u.id) } },
+          data: { isActive: true },
+        });
+      }
+    });
+
+    it("AC-16-07: prevents deactivating the last remaining active admin with 409 LAST_ADMIN_PROTECTED", async () => {
+      // Find all currently active administrators with mustChangePassword=false
+      const currentActiveAdmins = await prisma.user.findMany({
+        where: { role: UserRole.ADMINISTRATOR, isActive: true, mustChangePassword: false },
+      });
+
+      const soleAdmin = currentActiveAdmins[0];
+
+      // Deactivate all OTHER active admins temporarily so soleAdmin is the only active admin
+      const allOtherActive = await prisma.user.findMany({
+        where: { role: UserRole.ADMINISTRATOR, isActive: true, id: { not: soleAdmin.id } },
+      });
+
+      await prisma.user.updateMany({
+        where: { id: { in: allOtherActive.map((u) => u.id) } },
+        data: { isActive: false },
+      });
+
+      try {
+        const soleCookie = createTestSessionCookie(soleAdmin);
+
+        // Attempting to deactivate the sole admin must return 409 LAST_ADMIN_PROTECTED
+        const deactRes = await request(app)
+          .patch(`/api/admin/users/${soleAdmin.id}`)
+          .set("Cookie", soleCookie)
+          .send({ isActive: false });
+
+        expect(deactRes.status).toBe(409);
+        expect(deactRes.body.error.code).toBe("LAST_ADMIN_PROTECTED");
+        expect(deactRes.body.error.message).toContain("Cannot deactivate or demote the last remaining active Administrator");
       } finally {
         // Restore others to active
         await prisma.user.updateMany({

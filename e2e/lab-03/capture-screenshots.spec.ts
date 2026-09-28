@@ -233,12 +233,35 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
         await page.click('[data-testid="create-user-cancel-btn"]');
         await page.waitForSelector('[data-testid="create-user-modal"]', { state: "detached" });
 
-        // 2. Edit User Modal
-        await page.locator('button[data-testid^="edit-user-btn-"]').first().click();
+        // 2. Edit User Modal (target current Admin)
+        await page.locator('tr:has-text("admin@toktickit.com") button[data-testid^="edit-user-btn-"]').click();
         await page.waitForSelector('[data-testid="edit-user-modal"]');
         await page.screenshot({
           path: path.join(SCREENSHOT_DIR, "09-user-modal-edit.png"),
         });
+
+        // 2a. Self-Deactivation Safety Alert Dialog
+        await page.click('[data-testid="edit-user-active-toggle"]');
+        await page.waitForSelector('[data-testid="safety-alert-dialog"]');
+        await page.screenshot({
+          path: path.join(SCREENSHOT_DIR, "09-user-modal-safety-self-deactivation.png"),
+        });
+        await page.click('[data-testid="safety-dialog-ok-btn"]');
+        await page.waitForSelector('[data-testid="safety-alert-dialog"]', { state: "detached" });
+
+        // Toggle back to active so button is enabled
+        await page.click('[data-testid="edit-user-active-toggle"]');
+
+        // 2b. Last Administrator Protection Safety Alert Dialog
+        await page.selectOption('[data-testid="edit-user-role-select"]', "IT_STAFF");
+        await page.click('[data-testid="edit-user-save-btn"]');
+        await page.waitForSelector('[data-testid="safety-alert-dialog"]');
+        await page.screenshot({
+          path: path.join(SCREENSHOT_DIR, "09-user-modal-safety-last-admin.png"),
+        });
+        await page.click('[data-testid="safety-dialog-ok-btn"]');
+        await page.waitForSelector('[data-testid="safety-alert-dialog"]', { state: "detached" });
+
         await page.click('[data-testid="edit-user-cancel-btn"]');
         await page.waitForSelector('[data-testid="edit-user-modal"]', { state: "detached" });
 

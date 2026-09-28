@@ -842,6 +842,81 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
 }
 
 // ========================================================
+// Safety Alert Interception Dialog Component
+// ========================================================
+interface SafetyAlertDialogProps {
+  type: "self-deactivation" | "last-admin";
+  title: string;
+  message: string;
+  onDismiss: () => void;
+}
+
+export function SafetyAlertDialog({
+  type,
+  title,
+  message,
+  onDismiss,
+}: SafetyAlertDialogProps) {
+  return (
+    <div
+      className="modal-backdrop-custom d-flex align-items-center justify-content-center p-3"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(16, 24, 40, 0.7)",
+        backdropFilter: "blur(4px)",
+        zIndex: 1100,
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="safety-dialog-title"
+      data-testid="safety-alert-dialog"
+      data-dialog-type={type}
+    >
+      <div
+        className="card border-0 shadow-lg rounded-3 w-100"
+        style={{ maxWidth: 440, backgroundColor: "#FFFFFF" }}
+      >
+        <div className="card-body p-4 text-center">
+          <div
+            className="rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+            style={{ width: 56, height: 56, backgroundColor: "#FEF3F2", color: "#D92D20" }}
+          >
+            <AlertTriangleIcon size={28} />
+          </div>
+          <h3
+            id="safety-dialog-title"
+            className="h5 fw-bold text-dark mb-2"
+            data-testid="safety-dialog-title"
+          >
+            {title}
+          </h3>
+          <p
+            className="text-secondary small mb-4 px-2"
+            data-testid="safety-dialog-message"
+          >
+            {message}
+          </p>
+          <div className="d-flex justify-content-center">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm fw-semibold px-4 py-2 rounded-2"
+              onClick={onDismiss}
+              data-testid="safety-dialog-ok-btn"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========================================================
 // Edit User Modal Component
 // ========================================================
 interface EditUserModalProps {
@@ -859,8 +934,28 @@ function EditUserModal({ user, currentUserId, onClose, onSuccess }: EditUserModa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Safety alert dialog state (interception for self-deactivation & last-admin protection)
+  const [safetyDialog, setSafetyDialog] = useState<{
+    type: "self-deactivation" | "last-admin";
+    title: string;
+    message: string;
+  } | null>(null);
+
   const isSelf = currentUserId === user.id;
   const isSelfDeactivationAttempt = isSelf && !isActive;
+
+  const handleToggleActive = (checked: boolean) => {
+    if (isSelf && !checked) {
+      setSafetyDialog({
+        type: "self-deactivation",
+        title: "Cannot Deactivate Account",
+        message: "Administrators cannot deactivate their own account.",
+      });
+      setIsActive(false);
+      return;
+    }
+    setIsActive(checked);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -872,6 +967,11 @@ function EditUserModal({ user, currentUserId, onClose, onSuccess }: EditUserModa
     }
 
     if (isSelfDeactivationAttempt) {
+      setSafetyDialog({
+        type: "self-deactivation",
+        title: "Cannot Deactivate Account",
+        message: "Administrators cannot deactivate their own account.",
+      });
       setErrorMessage("Administrators cannot deactivate their own account.");
       return;
     }
@@ -886,8 +986,18 @@ function EditUserModal({ user, currentUserId, onClose, onSuccess }: EditUserModa
       onSuccess(res.data);
     } catch (err: any) {
       if (err?.code === "CANNOT_DEACTIVATE_SELF") {
+        setSafetyDialog({
+          type: "self-deactivation",
+          title: "Cannot Deactivate Account",
+          message: "Administrators cannot deactivate their own account.",
+        });
         setErrorMessage("Administrators cannot deactivate their own account.");
       } else if (err?.code === "LAST_ADMIN_PROTECTED") {
+        setSafetyDialog({
+          type: "last-admin",
+          title: "Last Administrator Protected",
+          message: "This account cannot be deactivated or demoted because it is the last active Administrator.",
+        });
         setErrorMessage("Cannot deactivate or demote the last remaining active Administrator.");
       } else {
         setErrorMessage(err?.message || "Failed to update user profile.");
@@ -898,178 +1008,189 @@ function EditUserModal({ user, currentUserId, onClose, onSuccess }: EditUserModa
   };
 
   return (
-    <div
-      className="modal-backdrop-custom d-flex align-items-center justify-content-center p-3"
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(16, 24, 40, 0.6)",
-        backdropFilter: "blur(4px)",
-        zIndex: 1050,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isSubmitting) onClose();
-      }}
-      data-testid="edit-user-modal"
-    >
+    <>
       <div
-        className="card border-0 shadow-lg rounded-3 w-100"
-        style={{ maxWidth: 540, maxHeight: "90vh", overflowY: "auto", backgroundColor: "#FFFFFF" }}
+        className="modal-backdrop-custom d-flex align-items-center justify-content-center p-3"
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(16, 24, 40, 0.6)",
+          backdropFilter: "blur(4px)",
+          zIndex: 1050,
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget && !isSubmitting) onClose();
+        }}
+        data-testid="edit-user-modal"
       >
-        <div className="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
-          <div>
-            <h2 className="h5 fw-bold text-dark mb-1">Edit User Profile</h2>
-            <div className="small text-muted">Update details for #{user.id} — {user.fullName}</div>
-          </div>
-          <button
-            type="button"
-            className="btn-close"
-            aria-label="Close"
-            disabled={isSubmitting}
-            onClick={onClose}
-          ></button>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <div className="card-body p-4">
-            {errorMessage && (
-              <div
-                className="alert alert-danger p-3 rounded-2 small mb-4 d-flex align-items-center gap-2"
-                role="alert"
-                data-testid="edit-user-error"
-                style={{ backgroundColor: "#FEF3F2", borderColor: "#FECDCA", color: "#B42318" }}
-              >
-                <AlertTriangleIcon size={16} className="flex-shrink-0" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
-
-            {/* Read-only Email Field */}
-            <div className="mb-3">
-              <label htmlFor="edit-email-readonly" className="form-label small fw-semibold text-secondary">
-                Email Address (Read-only)
-              </label>
-              <input
-                id="edit-email-readonly"
-                type="text"
-                className="form-control bg-light font-monospace"
-                value={user.email}
-                disabled
-                readOnly
-                data-testid="edit-user-email-readonly"
-                style={{ cursor: "not-allowed" }}
-              />
-              <div className="form-text text-muted small">
-                Email addresses are immutable and cannot be modified after account creation.
-              </div>
+        <div
+          className="card border-0 shadow-lg rounded-3 w-100"
+          style={{ maxWidth: 540, maxHeight: "90vh", overflowY: "auto", backgroundColor: "#FFFFFF" }}
+        >
+          <div className="card-header bg-white border-bottom p-4 d-flex justify-content-between align-items-center">
+            <div>
+              <h2 className="h5 fw-bold text-dark mb-1">Edit User Profile</h2>
+              <div className="small text-muted">Update details for #{user.id} — {user.fullName}</div>
             </div>
-
-            {/* Full Name */}
-            <div className="mb-3">
-              <label htmlFor="edit-fullname" className="form-label small fw-semibold text-dark">
-                Full Name <span className="text-danger">*</span>
-              </label>
-              <input
-                id="edit-fullname"
-                type="text"
-                className="form-control"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                maxLength={100}
-                required
-                data-testid="edit-user-fullname-input"
-              />
-            </div>
-
-            {/* Role */}
-            <div className="mb-4">
-              <label htmlFor="edit-role" className="form-label small fw-semibold text-dark">
-                System Role <span className="text-danger">*</span>
-              </label>
-              <select
-                id="edit-role"
-                className="form-select"
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                data-testid="edit-user-role-select"
-              >
-                <option value="REQUESTER">Requester</option>
-                <option value="IT_STAFF">IT Staff</option>
-                <option value="ADMINISTRATOR">Administrator</option>
-              </select>
-              {isSelf && role !== "ADMINISTRATOR" && (
-                <div className="form-text text-warning small mt-1 fw-medium">
-                  ⚠️ Note: Demoting your own account will immediately revoke Administrator privileges on your current session.
-                </div>
-              )}
-            </div>
-
-            {/* Account Status Toggle Switch */}
-            <div className="p-3 rounded-2 border" style={{ backgroundColor: "#F9FAFB", borderColor: "#EAECF0" }}>
-              <div className="form-check form-switch d-flex align-items-center gap-3 ps-0 mb-0">
-                <input
-                  className="form-check-input ms-0 mt-0 flex-shrink-0"
-                  type="checkbox"
-                  role="switch"
-                  id="edit-active-toggle"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  data-testid="edit-user-active-toggle"
-                  style={{ width: "2.4em", height: "1.25em", cursor: "pointer" }}
-                />
-                <label className="form-check-label d-flex flex-column" htmlFor="edit-active-toggle" style={{ cursor: "pointer" }}>
-                  <span className="fw-semibold text-dark" style={{ fontSize: "0.9rem" }}>
-                    Account Status: {isActive ? <span className="text-success">Active</span> : <span className="text-muted">Inactive</span>}
-                  </span>
-                  <span className="small text-muted" style={{ fontSize: "0.8rem" }}>
-                    {isActive
-                      ? "User can authenticate and perform role-permitted desk actions."
-                      : "User is blocked from logging in and cannot be assigned to tickets."}
-                  </span>
-                </label>
-              </div>
-
-              {isSelfDeactivationAttempt && (
-                <div
-                  className="alert alert-warning p-2 mt-3 mb-0 small rounded-2 d-flex align-items-center gap-2"
-                  data-testid="edit-user-self-deactivate-warning"
-                >
-                  <AlertTriangleIcon size={16} className="text-warning flex-shrink-0" />
-                  <span>Administrators cannot deactivate their own account.</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="card-footer bg-light border-top p-3 d-flex justify-content-end gap-2">
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm fw-semibold px-3 py-2 rounded-2"
-              onClick={onClose}
+              className="btn-close"
+              aria-label="Close"
               disabled={isSubmitting}
-              data-testid="edit-user-cancel-btn"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn btn-sm fw-semibold px-4 py-2 text-white rounded-2"
-              style={{ backgroundColor: "var(--zg-primary, #006B3C)" }}
-              disabled={isSubmitting || isSelfDeactivationAttempt}
-              data-testid="edit-user-save-btn"
-            >
-              {isSubmitting ? (
-                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-              ) : null}
-              Save Changes
-            </button>
+              onClick={onClose}
+            ></button>
           </div>
-        </form>
+
+          <form onSubmit={handleSubmit}>
+            <div className="card-body p-4">
+              {errorMessage && (
+                <div
+                  className="alert alert-danger p-3 rounded-2 small mb-4 d-flex align-items-center gap-2"
+                  role="alert"
+                  data-testid="edit-user-error"
+                  style={{ backgroundColor: "#FEF3F2", borderColor: "#FECDCA", color: "#B42318" }}
+                >
+                  <AlertTriangleIcon size={16} className="flex-shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {/* Read-only Email Field */}
+              <div className="mb-3">
+                <label htmlFor="edit-email-readonly" className="form-label small fw-semibold text-secondary">
+                  Email Address (Read-only)
+                </label>
+                <input
+                  id="edit-email-readonly"
+                  type="text"
+                  className="form-control bg-light font-monospace"
+                  value={user.email}
+                  disabled
+                  readOnly
+                  data-testid="edit-user-email-readonly"
+                  style={{ cursor: "not-allowed" }}
+                />
+                <div className="form-text text-muted small">
+                  Email addresses are immutable and cannot be modified after account creation.
+                </div>
+              </div>
+
+              {/* Full Name */}
+              <div className="mb-3">
+                <label htmlFor="edit-fullname" className="form-label small fw-semibold text-dark">
+                  Full Name <span className="text-danger">*</span>
+                </label>
+                <input
+                  id="edit-fullname"
+                  type="text"
+                  className="form-control"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  maxLength={100}
+                  required
+                  data-testid="edit-user-fullname-input"
+                />
+              </div>
+
+              {/* Role */}
+              <div className="mb-4">
+                <label htmlFor="edit-role" className="form-label small fw-semibold text-dark">
+                  System Role <span className="text-danger">*</span>
+                </label>
+                <select
+                  id="edit-role"
+                  className="form-select"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as UserRole)}
+                  data-testid="edit-user-role-select"
+                >
+                  <option value="REQUESTER">Requester</option>
+                  <option value="IT_STAFF">IT Staff</option>
+                  <option value="ADMINISTRATOR">Administrator</option>
+                </select>
+                {isSelf && role !== "ADMINISTRATOR" && (
+                  <div className="form-text text-warning small mt-1 fw-medium">
+                    ⚠️ Note: Demoting your own account will immediately revoke Administrator privileges on your current session.
+                  </div>
+                )}
+              </div>
+
+              {/* Account Status Toggle Switch */}
+              <div className="p-3 rounded-2 border" style={{ backgroundColor: "#F9FAFB", borderColor: "#EAECF0" }}>
+                <div className="form-check form-switch d-flex align-items-center gap-3 ps-0 mb-0">
+                  <input
+                    className="form-check-input ms-0 mt-0 flex-shrink-0"
+                    type="checkbox"
+                    role="switch"
+                    id="edit-active-toggle"
+                    checked={isActive}
+                    onChange={(e) => handleToggleActive(e.target.checked)}
+                    data-testid="edit-user-active-toggle"
+                    style={{ width: "2.4em", height: "1.25em", cursor: "pointer" }}
+                  />
+                  <label className="form-check-label d-flex flex-column" htmlFor="edit-active-toggle" style={{ cursor: "pointer" }}>
+                    <span className="fw-semibold text-dark" style={{ fontSize: "0.9rem" }}>
+                      Account Status: {isActive ? <span className="text-success">Active</span> : <span className="text-muted">Inactive</span>}
+                    </span>
+                    <span className="small text-muted" style={{ fontSize: "0.8rem" }}>
+                      {isActive
+                        ? "User can authenticate and perform role-permitted desk actions."
+                        : "User is blocked from logging in and cannot be assigned to tickets."}
+                    </span>
+                  </label>
+                </div>
+
+                {isSelfDeactivationAttempt && (
+                  <div
+                    className="alert alert-warning p-2 mt-3 mb-0 small rounded-2 d-flex align-items-center gap-2"
+                    data-testid="edit-user-self-deactivate-warning"
+                  >
+                    <AlertTriangleIcon size={16} className="text-warning flex-shrink-0" />
+                    <span>Administrators cannot deactivate their own account.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="card-footer bg-light border-top p-3 d-flex justify-content-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm fw-semibold px-3 py-2 rounded-2"
+                onClick={onClose}
+                disabled={isSubmitting}
+                data-testid="edit-user-cancel-btn"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-sm fw-semibold px-4 py-2 text-white rounded-2"
+                style={{ backgroundColor: "var(--zg-primary, #006B3C)" }}
+                disabled={isSubmitting || isSelfDeactivationAttempt}
+                data-testid="edit-user-save-btn"
+              >
+                {isSubmitting ? (
+                  <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                ) : null}
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+
+      {safetyDialog && (
+        <SafetyAlertDialog
+          type={safetyDialog.type}
+          title={safetyDialog.title}
+          message={safetyDialog.message}
+          onDismiss={() => setSafetyDialog(null)}
+        />
+      )}
+    </>
   );
 }
 

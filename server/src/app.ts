@@ -3598,19 +3598,6 @@ app.patch(
         return;
       }
 
-      // Self-deactivation guard: Admin cannot deactivate self (400 CANNOT_DEACTIVATE_SELF)
-      if (req.user!.id === targetId && isActive === false) {
-        res
-          .status(400)
-          .json(
-            createErrorEnvelope(
-              "CANNOT_DEACTIVATE_SELF",
-              "Administrators cannot deactivate their own account."
-            )
-          );
-        return;
-      }
-
       const result = await getPrisma().$transaction(async (tx) => {
         const target = await tx.user.findUnique({ where: { id: targetId } });
         if (!target) {
@@ -3639,6 +3626,11 @@ app.patch(
           }
         }
 
+        // Self-deactivation guard: Admin cannot deactivate self (400 CANNOT_DEACTIVATE_SELF)
+        if (req.user!.id === targetId && isActive === false) {
+          throw new Error("CANNOT_DEACTIVATE_SELF");
+        }
+
         return await tx.user.update({
           where: { id: targetId },
           data: {
@@ -3661,6 +3653,17 @@ app.patch(
 
       res.status(200).json({ data: result });
     } catch (error: any) {
+      if (error?.message === "CANNOT_DEACTIVATE_SELF") {
+        res
+          .status(400)
+          .json(
+            createErrorEnvelope(
+              "CANNOT_DEACTIVATE_SELF",
+              "Administrators cannot deactivate their own account."
+            )
+          );
+        return;
+      }
       if (error?.message === "USER_NOT_FOUND") {
         res
           .status(404)
