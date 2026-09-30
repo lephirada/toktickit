@@ -4,7 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import { getPrisma } from "./prisma.js";
-import { Prisma, Priority, TicketStatus } from "@prisma/client";
+import { Prisma, Priority, TicketStatus, UserRole } from "@prisma/client";
 import {
   requireAuth,
   requirePasswordChanged,
@@ -3336,6 +3336,425 @@ app.delete(
   requireAuth,
   requirePasswordChanged,
   handleAttachmentRemoval
+);
+
+// ---------------------------------------------------------------------------
+// Issue 16 — Administrator User Management Endpoints
+// ---------------------------------------------------------------------------
+
+// GET /api/admin/users
+app.get(
+  "/api/admin/users",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { search, role } = req.query;
+      const where: Prisma.UserWhereInput = {};
+
+      if (typeof role === "string" && role.trim() !== "") {
+        const upperRole = role.trim().toUpperCase();
+        if (!["REQUESTER", "IT_STAFF", "ADMINISTRATOR"].includes(upperRole)) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Role must be REQUESTER, IT_STAFF, or ADMINISTRATOR."
+              )
+            );
+          return;
+        }
+        where.role = upperRole as UserRole;
+      }
+
+      if (typeof search === "string" && search.trim() !== "") {
+        const term = search.trim();
+        where.OR = [
+          { fullName: { contains: term, mode: "insensitive" } },
+          { email: { contains: term, mode: "insensitive" } },
+        ];
+      }
+
+      const users = await getPrisma().user.findMany({
+        where,
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+          isActive: true,
+          mustChangePassword: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: [{ fullName: "asc" }, { id: "asc" }],
+      });
+
+      res.status(200).json({ data: users });
+    } catch {
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to fetch users."));
+    }
+  }
+);
+
+// POST /api/admin/users
+app.post(
+  "/api/admin/users",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { fullName, email, role, initialPassword } = req.body || {};
+
+      if (!fullName || typeof fullName !== "string" || fullName.trim().length === 0 || fullName.trim().length > 100) {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "Full name is required (max 100 characters)."));
+        return;
+      }
+
+      if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "A valid email address is required."));
+        return;
+      }
+
+      const upperRole = typeof role === "string" ? role.trim().toUpperCase() : "";
+      if (!["REQUESTER", "IT_STAFF", "ADMINISTRATOR"].includes(upperRole)) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Role must be REQUESTER, IT_STAFF, or ADMINISTRATOR."
+            )
+          );
+        return;
+      }
+
+      if (!initialPassword || typeof initialPassword !== "string") {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "Initial password is required."));
+        return;
+      }
+
+      const policyResult = validatePasswordPolicy(initialPassword);
+      if (!policyResult.isValid) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              policyResult.reason || "Password does not meet complexity requirements."
+            )
+          );
+        return;
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+
+      // Check existing email (case-insensitive)
+      const existing = await getPrisma().user.findFirst({
+        where: { email: { equals: cleanEmail, mode: "insensitive" } },
+      });
+
+      if (existing) {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope("DUPLICATE_EMAIL", "A user with this email address already exists.")
+          );
+        return;
+      }
+
+      const passwordHash = await hashPassword(initialPassword);
+
+      try {
+        const newUser = await getPrisma().user.create({
+          data: {
+            fullName: fullName.trim(),
+            email: cleanEmail,
+            role: upperRole as UserRole,
+            passwordHash,
+            isActive: true,
+            mustChangePassword: true,
+          },
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            role: true,
+            isActive: true,
+            mustChangePassword: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+
+        res.status(201).json({ data: newUser });
+      } catch (dbErr: any) {
+        if (dbErr?.code === "P2002") {
+          res
+            .status(409)
+            .json(
+              createErrorEnvelope(
+                "DUPLICATE_EMAIL",
+                "A user with this email address already exists."
+              )
+            );
+          return;
+        }
+        throw dbErr;
+      }
+    } catch {
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to create user."));
+    }
+  }
+);
+
+// PATCH /api/admin/users/:id
+app.patch(
+  "/api/admin/users/:id",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const targetId = parseInt(req.params.id, 10);
+      if (isNaN(targetId) || targetId <= 0) {
+        res
+          .status(404)
+          .json(createErrorEnvelope("USER_NOT_FOUND", "User with the specified ID does not exist."));
+        return;
+      }
+
+      // Prohibited fields
+      if ("email" in req.body) {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "Email address cannot be modified."));
+        return;
+      }
+
+      if ("department" in req.body) {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "Department modification is not supported."));
+        return;
+      }
+
+      const { fullName, role, isActive } = req.body || {};
+
+      if (fullName === undefined && role === undefined && isActive === undefined) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "At least one editable field (fullName, role, isActive) must be provided."
+            )
+          );
+        return;
+      }
+
+      if (fullName !== undefined) {
+        if (typeof fullName !== "string" || fullName.trim().length === 0 || fullName.trim().length > 100) {
+          res
+            .status(422)
+            .json(createErrorEnvelope("VALIDATION_ERROR", "Full name must be between 1 and 100 characters."));
+          return;
+        }
+      }
+
+      let upperRole: UserRole | undefined;
+      if (role !== undefined) {
+        if (typeof role !== "string" || !["REQUESTER", "IT_STAFF", "ADMINISTRATOR"].includes(role.trim().toUpperCase())) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Role must be REQUESTER, IT_STAFF, or ADMINISTRATOR."
+              )
+            );
+          return;
+        }
+        upperRole = role.trim().toUpperCase() as UserRole;
+      }
+
+      if (isActive !== undefined && typeof isActive !== "boolean") {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "isActive must be a boolean."));
+        return;
+      }
+
+      const result = await getPrisma().$transaction(async (tx) => {
+        const target = await tx.user.findUnique({ where: { id: targetId } });
+        if (!target) {
+          throw new Error("USER_NOT_FOUND");
+        }
+
+        const newRole = upperRole !== undefined ? upperRole : target.role;
+        const newActive = isActive !== undefined ? isActive : target.isActive;
+
+        const isDemotingOrDeactivatingActiveAdmin =
+          target.role === "ADMINISTRATOR" &&
+          target.isActive === true &&
+          (newRole !== "ADMINISTRATOR" || newActive === false);
+
+        if (isDemotingOrDeactivatingActiveAdmin) {
+          // Acquire row locks on active administrators in deterministic ID order
+          const lockedAdmins = await tx.$queryRaw<{ id: number }[]>`
+            SELECT id FROM "User"
+            WHERE role = 'ADMINISTRATOR' AND "isActive" = true
+            ORDER BY id ASC
+            FOR UPDATE
+          `;
+
+          if (lockedAdmins.length <= 1) {
+            throw new Error("LAST_ADMIN_PROTECTED");
+          }
+        }
+
+        // Self-deactivation guard: Admin cannot deactivate self (400 CANNOT_DEACTIVATE_SELF)
+        if (req.user!.id === targetId && isActive === false) {
+          throw new Error("CANNOT_DEACTIVATE_SELF");
+        }
+
+        return await tx.user.update({
+          where: { id: targetId },
+          data: {
+            ...(fullName !== undefined ? { fullName: fullName.trim() } : {}),
+            ...(upperRole !== undefined ? { role: upperRole } : {}),
+            ...(isActive !== undefined ? { isActive } : {}),
+          },
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            role: true,
+            isActive: true,
+            mustChangePassword: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+      });
+
+      res.status(200).json({ data: result });
+    } catch (error: any) {
+      if (error?.message === "CANNOT_DEACTIVATE_SELF") {
+        res
+          .status(400)
+          .json(
+            createErrorEnvelope(
+              "CANNOT_DEACTIVATE_SELF",
+              "Administrators cannot deactivate their own account."
+            )
+          );
+        return;
+      }
+      if (error?.message === "USER_NOT_FOUND") {
+        res
+          .status(404)
+          .json(createErrorEnvelope("USER_NOT_FOUND", "User with the specified ID does not exist."));
+        return;
+      }
+      if (error?.message === "LAST_ADMIN_PROTECTED") {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "LAST_ADMIN_PROTECTED",
+              "Cannot deactivate or demote the last remaining active Administrator."
+            )
+          );
+        return;
+      }
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to update user."));
+    }
+  }
+);
+
+// POST /api/admin/users/:id/initial-password
+app.post(
+  "/api/admin/users/:id/initial-password",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const targetId = parseInt(req.params.id, 10);
+      if (isNaN(targetId) || targetId <= 0) {
+        res
+          .status(404)
+          .json(createErrorEnvelope("USER_NOT_FOUND", "User with the specified ID does not exist."));
+        return;
+      }
+
+      const { initialPassword } = req.body || {};
+      if (!initialPassword || typeof initialPassword !== "string") {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "Initial password is required."));
+        return;
+      }
+
+      const policyResult = validatePasswordPolicy(initialPassword);
+      if (!policyResult.isValid) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              policyResult.reason || "Password does not meet complexity requirements."
+            )
+          );
+        return;
+      }
+
+      const target = await getPrisma().user.findUnique({ where: { id: targetId } });
+      if (!target) {
+        res
+          .status(404)
+          .json(createErrorEnvelope("USER_NOT_FOUND", "User with the specified ID does not exist."));
+        return;
+      }
+
+      const passwordHash = await hashPassword(initialPassword);
+
+      // Updates hash and forces mustChangePassword = true, leaving isActive untouched
+      await getPrisma().user.update({
+        where: { id: targetId },
+        data: {
+          passwordHash,
+          mustChangePassword: true,
+        },
+      });
+
+      res.status(200).json({
+        data: {
+          message: "Initial password updated successfully. User must change password at next login.",
+        },
+      });
+    } catch {
+      res
+        .status(500)
+        .json(createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to reset initial password."));
+    }
+  }
 );
 
 export default app;
