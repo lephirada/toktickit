@@ -256,10 +256,14 @@ test.describe("Lab 03 Complete 20-Step End-to-End Integration Journey", () => {
     await expect(confirmResolvedBtn).toBeHidden();
 
     // Verify state machine preservation: status is still IN_PROGRESS (NOT auto-closed/resolved)
-    await expect(page.locator('[data-testid="detail-status-badge"]')).toContainText(/IN PROGRESS/i);
+    const statusBadge = page.locator('[data-testid="detail-status-badge"]');
+    await expect(statusBadge).toContainText(/IN PROGRESS/i);
+    const statusTextAfter = await statusBadge.innerText();
+    expect(statusTextAfter.toUpperCase()).not.toContain("RESOLVED");
+    expect(statusTextAfter.trim().toUpperCase()).toBe("IN PROGRESS");
 
     // =========================================================================
-    // STEP 19 — Test user management flow as Administrator
+    // STEP 19 — Test user management flow as Administrator & authenticate created user
     // =========================================================================
     // Logout Sarah Connor
     await page.click('[data-testid="header-profile-button"]');
@@ -275,27 +279,61 @@ test.describe("Lab 03 Complete 20-Step End-to-End Integration Journey", () => {
     await page.goto("/admin/users");
     await expect(page.locator('[data-testid="admin-users-table"]')).toBeVisible();
 
-    // Create a new user
+    // 1. Create a new user through Admin UI
     await page.click('[data-testid="create-user-button"]');
     await expect(page.locator('[data-testid="create-user-modal"]')).toBeVisible();
 
     const journeyUserEmail = `e2e_test_journey_${Date.now()}@toktickit.com`;
+    const journeyUserTempPass = "JourneyPass123!";
     await page.fill('[data-testid="create-user-fullname-input"]', "Journey User");
     await page.fill('[data-testid="create-user-email-input"]', journeyUserEmail);
     await page.selectOption('[data-testid="create-user-role-select"]', "REQUESTER");
-    await page.fill('[data-testid="create-user-password-input"]', "JourneyPass123!");
+    await page.fill('[data-testid="create-user-password-input"]', journeyUserTempPass);
     await page.click('[data-testid="create-user-submit-btn"]');
 
+    // 2. Newly created user appears in Admin directory
     await expect(page.locator('[data-testid="create-user-modal"]')).toBeHidden();
     await expect(page.locator('[data-testid="admin-users-table"]').locator(`text=${journeyUserEmail}`)).toBeVisible();
 
-    // =========================================================================
-    // STEP 20 — Log out and verify protected pages require authentication again
-    // =========================================================================
+    // 3. Administrator logs out
     await page.click('[data-testid="header-profile-button"]');
     await page.click('[data-testid="header-logout-btn"]');
     await expect(page).toHaveURL(/\/login/);
 
+    // 4. Browser logs in using newly created user's temporary password
+    await page.fill('[data-testid="login-email-input"]', journeyUserEmail);
+    await page.fill('[data-testid="login-password-input"]', journeyUserTempPass);
+    await page.click('[data-testid="login-submit-btn"]');
+
+    // 5. Browser is redirected to /change-password because mustChangePassword=true
+    await expect(page).toHaveURL(/\/change-password/);
+    await expect(page.locator('[data-testid="change-password-screen"]')).toBeVisible();
+    await expect(page.locator('[data-testid="change-password-notice"]')).toBeVisible();
+
+    // 6. Newly created user submits a valid new password through the real UI
+    const journeyUserNewPass = "NewJourneyPass123!";
+    await page.fill('[data-testid="current-password-input"]', journeyUserTempPass);
+    await page.fill('[data-testid="new-password-input"]', journeyUserNewPass);
+    await page.fill('[data-testid="confirm-password-input"]', journeyUserNewPass);
+    await page.click('[data-testid="change-password-submit-btn"]');
+
+    // 7 & 8. Password-change succeeds and user is released into the application
+    await expect(page).toHaveURL(/\/my-tickets/, { timeout: 10000 });
+    await expect(page.locator('[data-testid="my-tickets-section"]')).toBeVisible();
+
+    // 9. Verify user reaches the appropriate role-based application page (Requester)
+    await expect(page.locator('[data-testid="nav-create-ticket"]')).toBeVisible();
+    await expect(page.locator('[data-testid="nav-staff-queue"]')).toBeHidden();
+    await expect(page.locator('[data-testid="nav-admin-users"]')).toBeHidden();
+
+    // 10. Log out before continuing to Step 20
+    await page.click('[data-testid="header-profile-button"]');
+    await page.click('[data-testid="header-logout-btn"]');
+    await expect(page).toHaveURL(/\/login/);
+
+    // =========================================================================
+    // STEP 20 — Log out and verify protected pages require authentication again
+    // =========================================================================
     // Verify /my-tickets redirects to /login
     await page.goto("/my-tickets");
     await expect(page).toHaveURL(/\/login/);
