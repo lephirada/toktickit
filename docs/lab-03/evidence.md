@@ -20,7 +20,7 @@
 | **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #36]`              | `[Approved]`                    | `[Merged]`   |
 | **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #37]`              | `[Request Changes -> Approved]` | `[Merge]`    |
 | **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #38]`              | `[Approved]`                    | `[Merge]`    |
-| **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #40]`              | `[Approved]`                    | `[Pending]`  |
 
 ---
 
@@ -319,23 +319,30 @@
 
 ### 2.4 Playwright Browser Automation & End-to-End Verification
 
-- **Target Commands:**
-  - Smoke Suite: `npx playwright test e2e/lab-03/smoke.spec.ts`
-  - Automated Responsive Screenshot Journey: `npx playwright test e2e/lab-03/capture-screenshots.spec.ts`
+- **Target Command:** `npm run test:e2e` (`npx playwright test`)
+- **Suites Executed:**
+  - `e2e/lab-03/full-journey.spec.ts`: Full 20-step continuous multi-persona real browser integration journey.
+  - `e2e/lab-03/authentication.spec.ts`: Route guards, unauthenticated redirects, invalid credentials, inactive accounts, first-login password gate enforcement, session persistence, and logout.
+  - `e2e/lab-03/staff-ticket-flow.spec.ts`: Queue triage, search/filter controls, claim and reassign workflows, status update modal with mandatory reasons, and confidential internal notes.
+  - `e2e/lab-03/user-administration.spec.ts`: User directory search, role filtering, create user flow, edit user details, and safety alert dialogs (self-deactivation and last-admin demotion).
+  - `e2e/lab-03/responsive-overflow.spec.ts`: Dedicated root horizontal page-overflow assertions (`document.documentElement.scrollWidth <= window.innerWidth`) across all 8 views and 3 viewports.
+  - `e2e/lab-03/capture-screenshots.spec.ts`: Automated deterministic responsive screenshot journey across 3 viewports for all 8 views plus modal and safety states.
+  - `e2e/app.spec.ts`: Smoke checks verifying server health, taxonomy accessibility, and RBAC authentication headers.
 
 - **Playwright Test Runner Log Output:**
 
 ```text
-Running 3 tests using 1 worker
+Running 64 tests using 1 worker
 
-     1 …ite › verifies server health and public taxonomy endpoints are reachable
-  ✓  1 …erifies server health and public taxonomy endpoints are reachable (35ms)
-     2 …st: rejects client-supplied X-Requester-Id header without session cookie
-  ✓  2 …jects client-supplied X-Requester-Id header without session cookie (6ms)
-     3 …e Suite › protects authenticated endpoints from unauthenticated requests
-  ✓  3 …e › protects authenticated endpoints from unauthenticated requests (9ms)
+  ✓  e2e/lab-03/authentication.spec.ts (5)
+  ✓  e2e/lab-03/capture-screenshots.spec.ts (24)
+  ✓  e2e/lab-03/full-journey.spec.ts (1)
+  ✓  e2e/lab-03/responsive-overflow.spec.ts (24)
+  ✓  e2e/app.spec.ts (3)
+  ✓  e2e/lab-03/staff-ticket-flow.spec.ts (3)
+  ✓  e2e/lab-03/user-administration.spec.ts (4)
 
-  3 passed (645ms)
+  64 passed (56.3s)
 ```
 
 - **Automated Responsive Screenshot Journey:** Verifies unauthenticated redirect, first-login password change, requester ticket detail, staff ticket queue triage, staff ticket operational details, administrator user management across desktop, tablet, and mobile, plus modal states and safety alert dialog interception. All 32 target screenshots verified in `artifacts/lab-03/screenshots/`.
