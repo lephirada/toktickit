@@ -169,7 +169,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
       // For tablet and mobile, also capture with filter drawer opened
       if (vp.name !== "desktop") {
         await page.click('[data-testid="queue-filter-drawer-toggle"]');
-        await page.waitForTimeout(200);
+        await expect(page.locator('[data-testid="queue-filter-drawer"]')).toBeVisible();
         await page.screenshot({
           path: path.join(SCREENSHOT_DIR, `06-staff-queue-${vp.name}-filter-open.png`),
           fullPage: true,
