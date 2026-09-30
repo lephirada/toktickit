@@ -169,10 +169,16 @@
 - **Branch:** `feature/16-user-management`
 - **Reviewer comment I received:**
 
-  > `[Placeholder: Partner review comments for Issue 16 PR]`
+  > Reviewed PR #38 against the Issue 16 Acceptance Criteria.
+
+  > The Admin User Management API/UI, RBAC, user creation/editing, password reset, duplicate-email validation, self-deactivation and last-admin protection, inactive-user assignment guard, responsive UI, tests, and evidence are all implemented.
+
+  > Server/client tests and CI are passing with no blocking issues.
+
+  > Approve.
 
 - **How I responded:**
-  > `[Placeholder: Author response to partner feedback]`
+  > Thank you for the review and approval Ka! Updating documentation and ready for merge into lab3-staging.
 
 ---
 
@@ -318,10 +324,12 @@
 
 - **My comment:**
 
-  > `[Placeholder: My review comment for partner's Issue 16 PR]`
+  > Reviewed the latest changes against the acceptance criteria. The required E2E suites, responsive checks, screenshots, and CI tests are all passing.
+
+  > Approve.
 
 - **Partner's response:**
-  > `[Placeholder: Partner's response]`
+  > Thank you so much @lephirada for reviewing and approving PR #47! All admin endpoints, safety rules, interactive UI, and test suites are verified. Proceeding to merge PR #47 into lab3-staging to complete Issue 17 (#39).
 
 ---
 
