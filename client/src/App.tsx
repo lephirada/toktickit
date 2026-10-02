@@ -360,10 +360,10 @@ export function AppContent() {
       />
 
       <main
-        className={`container-fluid py-4 flex-grow-1 ${effectiveView === "staff-queue" ? "px-2 px-sm-3 px-xl-4" : "px-3 px-sm-4 px-lg-4"}`}
+        className={`container-fluid py-4 flex-grow-1 ${effectiveView === "staff-queue" || effectiveView === "admin-users" ? "px-2 px-sm-3 px-xl-4" : "px-3 px-sm-4 px-lg-4"}`}
         style={{
           maxWidth:
-            effectiveView === "staff-queue"
+            effectiveView === "staff-queue" || effectiveView === "admin-users"
               ? "1600px"
               : effectiveView === "my-tickets" || effectiveView === "ticket-detail" || effectiveView === "staff-ticket-detail"
               ? 1440

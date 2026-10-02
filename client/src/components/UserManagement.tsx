@@ -140,7 +140,7 @@ export default function UserManagement() {
   };
 
   return (
-    <div className="container-xl py-4" data-testid="user-management-container">
+    <div className="w-100" data-testid="user-management-container">
       {/* Header Bar */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
         <div>
@@ -368,14 +368,14 @@ export default function UserManagement() {
               <table className="table table-hover align-middle mb-0" data-testid="admin-users-table">
                 <thead style={{ backgroundColor: "#F9FAFB", borderBottom: "1px solid #EAECF0" }}>
                   <tr className="text-secondary text-uppercase" style={{ fontSize: "0.75rem", letterSpacing: "0.05em" }}>
-                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: 80 }}>User ID</th>
-                    <th scope="col" className="py-3 px-3 fw-bold">Display Name</th>
-                    <th scope="col" className="py-3 px-3 fw-bold">Email</th>
-                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: 130 }}>Role</th>
-                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: 110 }}>Status</th>
-                    <th scope="col" className="py-3 px-3 fw-bold d-none d-lg-table-cell" style={{ width: 150 }}>Created</th>
-                    <th scope="col" className="py-3 px-3 fw-bold d-none d-xl-table-cell" style={{ width: 150 }}>Updated</th>
-                    <th scope="col" className="py-3 px-3 fw-bold text-end" style={{ width: 180 }}>Actions</th>
+                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: "9%" }}>User ID</th>
+                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: "20%" }}>Display Name</th>
+                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: "21%" }}>Email</th>
+                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: "8%" }}>Role</th>
+                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: "8%" }}>Status</th>
+                    <th scope="col" className="py-3 px-3 fw-bold d-none d-lg-table-cell" style={{ width: "12%" }}>Created</th>
+                    <th scope="col" className="py-3 px-3 fw-bold d-none d-xl-table-cell" style={{ width: "12%" }}>Updated</th>
+                    <th scope="col" className="py-3 px-3 fw-bold text-end" style={{ width: "11%", minWidth: 140 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
