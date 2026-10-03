@@ -5,7 +5,6 @@ import { AlertTriangleIcon, XCircleIcon } from "./icons";
 export interface AttachmentRemovalModalProps {
   isOpen: boolean;
   attachment: TicketDetailAttachment | null;
-  requesterId?: number;
   onClose: () => void;
   onSuccess: (updatedAttachment: TicketDetailAttachment) => void;
 }
@@ -20,7 +19,6 @@ export const PRESET_OPTIONS = [
 export const AttachmentRemovalModal: React.FC<AttachmentRemovalModalProps> = ({
   isOpen,
   attachment,
-  requesterId,
   onClose,
   onSuccess,
 }) => {
@@ -78,10 +76,6 @@ export const AttachmentRemovalModal: React.FC<AttachmentRemovalModalProps> = ({
       return;
     }
 
-    if (!requesterId) {
-      setErrorMessage("Requester authentication is required.");
-      return;
-    }
 
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -92,7 +86,7 @@ export const AttachmentRemovalModal: React.FC<AttachmentRemovalModalProps> = ({
         ...(selectedReason === "Other" ? { customReason: customReason.trim() } : {}),
       };
 
-      const updated = await removeAttachment(attachment.id, payload, requesterId);
+      const updated = await removeAttachment(attachment.id, payload);
       setIsSubmitting(false);
       onSuccess(updated);
       onClose();
@@ -144,7 +138,7 @@ export const AttachmentRemovalModal: React.FC<AttachmentRemovalModalProps> = ({
           className="alert alert-warning d-flex align-items-start gap-2 p-3 mb-3"
           style={{ fontSize: "0.875rem", backgroundColor: "var(--zg-warning-bg, #FFFAEB)", borderColor: "#FEDF89" }}
         >
-          <AlertTriangleIcon size={18} color="var(--zg-warning, #B54708)" className="flex-shrink-0 mt-0.5" />
+          <AlertTriangleIcon size={18} color="var(--zg-warning, #B54708)" className="flex-shrink-0 mt-0" />
           <div>
             <strong>Warning:</strong> This file will be soft-deleted. The removal will be recorded in the audit log and the file can no longer be downloaded.
           </div>

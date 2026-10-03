@@ -167,7 +167,7 @@ body {
   color: #1A2E26;
 }
 
-/* Filter Toolbar Alignment & Fixed Width Sizing (Zero Shift) */
+/* Filter Toolbar Alignment & Controlled Fixed Sizing */
 .zg-filter-toolbar,
 .zg-filter-bar {
   display: flex;
@@ -175,31 +175,62 @@ body {
   gap: 0.75rem;
   margin-bottom: 1.5rem;
   width: 100%;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .zg-filter-search {
-  flex: 1 1 240px;
-  min-width: 200px;
-  height: 40px;
+  flex: 1 1 auto;
+  min-width: 220px;
+  height: 48px;
+}
+
+.zg-filter-dropdown-group,
+.zg-filter-dropdowns {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.zg-filter-category {
+  width: 180px;
+  min-width: 180px;
+  flex: 0 0 180px;
+  height: 48px;
+}
+
+.zg-filter-priority {
+  width: 170px;
+  min-width: 170px;
+  flex: 0 0 170px;
+  height: 48px;
+}
+
+.zg-filter-status {
+  width: 160px;
+  min-width: 160px;
+  flex: 0 0 160px;
+  height: 48px;
 }
 
 .zg-filter-select-wrapper {
-  flex: 0 0 160px;
-  width: 160px;
+  position: relative;
+  height: 48px;
 }
 
 .zg-filter-select {
-  flex: 0 0 160px !important; /* Lock exact width */
-  width: 160px !important;
-  height: 40px !important;
+  height: 48px !important;
+  width: 100% !important;
   box-sizing: border-box;
   font-size: 0.875rem;
   border-color: var(--zg-border);
   border-radius: var(--zg-radius-md);
-  padding: 0.45rem 1.8rem 0.45rem 0.75rem;
-  text-overflow: ellipsis;
+  padding: 0.5rem 2rem 0.5rem 0.85rem;
   white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  background-color: #ffffff;
+  line-height: 1.5;
 }
 
 .zg-filter-toolbar .input-group,
@@ -208,31 +239,238 @@ body {
 .zg-filter-bar .input-group,
 .zg-filter-bar .input-group > .form-control,
 .zg-filter-bar .input-group > .input-group-text {
-  height: 40px !important;
+  height: 48px !important;
   font-size: 0.875rem;
 }
 
-.zg-filter-select:focus,
-.zg-filter-toolbar .input-group > .form-control:focus,
-.zg-filter-bar .input-group > .form-control:focus {
+.zg-filter-toolbar .input-group,
+.zg-filter-bar .input-group {
+  border-radius: var(--zg-radius-md);
+  transition: box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+/* Modern Staff Queue Filter Toolbar Ghost Button */
+.zg-ghost-reset-btn {
+  color: #667085 !important;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+}
+
+.zg-ghost-reset-btn:hover {
+  background-color: #F2F4F7 !important;
+  color: #1D2939 !important;
+}
+
+/* Staff Ticket Queue Collapsible Filter Drawer */
+.zg-queue-search-col {
+  min-width: 140px;
+}
+
+@media (min-width: 992px) {
+  .zg-queue-search-col {
+    min-width: 220px;
+  }
+}
+
+.zg-filter-toggle-btn {
+  height: 38px;
+  border-radius: 8px;
+  font-size: 0.825rem;
+  font-weight: 500;
+  border: 1px solid #D0D5DD;
+  background-color: #FFFFFF;
+  color: #344054;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition: all 0.15s ease-in-out;
+  white-space: nowrap;
+  padding: 0 0.75rem;
+}
+
+.zg-filter-toggle-btn:hover {
+  background-color: #F9FAFB;
+  border-color: #D0D5DD;
+  color: #1D2939;
+}
+
+.zg-filter-toggle-btn.is-active,
+.zg-filter-toggle-btn.has-filters {
+  border-color: var(--zg-primary);
+  background-color: #F4FBF7;
+  color: var(--zg-primary);
+}
+
+.zg-filter-drawer-box {
+  width: 100%;
+  border-radius: 10px;
+  background-color: #F8F9FA;
+  border: 1px solid #EAECF0;
+  padding: 0.75rem;
+  transition: all 0.2s ease-in-out;
+}
+
+@media (min-width: 992px) {
+  .zg-filter-drawer-box {
+    width: auto !important;
+    background-color: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+.zg-filter-drawer-item {
+  flex: 1 1 calc(50% - 6px);
+  min-width: 130px;
+}
+
+@media (min-width: 992px) {
+  .zg-filter-drawer-item {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: unset !important;
+  }
+}
+
+@media (max-width: 991px) {
+  .zg-filter-drawer-box .zg-filter-drawer-item {
+    flex: 1 1 calc(50% - 6px) !important;
+    min-width: 130px !important;
+    width: auto !important;
+    height: 38px !important;
+  }
+  .zg-filter-drawer-box .zg-filter-select-wrapper {
+    height: 38px !important;
+  }
+  .zg-filter-drawer-box .zg-filter-select {
+    height: 38px !important;
+    font-size: 0.85rem !important;
+    border-radius: 8px !important;
+    padding: 0.35rem 1.8rem 0.35rem 0.75rem !important;
+  }
+}
+
+.zg-assignment-capsule {
+  background-color: #F2F4F7;
+  gap: 3px;
+  max-width: 100%;
+}
+
+.zg-assignment-pill-btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.65rem;
+  white-space: nowrap;
+}
+
+@media (min-width: 576px) {
+  .zg-assignment-pill-btn {
+    font-size: 0.78rem;
+    padding: 0.28rem 0.85rem;
+  }
+}
+
+.zg-filter-toolbar .input-group > .input-group-text,
+.zg-filter-bar .input-group > .input-group-text {
+  border-top-left-radius: var(--zg-radius-md) !important;
+  border-bottom-left-radius: var(--zg-radius-md) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.zg-filter-toolbar .input-group > .form-control,
+.zg-filter-bar .input-group > .form-control {
+  border-top-right-radius: var(--zg-radius-md) !important;
+  border-bottom-right-radius: var(--zg-radius-md) !important;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.zg-filter-select:focus {
   border-color: var(--zg-secondary) !important;
   box-shadow: 0 0 0 2px rgba(11, 122, 70, 0.2) !important;
-  outline: none;
+  outline: none !important;
 }
 
-/* Prevent Vertical Card Shrink (Zero Layout Shift) */
+/* Unified Compound Input Groups (Search Bar, Password Fields with Toggle Button) */
+.input-group:focus-within {
+  box-shadow: 0 0 0 2px rgba(11, 122, 70, 0.2) !important;
+  border-radius: var(--zg-radius-md, 8px) !important;
+}
+
+.input-group:focus-within > .input-group-text,
+.input-group:focus-within > .form-control,
+.input-group:focus-within > .btn,
+.input-group:focus-within > .zg-password-toggle-btn {
+  border-color: var(--zg-secondary) !important;
+  box-shadow: none !important;
+  outline: none !important;
+  z-index: 1 !important;
+}
+
+/* Responsive Behavior for Tablet and Mobile */
+@media (max-width: 991px) {
+  .zg-filter-toolbar,
+  .zg-filter-bar {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .zg-filter-search {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .zg-filter-dropdown-group,
+  .zg-filter-dropdowns {
+    flex: 1 1 100%;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .zg-filter-category,
+  .zg-filter-priority,
+  .zg-filter-status {
+    flex: 1 1 calc(33.333% - 0.5rem);
+    min-width: 150px;
+    width: auto;
+  }
+}
+
+@media (max-width: 576px) {
+  .zg-filter-category,
+  .zg-filter-priority,
+  .zg-filter-status {
+    flex: 1 1 100%;
+    min-width: 100%;
+    width: 100%;
+  }
+}
+
+/* Content Area Sizing: Proportional and Content-Driven */
 .zg-ticket-content-area {
-  min-height: 380px;
+  min-height: auto;
 }
 
-/* Accessibility Focus Ring Standard */
+/* Accessibility Focus Ring Standard for Interactive Links & Standalone Buttons */
 a:focus-visible,
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
+button:focus-visible:not(.zg-password-toggle-btn) {
   outline: 2px solid var(--zg-secondary) !important;
   outline-offset: 2px;
+}
+
+/* Form Controls Focus Standard (Zen Green) - Flush, seamless focus without detached floating outline */
+.form-control:focus,
+.form-select:focus,
+input:focus,
+input:focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  border-color: var(--zg-secondary) !important;
+  box-shadow: 0 0 0 2px rgba(11, 122, 70, 0.2) !important;
+  outline: none !important;
 }
 
 /* Modal Overlay & Card */
@@ -400,26 +638,58 @@ textarea:focus-visible {
   font-size: 0.75rem;
 }
 
+.zg-status-open {
+  background-color: #E0F2FE;
+  color: #0369A1;
+  border: 1px solid #BAE6FD;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
 .zg-status-in-progress {
-  background-color: #FFFAEB;
+  background-color: #FEF0C7;
   color: #B54708;
   border: 1px solid #FEDF89;
   font-weight: 600;
   font-size: 0.75rem;
 }
 
+.zg-status-waiting {
+  background-color: #FFEDD5;
+  color: #C2410C;
+  border: 1px solid #FED7AA;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
 .zg-status-resolved {
-  background-color: #ECFDF3;
-  color: #027A48;
+  background-color: #DCFCE7;
+  color: #15803D;
   border: 1px solid #A6F4C5;
   font-weight: 600;
   font-size: 0.75rem;
 }
 
 .zg-status-closed {
-  background-color: #F2F4F7;
-  color: #344054;
+  background-color: #F3F4F6;
+  color: #374151;
   border: 1px solid #D0D5DD;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.zg-status-reopened {
+  background-color: #FDF4FF;
+  color: #A21CAF;
+  border: 1px solid #F0ABFC;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.zg-status-cancelled {
+  background-color: #FEE2E2;
+  color: #991B1B;
+  border: 1px solid #FCA5A5;
   font-weight: 600;
   font-size: 0.75rem;
 }
@@ -432,74 +702,221 @@ textarea:focus-visible {
   font-size: 0.75rem;
 }
 
-/* Table Hover & Styles */
+/* Table Layout & Enhanced Styles */
+/* Table Layout & Enhanced Modern Surface */
+.zg-table-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  border: 1px solid #EAECF0;
+  border-radius: 12px;
+  background-color: var(--zg-surface);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
 .zg-table {
   width: 100%;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
+  margin-bottom: 0;
 }
 
-.zg-table th,
-.zg-table td {
-  padding: 0.7rem 0.5rem;
+.zg-table th {
+  background-color: #F9FAFB;
+  color: #475467;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.75rem 0.5rem;
   vertical-align: middle;
-  overflow: hidden;
+  border-bottom: 1px solid #EAECF0;
+  border-top: none;
+  line-height: 1.25;
+}
+
+.zg-table td {
+  padding: 0.75rem 0.5rem;
+  vertical-align: middle;
+  border-bottom: 1px solid #F2F4F7;
+  transition: background-color 0.15s ease-in-out;
 }
 
 .zg-table th:first-child,
 .zg-table td:first-child {
-  padding-left: 0.875rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
 }
 
 .zg-table th:last-child,
 .zg-table td:last-child {
-  padding-right: 0.875rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.zg-table-row:nth-child(even) td {
+  background-color: #FAFCFB;
+}
+
+.zg-table-row:nth-child(odd) td {
+  background-color: #FFFFFF;
 }
 
 .zg-table-row:hover td {
   background-color: var(--zg-pale) !important;
 }
 
-.zg-table th {
-  background-color: var(--zg-surface-subtle);
-  color: var(--zg-text-secondary);
-  font-weight: 600;
+/* Status Badge Universal Standard */
+.zg-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--zg-radius-full);
   font-size: 0.7rem;
-  text-transform: uppercase;
+  font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
-  border-bottom: 2px solid var(--zg-border-subtle);
+  max-width: 100%;
+  line-height: 1;
 }
 
-.zg-table-container {
-  overflow-x: hidden;
-  width: 100%;
+/* Priority Badges Universal Standard */
+.zg-priority-p0,
+.zg-priority-p1,
+.zg-priority-p2,
+.zg-priority-p3 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--zg-radius-full);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 100%;
+  line-height: 1;
 }
 
-@media (max-width: 991px) {
-  .zg-table {
-    table-layout: auto;
-    min-width: 860px;
+@media (min-width: 768px) and (max-width: 991px) {
+  .zg-table th,
+  .zg-table td {
+    padding: 0.55rem 0.35rem;
   }
-  .zg-table-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  .zg-table th {
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
   }
+  .zg-table td {
+    font-size: 0.75rem;
+  }
+  .zg-priority-p0,
+  .zg-priority-p1,
+  .zg-priority-p2,
+  .zg-priority-p3,
+  .zg-status-badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.35rem;
+  }
+}
+
+/* Staff Ticket Queue Fixed Table (Strictly Zero Horizontal Scroll) */
+.zg-table-fixed {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+.zg-table-fixed th {
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+  color: #475467 !important;
+  padding: 0.75rem 0.4rem !important;
+  vertical-align: middle;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  line-height: 1.3;
+  border-bottom: 1px solid #EAECF0 !important;
+}
+
+.zg-table-fixed td {
+  vertical-align: middle;
+  padding: 0.75rem 0.4rem !important;
+  line-height: 1.35;
+  border-bottom: 1px solid #F2F4F7 !important;
+}
+
+.zg-table-fixed tbody tr:hover td {
+  background-color: #F8FAFC !important;
+}
+
+.zg-table-fixed .badge,
+.zg-table-fixed .zg-status-badge {
+  white-space: normal !important;
+  display: inline-block;
+  text-align: center;
+  line-height: 1.25;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+/* Priority Badges must strictly stay on a single line without wrapping */
+.zg-table-fixed .zg-priority-badge,
+.zg-priority-p0,
+.zg-priority-p1,
+.zg-priority-p2,
+.zg-priority-p3,
+[data-testid="priority-badge-not-set"] {
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0;
+}
+
+.zg-table-fixed [data-testid="queue-status"] .zg-status-badge {
+  font-size: 0.65rem !important;
+  padding: 0.22rem 0.42rem !important;
+}
+
+.zg-table-fixed [data-testid="queue-req-priority"] .badge,
+.zg-table-fixed [data-testid="queue-it-priority"] .badge {
+  font-size: 0.65rem !important;
+  padding: 0.2rem 0.4rem !important;
 }
 
 .zg-mobile-card {
   background-color: var(--zg-surface);
-  border: 1px solid var(--zg-border);
-  border-radius: var(--zg-radius-md);
+  border: 1px solid #EAECF0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .zg-mobile-card:hover {
-  box-shadow: var(--zg-shadow-md);
+  box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
 }
 
-/* Table Column Locking & Layout Utilities */
+/* Micro-animations & Utility Helpers */
+.transition-all {
+  transition: all 0.15s ease-in-out !important;
+}
+
+.transition-transform {
+  transition: transform 0.15s ease-in-out !important;
+}
+
+.rotate-180 {
+  transform: rotate(180deg) !important;
+}
+
+.hover-opacity-100:hover {
+  opacity: 1 !important;
+}
+
+/* Table Column Locking & Test Contract Utilities */
 .whitespace-nowrap {
   white-space: nowrap !important;
 }
@@ -525,3 +942,32 @@ textarea:focus-visible {
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
 }
+
+/* Password Visibility Toggle Button Styling */
+.zg-password-toggle-btn {
+  --bs-btn-color: #667085;
+  --bs-btn-border-color: #D0D5DD;
+  --bs-btn-hover-color: #344054;
+  --bs-btn-hover-bg: #F2F4F7;
+  --bs-btn-hover-border-color: #D0D5DD;
+  --bs-btn-active-color: #1D2939;
+  --bs-btn-active-bg: #EAECF0;
+  --bs-btn-active-border-color: #D0D5DD;
+  background-color: transparent;
+  color: var(--bs-btn-color);
+  border-color: var(--bs-btn-border-color);
+  transition: all 0.15s ease-in-out;
+}
+
+.zg-password-toggle-btn:hover {
+  background-color: var(--bs-btn-hover-bg) !important;
+  color: var(--bs-btn-hover-color) !important;
+  border-color: var(--bs-btn-hover-border-color) !important;
+}
+
+.zg-password-toggle-btn:active {
+  background-color: var(--bs-btn-active-bg) !important;
+  color: var(--bs-btn-active-color) !important;
+}
+
+

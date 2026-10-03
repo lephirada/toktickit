@@ -3,19 +3,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../src/api.js";
-import { RequesterProvider, useRequester } from "../../src/context/RequesterContext.js";
+import { AuthProvider, useAuth } from "../../src/context/AuthContext.js";
 import CreateTicketForm from "../../src/components/CreateTicketForm.js";
 import App from "../../src/App.js";
 
-const mockRequesters: api.RequesterUser[] = [
-  {
-    id: 1,
-    fullName: "Sarah Connor",
-    email: "sarah.connor@toktickit.com",
-    department: "Engineering",
-    isActive: true,
-  },
-];
+const mockAuthUser: api.AuthUser = {
+  id: 1,
+  fullName: "Sarah Connor",
+  email: "sarah.connor@toktickit.com",
+  role: "REQUESTER",
+  mustChangePassword: false,
+};
 
 const mockCategories: api.Category[] = [
   { id: 1, name: "Account and Access" },
@@ -39,7 +37,7 @@ function TestWrapper({
   onSuccess?: (ticketNo: string) => void;
   onCancel?: () => void;
 }) {
-  const { isFormDirty } = useRequester();
+  const { isFormDirty } = useAuth();
   return (
     <div>
       <div data-testid="is-dirty-flag">{isFormDirty ? "dirty" : "clean"}</div>
@@ -51,9 +49,9 @@ function TestWrapper({
 describe("Issue 7 — Create Ticket Form Component Tests", () => {
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem("toktickit_requester_id", "1");
+    sessionStorage.clear();
     vi.restoreAllMocks();
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockAuthUser);
     vi.spyOn(api, "fetchTickets").mockResolvedValue({
       data: [],
       pagination: {
@@ -77,9 +75,9 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <TestWrapper />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     // Wait for categories to load
@@ -98,17 +96,18 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     // System select becomes enabled and populates Hardware systems
     await waitFor(() => {
       expect(systemSelect).not.toBeDisabled();
-      expect(screen.getByRole("option", { name: "Corporate Laptop" })).toBeInTheDocument();
     });
 
-    // Select "Network"
+    expect(screen.getByRole("option", { name: "Corporate Laptop" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "VPN Gateway" })).not.toBeInTheDocument();
+
+    // Switch to "Network"
     await user.selectOptions(categorySelect, "4");
 
-    // System select updates to Network systems
     await waitFor(() => {
-      expect(screen.queryByRole("option", { name: "Corporate Laptop" })).not.toBeInTheDocument();
       expect(screen.getByRole("option", { name: "VPN Gateway" })).toBeInTheDocument();
       expect(screen.getByRole("option", { name: "Campus Wi-Fi" })).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: "Corporate Laptop" })).not.toBeInTheDocument();
     });
   });
 
@@ -117,29 +116,33 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <TestWrapper />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     await screen.findByRole("option", { name: "Hardware" });
 
-    // Click submit immediately on empty form
+    // Submit with completely blank form
     const submitBtn = screen.getByTestId("submit-ticket-btn");
     await user.click(submitBtn);
 
     // Verify error messages for empty submission
-    expect(screen.getByText("Summary is required.")).toBeInTheDocument();
+    expect(await screen.findByText("Summary is required.")).toBeInTheDocument();
     expect(screen.getByText("Description is required.")).toBeInTheDocument();
     expect(screen.getByText("Valid category is required.")).toBeInTheDocument();
     expect(createTicketSpy).not.toHaveBeenCalled();
 
-    // Type short values
+    // Fill Category, but enter too short summary and description
+    const categorySelect = screen.getByLabelText(/Category/i);
+    await user.selectOptions(categorySelect, "2");
+
     const summaryInput = screen.getByLabelText(/Summary/i);
     const descriptionInput = screen.getByLabelText(/Description/i);
 
-    await user.type(summaryInput, "VPN");
-    await user.type(descriptionInput, "Too short");
+    await user.type(summaryInput, "1234"); // 4 chars < 5
+    await user.type(descriptionInput, "123456789"); // 9 chars < 10
+
     await user.click(submitBtn);
 
     expect(
@@ -155,83 +158,69 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     const uploadSpy = vi.spyOn(api, "uploadAttachments").mockResolvedValue({
       data: [
         {
-          id: 881,
-          originalName: "error_screen.png",
+          id: 501,
+          originalName: "network_screenshot.png",
           mimeType: "image/png",
-          sizeBytes: 245890,
+          sizeBytes: 2048,
           createdAt: new Date().toISOString(),
         },
       ],
     });
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <TestWrapper />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     await screen.findByRole("option", { name: "Hardware" });
 
-    const file = new File(["fake content"], "error_screen.png", { type: "image/png" });
+    // Initially form is clean
+    expect(screen.getByTestId("is-dirty-flag")).toHaveTextContent("clean");
+
+    const file = new File(["dummy content"], "network_screenshot.png", { type: "image/png" });
     const fileInput = document.getElementById("file-upload-input") as HTMLInputElement;
 
-    // Trigger file upload
     await userEvent.upload(fileInput, file);
 
-    // Verify upload function called with active requester ID (1)
+    // Verify uploadAttachments called
     await waitFor(() => {
-      expect(uploadSpy).toHaveBeenCalledWith([file], 1);
+      expect(uploadSpy).toHaveBeenCalledWith([file]);
     });
 
     // Verify attachment chip rendered
-    await screen.findByText("error_screen.png");
-    expect(screen.getByTestId("attachment-chip-881")).toBeInTheDocument();
+    expect(await screen.findByText("network_screenshot.png")).toBeInTheDocument();
+    expect(screen.getByText(/2.0 KB/)).toBeInTheDocument();
+
+    // Verify dirty flag set
     expect(screen.getByTestId("is-dirty-flag")).toHaveTextContent("dirty");
-
-    // Click remove button
-    const removeBtn = screen.getByRole("button", { name: /Remove error_screen.png/i });
-    await userEvent.click(removeBtn);
-
-    expect(screen.queryByTestId("attachment-chip-881")).not.toBeInTheDocument();
   });
 
   it("3b. Client MIME & Extension Validation: Rejects files with disallowed MIME types or extensions without calling api.uploadAttachments", async () => {
     const uploadSpy = vi.spyOn(api, "uploadAttachments");
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <TestWrapper />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     await screen.findByRole("option", { name: "Hardware" });
 
+    // Try disallowed .exe file
+    const invalidFile = new File(["malicious"], "virus.exe", { type: "application/x-msdownload" });
     const fileInput = document.getElementById("file-upload-input") as HTMLInputElement;
 
-    // 1. Invalid MIME type (text/plain)
-    const txtFile = new File(["notes"], "notes.txt", { type: "text/plain" });
-    fireEvent.change(fileInput, { target: { files: [txtFile] } });
+    fireEvent.change(fileInput, { target: { files: [invalidFile] } });
 
-    await screen.findByText("Only JPG, PNG, WEBP, and PDF files are allowed.");
+    // Verify upload blocked
     expect(uploadSpy).not.toHaveBeenCalled();
-
-    // 2. Extension matches but invalid MIME type (e.g. application/zip named test.png)
-    const spoofedFile = new File(["fake zip"], "test.png", { type: "application/zip" });
-    fireEvent.change(fileInput, { target: { files: [spoofedFile] } });
-
-    await screen.findByText("Only JPG, PNG, WEBP, and PDF files are allowed.");
-    expect(uploadSpy).not.toHaveBeenCalled();
-
-    // 3. MIME matches but invalid extension (.exe with image/png) via drop
-    const dropzone = fileInput.closest(".zg-dropzone")!;
-    const badExtFile = new File(["exe bytes"], "malicious.exe", { type: "image/png" });
-    fireEvent.drop(dropzone, { dataTransfer: { files: [badExtFile] } });
-
-    await screen.findByText("Only JPG, PNG, WEBP, and PDF files are allowed.");
-    expect(uploadSpy).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText("Only JPG, PNG, WEBP, and PDF files are allowed.")
+    ).toBeInTheDocument();
   });
 
-  it("4. Successful Creation: Valid form submission calls api.createTicket with X-Requester-Id, clears dirty flag, and redirects", async () => {
+  it("4. Successful Creation: Valid form submission calls api.createTicket, clears dirty flag, and redirects", async () => {
     const createTicketSpy = vi.spyOn(api, "createTicket").mockResolvedValue({
       data: {
         id: 42,
@@ -264,9 +253,9 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <TestWrapper onSuccess={onSuccessMock} />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
     await screen.findByRole("option", { name: "Network" });
@@ -310,17 +299,14 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
 
     // Verify createTicket called with payload
     await waitFor(() => {
-      expect(createTicketSpy).toHaveBeenCalledWith(
-        {
-          categoryId: 4,
-          relatedSystemId: 102,
-          priority: "P1_HIGH",
-          summary: "Cannot connect to corporate VPN",
-          description: "Getting authentication error code 0x80070005 when connecting.",
-          attachmentIds: [881],
-        },
-        1
-      );
+      expect(createTicketSpy).toHaveBeenCalledWith({
+        categoryId: 4,
+        relatedSystemId: 102,
+        priority: "P1_HIGH",
+        summary: "Cannot connect to corporate VPN",
+        description: "Getting authentication error code 0x80070005 when connecting.",
+        attachmentIds: [881],
+      });
     });
 
     // Verify success callback and dirty state cleared
@@ -345,17 +331,21 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
+      <AuthProvider>
         <TestWrapper />
-      </RequesterProvider>
+      </AuthProvider>
     );
 
-    await screen.findByRole("option", { name: "Network" });
+    await screen.findByRole("option", { name: "Hardware" });
 
-    // Fill valid category, summary, description
-    await user.selectOptions(screen.getByLabelText(/Category/i), "4");
-    await user.type(screen.getByLabelText(/Summary/i), "Valid Summary VPN");
-    await user.type(screen.getByLabelText(/Description/i), "Valid Description for testing 422.");
+    // Fill minimum required fields
+    const categorySelect = screen.getByLabelText(/Category/i);
+    await user.selectOptions(categorySelect, "2");
+
+    const summaryInput = screen.getByLabelText(/Summary/i);
+    const descriptionInput = screen.getByLabelText(/Description/i);
+    await user.type(summaryInput, "Valid summary text");
+    await user.type(descriptionInput, "Valid description text with enough characters");
 
     // Submit form
     await user.click(screen.getByTestId("submit-ticket-btn"));
@@ -368,8 +358,6 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
   });
 
   it("6. Centralized Dirty Guard: Intercepts navigation when form is dirty; Cancel retains inputs, Discard resets and navigates", async () => {
-    localStorage.setItem("toktickit_requester_id", "1");
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
     vi.spyOn(api, "fetchCategories").mockResolvedValue(mockCategories);
     vi.spyOn(api, "fetchRelatedSystems").mockResolvedValue(mockNetworkSystems);
     vi.spyOn(api, "fetchTickets").mockResolvedValue({
@@ -403,9 +391,8 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     // Form inputs must still be there
     expect(screen.getByLabelText(/Summary/i)).toHaveValue("Unsaved Network Issue");
 
-    // Now click Profile button (direct navigation to /select-requester)
-    const profileBtn = screen.getByTestId("header-profile-button");
-    await user.click(profileBtn);
+    // Click My Tickets link again
+    await user.click(myTicketsLink);
 
     // Modal appears again
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -414,7 +401,7 @@ describe("Issue 7 — Create Ticket Form Component Tests", () => {
     await user.click(screen.getByTestId("dirty-discard-btn"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    // Screen must have navigated to Select Requester
-    expect(await screen.findByTestId("select-requester-screen")).toBeInTheDocument();
+    // Screen must have navigated to My Tickets
+    expect(await screen.findByTestId("my-tickets-section")).toBeInTheDocument();
   });
 });

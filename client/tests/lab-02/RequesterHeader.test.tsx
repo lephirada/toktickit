@@ -3,333 +3,191 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../src/api.js";
-import { RequesterProvider, useRequester } from "../../src/context/RequesterContext.js";
+import { AuthProvider, useAuth } from "../../src/context/AuthContext.js";
 import Header from "../../src/components/Header.js";
 import DirtyGuardModal from "../../src/components/DirtyGuardModal.js";
 
-const mockRequesters: api.RequesterUser[] = [
-  {
-    id: 1,
-    fullName: "Sarah Connor",
-    email: "sarah.connor@toktickit.com",
-    department: "Engineering",
-    isActive: true,
-  },
-  {
-    id: 2,
-    fullName: "John Doe",
-    email: "john.doe@toktickit.com",
-    department: "Finance",
-    isActive: true,
-  },
-  {
-    id: 3,
-    fullName: "Jennifer Anderson",
-    email: "jennifer.anderson@toktickit.com",
-    department: "Engineering",
-    isActive: true,
-  },
-];
-
-const mockTicketsByRequester: Record<number, api.TicketItem[]> = {
-  1: [
-    {
-      id: 101,
-      ticketNo: "TKT-2026-00001",
-      summary: "VPN Connection Drop",
-      priority: "P1_HIGH",
-      status: "NEW",
-      categoryId: 4,
-      requesterId: 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ],
-  2: [
-    {
-      id: 102,
-      ticketNo: "TKT-2026-00002",
-      summary: "Payroll Portal Access",
-      priority: "P2_MEDIUM",
-      status: "NEW",
-      categoryId: 1,
-      requesterId: 2,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ],
+const mockRequesterUser: api.AuthUser = {
+  id: 1,
+  fullName: "Sarah Connor",
+  email: "sarah.connor@toktickit.com",
+  role: "REQUESTER",
+  mustChangePassword: false,
 };
 
-function TestApp() {
-  const { currentRequester, isFormDirty, setFormDirty, tickets, ticketsLoading } = useRequester();
+const mockStaffUser: api.AuthUser = {
+  id: 2,
+  fullName: "John Doe",
+  email: "john.doe@toktickit.com",
+  role: "IT_STAFF",
+  mustChangePassword: false,
+};
+
+const mockAdminUser: api.AuthUser = {
+  id: 3,
+  fullName: "Admin Alice",
+  email: "admin.alice@toktickit.com",
+  role: "ADMINISTRATOR",
+  mustChangePassword: false,
+};
+
+function TestHeaderApp({ onNavigate }: { onNavigate?: (view: string) => void }) {
+  const { isFormDirty, setFormDirty } = useAuth();
 
   return (
     <div>
-      <Header />
+      <Header onNavigate={onNavigate} />
       <DirtyGuardModal />
-      <div data-testid="current-requester-id">{currentRequester?.id}</div>
-      <div data-testid="current-requester-name">{currentRequester?.fullName}</div>
       <div data-testid="is-dirty">{isFormDirty ? "dirty" : "clean"}</div>
       <button onClick={() => setFormDirty(true)}>Make Form Dirty</button>
       <button onClick={() => setFormDirty(false)}>Clean Form</button>
-
-      <div data-testid="tickets-loading">{ticketsLoading ? "loading" : "idle"}</div>
-      <ul data-testid="ticket-list">
-        {tickets.map((t) => (
-          <li key={t.id} data-testid={`ticket-${t.id}`}>
-            {t.ticketNo} - {t.summary}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
 
-describe("Issue 6 — Requester Context & Header Component Tests", () => {
+describe("Issue 13 / Shared Application Header Component Tests (RequesterHeader.test.tsx)", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
   });
 
-  it("fetches active requesters and displays them in the header dropdown", async () => {
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue({
-      data: [],
-      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
-    });
+  it("1. Renders authenticated Requester user with name, role badge, and requester links", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockRequesterUser);
 
     render(
-      <RequesterProvider>
-        <TestApp />
-      </RequesterProvider>
+      <AuthProvider>
+        <TestHeaderApp />
+      </AuthProvider>
     );
 
-    // Wait for dropdown options to be populated
-    await screen.findByRole("option", { name: /Sarah Connor/i });
+    // Wait for user to be loaded
+    expect(await screen.findByTestId("header-profile-name")).toHaveTextContent("Sarah Connor");
+    expect(screen.getByTestId("role-badge-requester")).toBeInTheDocument();
+    expect(screen.getByTestId("role-badge-requester")).toHaveTextContent("Requester");
 
-    const selectElement = screen.getByRole("combobox", {
-      name: /select active requester/i,
-    });
-
-    expect(selectElement).toBeInTheDocument();
-    expect(screen.getByText("Sarah Connor (Engineering)")).toBeInTheDocument();
-    expect(screen.getByText("John Doe (Finance)")).toBeInTheDocument();
-    expect(screen.getByText("Jennifer Anderson (Engineering)")).toBeInTheDocument();
-
-    const user = userEvent.setup();
-    await user.selectOptions(selectElement, "1");
-
-    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
-    expect(localStorage.getItem("toktickit_requester_id")).toBe("1");
+    // Requester navigation links must be visible on desktop
+    expect(screen.getByTestId("nav-my-tickets")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-create-ticket")).toBeInTheDocument();
+    expect(screen.queryByTestId("nav-staff-queue")).not.toBeInTheDocument();
   });
 
-  it("restores previously selected requester from localStorage", async () => {
-    localStorage.setItem("toktickit_requester_id", "2");
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue({
-      data: [],
-      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
-    });
+  it("2. Renders role-specific navigation for IT_STAFF", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockStaffUser);
 
     render(
-      <RequesterProvider>
-        <TestApp />
-      </RequesterProvider>
+      <AuthProvider>
+        <TestHeaderApp />
+      </AuthProvider>
     );
 
-    // Wait for option 2 to be rendered
-    await screen.findByRole("option", { name: /John Doe/i });
+    expect(await screen.findByTestId("header-profile-name")).toHaveTextContent("John Doe");
+    expect(screen.getByTestId("role-badge-staff")).toBeInTheDocument();
+    expect(screen.getByTestId("role-badge-staff")).toHaveTextContent("IT Staff");
 
-    const selectElement = screen.getByRole("combobox", {
-      name: /select active requester/i,
-    });
-
-    await waitFor(() => {
-      expect(selectElement).toHaveValue("2");
-      expect(screen.getByTestId("current-requester-name")).toHaveTextContent("John Doe");
-    });
+    expect(screen.getByTestId("nav-staff-queue")).toBeInTheDocument();
+    expect(screen.queryByTestId("nav-my-tickets")).not.toBeInTheDocument();
   });
 
-  it("updates localStorage and active context when a new requester is selected", async () => {
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue({
-      data: [],
-      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
-    });
+  it("3. Renders role-specific navigation for ADMINISTRATOR", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockAdminUser);
+
+    render(
+      <AuthProvider>
+        <TestHeaderApp />
+      </AuthProvider>
+    );
+
+    expect(await screen.findByTestId("header-profile-name")).toHaveTextContent("Admin Alice");
+    expect(screen.getByTestId("role-badge-admin")).toBeInTheDocument();
+    expect(screen.getByTestId("role-badge-admin")).toHaveTextContent("Admin");
+
+    expect(screen.getByTestId("nav-admin-users")).toBeInTheDocument();
+    expect(screen.queryByTestId("nav-my-tickets")).not.toBeInTheDocument();
+  });
+
+  it("4. Profile dropdown opens and displays user email, role badge, Change Password, and Sign Out", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockRequesterUser);
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
-        <TestApp />
-      </RequesterProvider>
+      <AuthProvider>
+        <TestHeaderApp />
+      </AuthProvider>
     );
 
-    // Wait for options to load before attempting selection
-    await screen.findByRole("option", { name: /John Doe/i });
+    const profileTrigger = await screen.findByTestId("header-profile-button");
+    await user.click(profileTrigger);
 
-    const selectElement = screen.getByRole("combobox", {
-      name: /select active requester/i,
-    });
-
-    await user.selectOptions(selectElement, "2");
-
-    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("John Doe");
-    expect(localStorage.getItem("toktickit_requester_id")).toBe("2");
+    expect(screen.getByTestId("header-user-dropdown")).toBeInTheDocument();
+    expect(screen.getByText("sarah.connor@toktickit.com")).toBeInTheDocument();
+    expect(screen.getByTestId("dropdown-change-password")).toBeInTheDocument();
+    expect(screen.getByTestId("header-logout-btn")).toBeInTheDocument();
   });
 
-  it("clears old state and reloads requester-specific tickets via api.fetchTickets when context changes", async () => {
-    localStorage.setItem("toktickit_requester_id", "1");
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
-      const items = mockTicketsByRequester[reqId || 1] || [];
-      return {
-        data: items,
-        pagination: { page: 1, pageSize: 10, totalItems: items.length, totalPages: 1, hasNext: false, hasPrev: false },
-      };
-    });
+  it("5. Clicking Sign Out in dropdown calls api.logout and updates session", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockRequesterUser);
+    const logoutSpy = vi.spyOn(api, "logout").mockResolvedValue();
+    const onNavigateMock = vi.fn();
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
-        <TestApp />
-      </RequesterProvider>
+      <AuthProvider>
+        <TestHeaderApp onNavigate={onNavigateMock} />
+      </AuthProvider>
     );
 
-    // Verify Requester 1 (Sarah) tickets loaded initially
-    await screen.findByRole("option", { name: /Sarah Connor/i });
+    const profileTrigger = await screen.findByTestId("header-profile-button");
+    await user.click(profileTrigger);
+
+    const logoutBtn = screen.getByTestId("header-logout-btn");
+    await user.click(logoutBtn);
+
     await waitFor(() => {
-      expect(screen.getByTestId("ticket-101")).toHaveTextContent("VPN Connection Drop");
+      expect(logoutSpy).toHaveBeenCalled();
+      expect(onNavigateMock).toHaveBeenCalledWith("login");
     });
-    expect(fetchTicketsSpy).toHaveBeenCalledWith(1);
-
-    // Wait for option 2 to be present
-    await screen.findByRole("option", { name: /John Doe/i });
-    const selectElement = screen.getByRole("combobox", {
-      name: /select active requester/i,
-    });
-
-    // Switch to Requester 2 (John)
-    await user.selectOptions(selectElement, "2");
-
-    // Verify Sarah's ticket cleared and John's ticket loaded
-    await waitFor(() => {
-      expect(screen.queryByTestId("ticket-101")).not.toBeInTheDocument();
-      expect(screen.getByTestId("ticket-102")).toHaveTextContent("Payroll Portal Access");
-    });
-    expect(fetchTicketsSpy).toHaveBeenCalledWith(2);
   });
 
-  it("intercepts requester switch with dirty guard modal and reloads tickets only upon confirming discard", async () => {
-    localStorage.setItem("toktickit_requester_id", "1");
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    const fetchTicketsSpy = vi.spyOn(api, "fetchTickets").mockImplementation(async (reqId) => {
-      const items = mockTicketsByRequester[reqId || 1] || [];
-      return {
-        data: items,
-        pagination: { page: 1, pageSize: 10, totalItems: items.length, totalPages: 1, hasNext: false, hasPrev: false },
-      };
-    });
+  it("6. Intercepts navigation with dirty guard modal and navigates only upon confirming discard", async () => {
+    vi.spyOn(api, "fetchCurrentUser").mockResolvedValue(mockRequesterUser);
+    const onNavigateMock = vi.fn();
     const user = userEvent.setup();
 
     render(
-      <RequesterProvider>
-        <TestApp />
-      </RequesterProvider>
+      <AuthProvider>
+        <TestHeaderApp onNavigate={onNavigateMock} />
+      </AuthProvider>
     );
 
-    await screen.findByRole("option", { name: /Sarah Connor/i });
-    await waitFor(() => {
-      expect(screen.getByTestId("ticket-101")).toHaveTextContent("VPN Connection Drop");
-    });
+    await screen.findByTestId("header-profile-name");
 
     // Make form dirty
     await user.click(screen.getByRole("button", { name: /make form dirty/i }));
     expect(screen.getByTestId("is-dirty")).toHaveTextContent("dirty");
 
-    // Wait for dropdown option 2
-    await screen.findByRole("option", { name: /John Doe/i });
-    const selectElement = screen.getByRole("combobox", {
-      name: /select active requester/i,
-    });
+    // Click My Tickets in header nav
+    const myTicketsLink = screen.getByTestId("nav-my-tickets");
+    await user.click(myTicketsLink);
 
-    // Attempt to switch to John Doe (ID: 2)
-    await user.selectOptions(selectElement, "2");
-
-    // Modal appears, requester and tickets must NOT switch yet
+    // Modal appears, navigation blocked
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
-    expect(screen.getByTestId("ticket-101")).toBeInTheDocument();
+    expect(onNavigateMock).not.toHaveBeenCalled();
 
-    // Click "Cancel" (or "Cancel / Stay" per ui-spec)
-    await user.click(screen.getByRole("button", { name: /cancel/i }));
+    // Click Cancel on modal
+    await user.click(screen.getByTestId("dirty-cancel-btn"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("Sarah Connor");
-    expect(screen.getByTestId("ticket-101")).toBeInTheDocument();
     expect(screen.getByTestId("is-dirty")).toHaveTextContent("dirty");
+    expect(onNavigateMock).not.toHaveBeenCalled();
 
-    // Attempt switch again and click "Discard Changes"
-    await user.selectOptions(selectElement, "2");
+    // Click navigation link again
+    await user.click(myTicketsLink);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /discard changes/i }));
+    // Click Discard Changes
+    await user.click(screen.getByTestId("dirty-discard-btn"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByTestId("current-requester-name")).toHaveTextContent("John Doe");
     expect(screen.getByTestId("is-dirty")).toHaveTextContent("clean");
-    expect(localStorage.getItem("toktickit_requester_id")).toBe("2");
-
-    // Verify Sarah's ticket cleared and John's ticket reloaded
-    await waitFor(() => {
-      expect(screen.queryByTestId("ticket-101")).not.toBeInTheDocument();
-      expect(screen.getByTestId("ticket-102")).toHaveTextContent("Payroll Portal Access");
-    });
-    expect(fetchTicketsSpy).toHaveBeenCalledWith(2);
-  });
-
-  it("clicking the Profile button navigates directly to select-requester screen", async () => {
-    localStorage.setItem("toktickit_requester_id", "1");
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue({
-      data: [],
-      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
-    });
-    const onNavigateMock = vi.fn();
-    const user = userEvent.setup();
-
-    render(
-      <RequesterProvider>
-        <Header onNavigate={onNavigateMock} />
-      </RequesterProvider>
-    );
-
-    await screen.findByRole("option", { name: /Sarah Connor/i });
-
-    const profileButton = screen.getByTestId("header-profile-button");
-    await user.click(profileButton);
-
-    expect(onNavigateMock).toHaveBeenCalledWith("select-requester");
-  });
-
-  it("hides navigation links and profile button when currentScreen is select-requester even if requester is active", async () => {
-    localStorage.setItem("toktickit_requester_id", "1");
-    vi.spyOn(api, "fetchRequesters").mockResolvedValue(mockRequesters);
-    vi.spyOn(api, "fetchTickets").mockResolvedValue({
-      data: [],
-      pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
-    });
-
-    render(
-      <RequesterProvider>
-        <Header currentScreen="select-requester" />
-      </RequesterProvider>
-    );
-
-    await screen.findByRole("option", { name: /Sarah Connor/i });
-
-    // Only TokTickIT brand logo should be visible
-    expect(screen.getByRole("link", { name: /toktickit home/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /my tickets/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /\+ create ticket/i })).not.toBeInTheDocument();
-    expect(screen.queryByTestId("header-profile-button")).not.toBeInTheDocument();
+    expect(onNavigateMock).toHaveBeenCalledWith("my-tickets");
   });
 });
-

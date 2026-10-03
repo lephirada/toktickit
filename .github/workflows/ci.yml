@@ -7,6 +7,7 @@ on:
       - main
       - lab1-staging
       - lab2-staging
+      - lab3-staging
 
 jobs:
   client-build:
@@ -97,15 +98,21 @@ jobs:
             async function verify() {
               const catCount = await prisma.category.count();
               const sysCount = await prisma.relatedSystem.count();
-              const totalReqCount = await prisma.requesterUser.count();
-              const activeReqCount = await prisma.requesterUser.count({ where: { isActive: true } });
-              const inactiveReqCount = await prisma.requesterUser.count({ where: { isActive: false } });
+              const totalUserCount = await prisma.user.count();
+              const totalReqCount = await prisma.user.count({ where: { role: "REQUESTER" } });
+              const activeReqCount = await prisma.user.count({ where: { role: "REQUESTER", isActive: true } });
+              const inactiveReqCount = await prisma.user.count({ where: { role: "REQUESTER", isActive: false } });
+              const staffCount = await prisma.user.count({ where: { role: "IT_STAFF" } });
+              const adminCount = await prisma.user.count({ where: { role: "ADMINISTRATOR" } });
               if (catCount !== 4) throw new Error("Expected 4 categories, found " + catCount);
               if (sysCount !== 6) throw new Error("Expected 6 related systems, found " + sysCount);
+              if (totalUserCount !== 10) throw new Error("Expected 10 total users, found " + totalUserCount);
               if (totalReqCount !== 5) throw new Error("Expected 5 total requesters, found " + totalReqCount);
               if (activeReqCount !== 4) throw new Error("Expected 4 active requesters, found " + activeReqCount);
               if (inactiveReqCount !== 1) throw new Error("Expected 1 inactive requester, found " + inactiveReqCount);
-              console.log("Verified: 4 categories, 6 related systems, 5 requesters (4 active, 1 inactive) in DB.");
+              if (staffCount !== 4) throw new Error("Expected 4 IT staff, found " + staffCount);
+              if (adminCount !== 1) throw new Error("Expected 1 administrator, found " + adminCount);
+              console.log("Verified: 4 categories, 6 related systems, 10 users (5 requesters [4 active, 1 inactive], 4 staff, 1 admin) in DB.");
               process.exit(0);
             }
             verify().catch(e => { console.error(e); process.exit(1); });

@@ -3,6 +3,7 @@ import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { Priority, TicketStatus, Prisma } from "@prisma/client";
+import { createTestSessionCookie } from "../helpers/auth.js";
 
 describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.ts)", () => {
   const prisma = getPrisma();
@@ -10,6 +11,9 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
   let requesterAId: number;
   let requesterBId: number;
   let inactiveRequesterId: number;
+  let cookieA: string;
+  let cookieB: string;
+  let inactiveCookie: string;
 
   let hardwareCatId: number;
   let networkCatId: number;
@@ -22,19 +26,29 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
 
   beforeAll(async () => {
     // 1. Retrieve seeded requesters
-    const sarah = await prisma.requesterUser.findFirstOrThrow({
+    const sarah = await prisma.user.findFirstOrThrow({
       where: { email: "sarah.connor@toktickit.com" },
     });
-    const john = await prisma.requesterUser.findFirstOrThrow({
+    const john = await prisma.user.findFirstOrThrow({
       where: { email: "john.doe@toktickit.com" },
     });
-    const kyle = await prisma.requesterUser.findFirstOrThrow({
+    const kyle = await prisma.user.findFirstOrThrow({
       where: { email: "kyle.reese@toktickit.com" },
     });
 
     requesterAId = sarah.id;
     requesterBId = john.id;
     inactiveRequesterId = kyle.id;
+
+    cookieA = createTestSessionCookie({ id: sarah.id, email: sarah.email, role: "REQUESTER" });
+    cookieB = createTestSessionCookie({ id: john.id, email: john.email, role: "REQUESTER" });
+    inactiveCookie = createTestSessionCookie({ id: kyle.id, email: kyle.email, role: "REQUESTER" });
+
+    // Ensure Sarah's mustChangePassword is false during operational query tests
+    await prisma.user.update({
+      where: { id: requesterAId },
+      data: { mustChangePassword: false },
+    });
 
     // 2. Retrieve categories
     const hardware = await prisma.category.findFirstOrThrow({ where: { name: "Hardware" } });
@@ -66,7 +80,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00001",
         summary: "MacBook Pro keyboard key sticking",
         description: "The spacebar and T key are intermittently unresponsive.",
-        priority: Priority.P0_URGENT,
+        requestedPriority: Priority.P0_URGENT,
         status: TicketStatus.NEW,
         categoryId: hardwareCatId,
         relatedSystemId: laptopSystemId,
@@ -77,7 +91,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00002",
         summary: "VPN Client timeout error on home network",
         description: "Cannot connect to VPN Gateway after updating macOS.",
-        priority: Priority.P1_HIGH,
+        requestedPriority: Priority.P1_HIGH,
         status: TicketStatus.IN_PROGRESS,
         categoryId: networkCatId,
         relatedSystemId: vpnSystemId,
@@ -88,7 +102,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00003",
         summary: "Leb2 application portal session expired",
         description: "Session constantly logs out every 2 minutes.",
-        priority: Priority.P2_MEDIUM,
+        requestedPriority: Priority.P2_MEDIUM,
         status: TicketStatus.RESOLVED,
         categoryId: softwareCatId,
         relatedSystemId: null,
@@ -99,7 +113,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00004",
         summary: "Laptop battery drains rapidly",
         description: "Battery health reported as poor in diagnostic settings.",
-        priority: Priority.P3_LOW,
+        requestedPriority: Priority.P3_LOW,
         status: TicketStatus.CLOSED,
         categoryId: hardwareCatId,
         relatedSystemId: laptopSystemId,
@@ -110,7 +124,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-A-00005",
         summary: "Campus Wi-Fi connectivity drops in Engineering lab",
         description: "Signal frequently drops when moving between desks.",
-        priority: Priority.P2_MEDIUM,
+        requestedPriority: Priority.P2_MEDIUM,
         status: TicketStatus.NEW,
         categoryId: networkCatId,
         relatedSystemId: null,
@@ -126,7 +140,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: `TEST-TKT-A-${numPadded}`,
         summary: `Automated issue ticket sequence number ${i}`,
         description: `Detailed description for pagination test ticket ${i}.`,
-        priority: i % 2 === 0 ? Priority.P1_HIGH : Priority.P2_MEDIUM,
+        requestedPriority: i % 2 === 0 ? Priority.P1_HIGH : Priority.P2_MEDIUM,
         status: i > 12 ? TicketStatus.RESOLVED : TicketStatus.NEW,
         categoryId: hardwareCatId,
         relatedSystemId: laptopSystemId,
@@ -146,7 +160,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-B-00001",
         summary: "Finance billing export tool crashes on launch",
         description: "Error 500 thrown when attempting to generate monthly ledger.",
-        priority: Priority.P0_URGENT,
+        requestedPriority: Priority.P0_URGENT,
         status: TicketStatus.NEW,
         categoryId: softwareCatId,
         relatedSystemId: null,
@@ -157,7 +171,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
         ticketNo: "TEST-TKT-B-00002",
         summary: "Finance team VPN access request",
         description: "Need remote access privileges enabled for new payroll intern.",
-        priority: Priority.P1_HIGH,
+        requestedPriority: Priority.P1_HIGH,
         status: TicketStatus.RESOLVED,
         categoryId: networkCatId,
         relatedSystemId: vpnSystemId,
@@ -173,45 +187,54 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
   });
 
   afterAll(async () => {
-    // Clean up created test tickets
-    if (testTicketIds.length > 0) {
-      await prisma.attachment.deleteMany({
-        where: { ticketId: { in: testTicketIds } },
-      });
-      await prisma.ticket.deleteMany({
-        where: { id: { in: testTicketIds } },
-      });
+    try {
+      // Clean up created test tickets
+      if (testTicketIds.length > 0) {
+        await prisma.attachment.deleteMany({
+          where: { ticketId: { in: testTicketIds } },
+        });
+        await prisma.ticket.deleteMany({
+          where: { id: { in: testTicketIds } },
+        });
+      }
+    } finally {
+      if (requesterAId) {
+        await prisma.user.update({
+          where: { id: requesterAId },
+          data: { mustChangePassword: true },
+        }).catch(() => {});
+      }
     }
   });
 
   // ---------------------------------------------------------------------------
-  // 1. Authentication & Context Guards
+  // 1. Authentication & Session Guards
   // ---------------------------------------------------------------------------
-  describe("Authentication & Header Guards", () => {
-    it("returns 403 Forbidden when X-Requester-Id header is missing", async () => {
+  describe("Authentication & Session Guards", () => {
+    it("returns 401 Unauthorized when session cookie is missing", async () => {
       const res = await request(app).get("/api/tickets");
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(401);
       expect(res.body).toHaveProperty("error");
-      expect(res.body.error.code).toBe("FORBIDDEN_REQUESTER");
+      expect(res.body.error.code).toBe("UNAUTHORIZED");
     });
 
-    it("returns 403 Forbidden when X-Requester-Id is non-numeric or invalid", async () => {
+    it("returns 401 Unauthorized when session cookie is invalid or tampered", async () => {
       const res = await request(app)
         .get("/api/tickets")
-        .set("X-Requester-Id", "not-a-number");
+        .set("Cookie", "toktickit_session=invalid-tampered-token");
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("FORBIDDEN_REQUESTER");
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("UNAUTHORIZED");
     });
 
-    it("returns 403 Forbidden when X-Requester-Id belongs to an inactive requester", async () => {
+    it("returns 401 Unauthorized when session cookie belongs to an inactive requester", async () => {
       const res = await request(app)
         .get("/api/tickets")
-        .set("X-Requester-Id", String(inactiveRequesterId));
+        .set("Cookie", inactiveCookie);
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("FORBIDDEN_REQUESTER");
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe("ACCOUNT_DEACTIVATED");
     });
   });
 
@@ -222,7 +245,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("returns only Requester A's tickets when authenticated as Requester A", async () => {
       const res = await request(app)
         .get("/api/tickets")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("data");
@@ -238,7 +261,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("returns only Requester B's tickets when authenticated as Requester B", async () => {
       const res = await request(app)
         .get("/api/tickets")
-        .set("X-Requester-Id", String(requesterBId));
+        .set("Cookie", cookieB);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("data");
@@ -259,7 +282,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("defaults to page 1, pageSize 10, sorted by createdAt DESC", async () => {
       const res = await request(app)
         .get("/api/tickets")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("data");
@@ -289,7 +312,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("supports custom page and pageSize (or limit) parameters", async () => {
       const res = await request(app)
         .get("/api/tickets?page=2&pageSize=5")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       const { pagination, data } = res.body;
@@ -305,7 +328,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("returns empty data array when requesting beyond totalPages", async () => {
       const res = await request(app)
         .get("/api/tickets?page=999&pageSize=10")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       const { pagination, data } = res.body;
@@ -324,7 +347,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("searches by exact ticket number case-insensitively", async () => {
       const res = await request(app)
         .get("/api/tickets?search=test-tkt-a-00001")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(1);
@@ -334,7 +357,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("searches by partial keyword in summary case-insensitively", async () => {
       const res = await request(app)
         .get("/api/tickets?search=keyBOARD")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(1);
@@ -344,7 +367,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("returns empty data when search matches nothing", async () => {
       const res = await request(app)
         .get("/api/tickets?search=nonexistentkeywordxyz")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
@@ -359,7 +382,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("filters tickets by categoryId", async () => {
       const res = await request(app)
         .get(`/api/tickets?categoryId=${networkCatId}`)
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBeGreaterThan(0);
@@ -372,7 +395,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("filters tickets by priority", async () => {
       const res = await request(app)
         .get("/api/tickets?priority=P0_URGENT")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(1);
@@ -382,7 +405,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("filters tickets by status", async () => {
       const res = await request(app)
         .get("/api/tickets?status=RESOLVED")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBeGreaterThan(0);
@@ -399,7 +422,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("sorts by ticketNo ASC", async () => {
       const res = await request(app)
         .get("/api/tickets?sortBy=ticketNo&sortOrder=asc&pageSize=5")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       const data = res.body.data;
@@ -414,7 +437,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("sorts by summary DESC", async () => {
       const res = await request(app)
         .get("/api/tickets?sortBy=summary&sortOrder=desc&pageSize=5")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       const data = res.body.data;
@@ -434,7 +457,7 @@ describe("Issue 8 — My Tickets Query API (server/tests/lab-02/my-tickets.test.
     it("includes category, relatedSystem, requester, and attachments metadata", async () => {
       const res = await request(app)
         .get("/api/tickets?search=MacBook")
-        .set("X-Requester-Id", String(requesterAId));
+        .set("Cookie", cookieA);
 
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBe(1);
