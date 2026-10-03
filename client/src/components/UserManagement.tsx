@@ -104,6 +104,12 @@ export default function UserManagement() {
   // Filters
   const [searchInput, setSearchInput] = useState<string>("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
+  const hasActiveFilters = Boolean(searchInput.trim() || roleFilter !== "ALL");
+
+  const handleClearFilters = () => {
+    setSearchInput("");
+    setRoleFilter("ALL");
+  };
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
@@ -140,7 +146,7 @@ export default function UserManagement() {
   };
 
   return (
-    <div className="container-xl py-4" data-testid="user-management-container">
+    <div className="w-100" data-testid="user-management-container">
       {/* Header Bar */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
         <div>
@@ -162,31 +168,31 @@ export default function UserManagement() {
         </div>
 
         <div className="d-flex align-items-center gap-2">
-          <button
-            type="button"
-            className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1 px-3 py-2 fw-semibold rounded-2"
-            onClick={loadUsers}
-            disabled={isLoading}
-            data-testid="admin-users-refresh-button"
-            aria-label="Refresh user list"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={isLoading ? "spin" : ""}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1 px-3 py-2 fw-semibold rounded-2"
+              onClick={handleClearFilters}
+              disabled={isLoading}
+              data-testid="admin-users-clear-filters-button"
+              aria-label="Clear filters"
             >
-              <polyline points="23 4 23 10 17 10"></polyline>
-              <polyline points="1 20 1 14 7 14"></polyline>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-            </svg>
-            Refresh
-          </button>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              Clear Filters
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-sm fw-semibold d-flex align-items-center gap-2 px-3 py-2 text-white rounded-2 shadow-sm"
@@ -367,15 +373,15 @@ export default function UserManagement() {
             <div className="table-responsive" style={{ maxHeight: "calc(100vh - 280px)" }}>
               <table className="table table-hover align-middle mb-0" data-testid="admin-users-table">
                 <thead style={{ backgroundColor: "#F9FAFB", borderBottom: "1px solid #EAECF0" }}>
-                  <tr className="text-secondary text-uppercase" style={{ fontSize: "0.75rem", letterSpacing: "0.05em" }}>
-                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: 80 }}>User ID</th>
-                    <th scope="col" className="py-3 px-3 fw-bold">Display Name</th>
-                    <th scope="col" className="py-3 px-3 fw-bold">Email</th>
-                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: 130 }}>Role</th>
-                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: 110 }}>Status</th>
-                    <th scope="col" className="py-3 px-3 fw-bold d-none d-lg-table-cell" style={{ width: 150 }}>Created</th>
-                    <th scope="col" className="py-3 px-3 fw-bold d-none d-xl-table-cell" style={{ width: 150 }}>Updated</th>
-                    <th scope="col" className="py-3 px-3 fw-bold text-end" style={{ width: 180 }}>Actions</th>
+                  <tr className="text-secondary text-uppercase align-middle" style={{ fontSize: "0.75rem", letterSpacing: "0.05em" }}>
+                    <th scope="col" className="py-3 px-3 fw-bold text-center" style={{ width: "7%" }}>User ID</th>
+                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: "20%" }}>Display Name</th>
+                    <th scope="col" className="py-3 px-3 fw-bold" style={{ width: "21%" }}>Email</th>
+                    <th scope="col" className="py-3 px-3 fw-bold text-center" style={{ width: "5%" }}>Role</th>
+                    <th scope="col" className="py-3 px-3 fw-bold text-center" style={{ width: "5%" }}>Status</th>
+                    <th scope="col" className="py-3 px-3 fw-bold d-none d-lg-table-cell text-center" style={{ width: "13%" }}>Created</th>
+                    <th scope="col" className="py-3 px-3 fw-bold d-none d-xl-table-cell text-center" style={{ width: "13%" }}>Updated</th>
+                    <th scope="col" className="py-3 px-3 fw-bold text-end" style={{ width: "16%", minWidth: 140 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -383,7 +389,7 @@ export default function UserManagement() {
                     const isSelf = currentUser?.id === u.id;
                     return (
                       <tr key={u.id} data-testid={`user-row-${u.id}`}>
-                        <td className="py-3 px-3 fw-mono text-muted small" data-testid={`user-id-${u.id}`}>
+                        <td className="py-3 px-3 fw-mono text-muted small text-center" data-testid={`user-id-${u.id}`}>
                           #{u.id}
                         </td>
                         <td className="py-3 px-3" data-testid={`user-name-${u.id}`}>
@@ -411,13 +417,13 @@ export default function UserManagement() {
                         <td className="py-3 px-3 text-secondary small font-monospace" data-testid={`user-email-${u.id}`}>
                           {u.email}
                         </td>
-                        <td className="py-3 px-3" data-testid={`user-role-${u.id}`}>
+                        <td className="py-3 px-3 text-center" data-testid={`user-role-${u.id}`}>
                           {renderUserRoleBadge(u.role)}
                         </td>
-                        <td className="py-3 px-3" data-testid={`user-status-${u.id}`}>
+                        <td className="py-3 px-3 text-center" data-testid={`user-status-${u.id}`}>
                           {u.isActive ? (
                             <span
-                              className="badge px-2 py-1 rounded-pill"
+                              className="badge px-2 py-1 rounded-pill text-center"
                               style={{
                                 backgroundColor: "#ECFDF3",
                                 color: "#027A48",
@@ -431,7 +437,7 @@ export default function UserManagement() {
                             </span>
                           ) : (
                             <span
-                              className="badge px-2 py-1 rounded-pill"
+                              className="badge px-2 py-1 rounded-pill text-center"
                               style={{
                                 backgroundColor: "#F2F4F7",
                                 color: "#344054",
@@ -445,10 +451,10 @@ export default function UserManagement() {
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-muted small d-none d-lg-table-cell" data-testid={`user-created-${u.id}`}>
+                        <td className="py-3 px-3 text-muted small d-none d-lg-table-cell text-center" data-testid={`user-created-${u.id}`}>
                           {formatDate(u.createdAt)}
                         </td>
-                        <td className="py-3 px-3 text-muted small d-none d-xl-table-cell" data-testid={`user-updated-${u.id}`}>
+                        <td className="py-3 px-3 text-muted small d-none d-xl-table-cell text-center" data-testid={`user-updated-${u.id}`}>
                           {formatDate(u.updatedAt)}
                         </td>
                         <td className="py-3 px-3 text-end" data-testid={`user-actions-${u.id}`}>
@@ -702,7 +708,7 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
           ></button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <div className="card-body p-4">
             {/* Informational notice */}
             <div
@@ -741,6 +747,7 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
                 onChange={(e) => setFullName(e.target.value)}
                 maxLength={100}
                 required
+                autoComplete="off"
                 data-testid="create-user-fullname-input"
               />
             </div>
@@ -758,6 +765,7 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="off"
                 data-testid="create-user-email-input"
               />
               <div className="form-text text-muted small">
@@ -797,6 +805,7 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
                   value={initialPassword}
                   onChange={(e) => setInitialPassword(e.target.value)}
                   required
+                  autoComplete="new-password"
                   data-testid="create-user-password-input"
                   style={{ borderRight: 0 }}
                 />
@@ -1265,7 +1274,7 @@ function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordModalProp
           ></button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <div className="card-body p-4">
             <div
               className="p-3 rounded-2 mb-4 d-flex align-items-start gap-2"
@@ -1302,6 +1311,7 @@ function ResetPasswordModal({ user, onClose, onSuccess }: ResetPasswordModalProp
                   value={initialPassword}
                   onChange={(e) => setInitialPassword(e.target.value)}
                   required
+                  autoComplete="new-password"
                   data-testid="reset-password-input"
                   style={{ borderRight: 0 }}
                 />

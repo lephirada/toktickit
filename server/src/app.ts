@@ -2253,6 +2253,7 @@ app.get(
           requestedPriority: ticket.requestedPriority,
           itPriority: ticket.itPriority,
           status: ticket.status,
+          resolutionIndicated: ticket.resolutionIndicated,
           requesterId: ticket.requesterId,
           requester: {
             id: ticket.requester.id,
