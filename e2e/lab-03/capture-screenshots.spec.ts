@@ -5,6 +5,23 @@ import { execSync } from "child_process";
 
 const SCREENSHOT_DIR = path.resolve(process.cwd(), "artifacts/lab-03/screenshots");
 
+async function saveDualScreenshot(
+  page: any,
+  subfolder: string,
+  filename: string,
+  flatFilename: string,
+  fullPage: boolean = true
+) {
+  const targetDir = path.join(SCREENSHOT_DIR, subfolder);
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  const folderPath = path.join(targetDir, filename);
+  const flatPath = path.join(SCREENSHOT_DIR, flatFilename);
+  await page.screenshot({ path: folderPath, fullPage });
+  fs.copyFileSync(folderPath, flatPath);
+}
+
 test.describe("Lab 3 Responsive Screenshot Capture", () => {
   let ticketId: number | string = 1;
 
@@ -67,10 +84,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto("http://localhost:5173/login");
       await page.waitForSelector('[data-testid="login-screen"]');
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, `01-login-${vp.name}.png`),
-        fullPage: true,
-      });
+      await saveDualScreenshot(page, "login", `${vp.name}.png`, `01-login-${vp.name}.png`);
     });
 
     test(`captures Change Password screen (${vp.name})`, async ({ page }) => {
@@ -84,10 +98,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
       await page.click('[data-testid="login-submit-btn"]');
 
       await page.waitForSelector('[data-testid="change-password-screen"]');
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, `02-change-password-${vp.name}.png`),
-        fullPage: true,
-      });
+      await saveDualScreenshot(page, "change-password", `${vp.name}.png`, `02-change-password-${vp.name}.png`);
     });
 
     test(`captures My Tickets screen (${vp.name})`, async ({ page }) => {
@@ -101,10 +112,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
       await page.click('[data-testid="login-submit-btn"]');
 
       await page.waitForSelector('[data-testid="my-tickets-section"]');
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, `03-my-tickets-${vp.name}.png`),
-        fullPage: true,
-      });
+      await saveDualScreenshot(page, "requester-my-tickets", `${vp.name}.png`, `03-my-tickets-${vp.name}.png`);
     });
 
     test(`captures Create Ticket screen (${vp.name})`, async ({ page }) => {
@@ -119,10 +127,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
       await page.waitForSelector('[data-testid="my-tickets-section"]');
       await page.goto("http://localhost:5173/create-ticket");
       await page.waitForSelector('[data-testid="create-ticket-section"]');
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, `04-create-ticket-${vp.name}.png`),
-        fullPage: true,
-      });
+      await saveDualScreenshot(page, "requester-create-ticket", `${vp.name}.png`, `04-create-ticket-${vp.name}.png`);
     });
 
     test(`captures Requester Ticket Detail screen (${vp.name})`, async ({ page }) => {
@@ -137,10 +142,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
       await page.waitForSelector('[data-testid="my-tickets-section"]');
       await page.goto(`http://localhost:5173/tickets/${ticketId}`);
       await page.waitForSelector('[data-testid="ticket-detail-screen"]');
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, `05-ticket-detail-${vp.name}.png`),
-        fullPage: true,
-      });
+      await saveDualScreenshot(page, "requester-ticket-detail", `${vp.name}.png`, `05-ticket-detail-${vp.name}.png`);
     });
 
     test(`captures Staff Ticket Queue screen (${vp.name})`, async ({ page }) => {
@@ -161,19 +163,13 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
         await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
         await expect(page.locator('[data-testid="staff-ticket-cards"]')).toBeHidden();
       }
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, `06-staff-queue-${vp.name}.png`),
-        fullPage: true,
-      });
+      await saveDualScreenshot(page, "staff-queue", `${vp.name}.png`, `06-staff-queue-${vp.name}.png`);
 
       // For tablet and mobile, also capture with filter drawer opened
       if (vp.name !== "desktop") {
         await page.click('[data-testid="queue-filter-drawer-toggle"]');
         await expect(page.locator('[data-testid="queue-filter-drawer"]')).toBeVisible();
-        await page.screenshot({
-          path: path.join(SCREENSHOT_DIR, `06-staff-queue-${vp.name}-filter-open.png`),
-          fullPage: true,
-        });
+        await saveDualScreenshot(page, "staff-queue", `${vp.name}-filter-open.png`, `06-staff-queue-${vp.name}-filter-open.png`);
       }
     });
 
@@ -191,10 +187,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
       await page.goto(`http://localhost:5173/staff/tickets/${ticketId}`);
       await page.waitForSelector('[data-testid="staff-ticket-detail-section"]');
 
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, `07-staff-ticket-detail-${vp.name}.png`),
-        fullPage: true,
-      });
+      await saveDualScreenshot(page, "staff-ticket-detail", `${vp.name}.png`, `07-staff-ticket-detail-${vp.name}.png`);
     });
 
     test(`captures Administrator User Management screen (${vp.name})`, async ({ page }) => {
@@ -217,35 +210,26 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
         await page.waitForSelector('[data-testid="admin-users-table"]');
       }
 
-      await page.screenshot({
-        path: path.join(SCREENSHOT_DIR, `08-admin-users-${vp.name}.png`),
-        fullPage: true,
-      });
+      await saveDualScreenshot(page, "user-management", `${vp.name}.png`, `08-admin-users-${vp.name}.png`);
 
       // On desktop, capture modals
       if (vp.name === "desktop") {
         // 1. Create User Modal
         await page.click('[data-testid="create-user-button"]');
         await page.waitForSelector('[data-testid="create-user-modal"]');
-        await page.screenshot({
-          path: path.join(SCREENSHOT_DIR, "09-user-modal-create.png"),
-        });
+        await saveDualScreenshot(page, "user-management", "modal-create.png", "09-user-modal-create.png", false);
         await page.click('[data-testid="create-user-cancel-btn"]');
         await page.waitForSelector('[data-testid="create-user-modal"]', { state: "detached" });
 
         // 2. Edit User Modal (target current Admin)
         await page.locator('tr:has-text("admin@toktickit.com") button[data-testid^="edit-user-btn-"]').click();
         await page.waitForSelector('[data-testid="edit-user-modal"]');
-        await page.screenshot({
-          path: path.join(SCREENSHOT_DIR, "09-user-modal-edit.png"),
-        });
+        await saveDualScreenshot(page, "user-management", "modal-edit.png", "09-user-modal-edit.png", false);
 
         // 2a. Self-Deactivation Safety Alert Dialog
         await page.click('[data-testid="edit-user-active-toggle"]');
         await page.waitForSelector('[data-testid="safety-alert-dialog"]');
-        await page.screenshot({
-          path: path.join(SCREENSHOT_DIR, "09-user-modal-safety-self-deactivation.png"),
-        });
+        await saveDualScreenshot(page, "user-management", "safety-self-deactivation.png", "09-user-modal-safety-self-deactivation.png", false);
         await page.click('[data-testid="safety-dialog-ok-btn"]');
         await page.waitForSelector('[data-testid="safety-alert-dialog"]', { state: "detached" });
 
@@ -256,9 +240,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
         await page.selectOption('[data-testid="edit-user-role-select"]', "IT_STAFF");
         await page.click('[data-testid="edit-user-save-btn"]');
         await page.waitForSelector('[data-testid="safety-alert-dialog"]');
-        await page.screenshot({
-          path: path.join(SCREENSHOT_DIR, "09-user-modal-safety-last-admin.png"),
-        });
+        await saveDualScreenshot(page, "user-management", "safety-last-admin.png", "09-user-modal-safety-last-admin.png", false);
         await page.click('[data-testid="safety-dialog-ok-btn"]');
         await page.waitForSelector('[data-testid="safety-alert-dialog"]', { state: "detached" });
 
@@ -268,9 +250,7 @@ test.describe("Lab 3 Responsive Screenshot Capture", () => {
         // 3. Reset Password Modal
         await page.locator('button[data-testid^="reset-pwd-btn-"]').first().click();
         await page.waitForSelector('[data-testid="reset-password-modal"]');
-        await page.screenshot({
-          path: path.join(SCREENSHOT_DIR, "09-user-modal-reset-password.png"),
-        });
+        await saveDualScreenshot(page, "user-management", "modal-reset-password.png", "09-user-modal-reset-password.png", false);
         await page.click('[data-testid="reset-password-cancel-btn"]');
         await page.waitForSelector('[data-testid="reset-password-modal"]', { state: "detached" });
       }

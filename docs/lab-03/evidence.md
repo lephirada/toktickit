@@ -20,7 +20,7 @@
 | **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #36]`              | `[Approved]`                    | `[Merged]`   |
 | **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #37]`              | `[Request Changes -> Approved]` | `[Merge]`    |
 | **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #38]`              | `[Approved]`                    | `[Merge]`    |
-| **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #... Placeholder]` | `[Pending]`                     | `[Pending]`  |
+| **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #39]`              | `[Request Changes -> In Review]` | `[Pending]`  |
 
 ---
 
@@ -388,43 +388,43 @@ Running 64 tests using 1 worker
 
 ---
 
-## 3. UI State & Responsive Screenshot Catalog (32 Verified Images)
+## 3. UI State & Responsive Screenshot Catalog (32 Verified Images Across 8 Folders)
 
-Screenshots captured automatically by `e2e/lab-03/capture-screenshots.spec.ts` and stored in `artifacts/lab-03/screenshots/`.
+Screenshots captured automatically by `e2e/lab-03/capture-screenshots.spec.ts` and organized into the 8 prescribed view folders under `artifacts/lab-03/screenshots/` (with backward-compatible flat file aliases preserved).
 
-| Image Identifier  | Screen View                      | Viewport & Resolution       | File Path Verified                                                        |
-| :---------------- | :------------------------------- | :-------------------------- | :------------------------------------------------------------------------ |
-| `SCR-01-D`        | Login Screen                     | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/01-login-desktop.png`                       |
-| `SCR-01-T`        | Login Screen                     | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/01-login-tablet.png`                        |
-| `SCR-01-M`        | Login Screen                     | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/01-login-mobile.png`                        |
-| `SCR-02-D`        | Change Password Screen           | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/02-change-password-desktop.png`             |
-| `SCR-02-T`        | Change Password Screen           | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/02-change-password-tablet.png`              |
-| `SCR-02-M`        | Change Password Screen           | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/02-change-password-mobile.png`              |
-| `SCR-03-D`        | My Tickets Dashboard             | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/03-my-tickets-desktop.png`                  |
-| `SCR-03-T`        | My Tickets Dashboard             | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/03-my-tickets-tablet.png`                   |
-| `SCR-03-M`        | My Tickets Dashboard             | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/03-my-tickets-mobile.png`                   |
-| `SCR-04-D`        | Create Ticket Screen             | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/04-create-ticket-desktop.png`               |
-| `SCR-04-T`        | Create Ticket Screen             | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/04-create-ticket-tablet.png`                |
-| `SCR-04-M`        | Create Ticket Screen             | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/04-create-ticket-mobile.png`                |
-| `SCR-05-D`        | Requester Ticket Detail          | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/05-ticket-detail-desktop.png`               |
-| `SCR-05-T`        | Requester Ticket Detail          | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/05-ticket-detail-tablet.png`                |
-| `SCR-05-M`        | Requester Ticket Detail          | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/05-ticket-detail-mobile.png`                |
-| `SCR-06-D`        | IT Staff Ticket Queue            | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/06-staff-queue-desktop.png`                 |
-| `SCR-06-T`        | IT Staff Ticket Queue            | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/06-staff-queue-tablet.png`                  |
-| `SCR-06-T-FO`     | IT Staff Queue (Filter Open)     | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/06-staff-queue-tablet-filter-open.png`      |
-| `SCR-06-M`        | IT Staff Ticket Queue            | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/06-staff-queue-mobile.png`                  |
-| `SCR-06-M-FO`     | IT Staff Queue (Filter Open)     | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/06-staff-queue-mobile-filter-open.png`      |
-| `SCR-07-D`        | IT Staff Ticket Detail           | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/07-staff-ticket-detail-desktop.png`         |
-| `SCR-07-T`        | IT Staff Ticket Detail           | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/07-staff-ticket-detail-tablet.png`          |
-| `SCR-07-M`        | IT Staff Ticket Detail           | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/07-staff-ticket-detail-mobile.png`          |
-| `SCR-08-D`        | Admin User Management Table      | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/08-admin-users-desktop.png`                 |
-| `SCR-08-T`        | Admin User Management Table      | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/08-admin-users-tablet.png`                  |
-| `SCR-08-M`        | Admin User Management Table      | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/08-admin-users-mobile.png`                  |
-| `SCR-09-MOD-CR`   | Create User Modal                | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-create.png`                   |
-| `SCR-09-MOD-ED`   | Edit User Profile Modal          | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-edit.png`                     |
-| `SCR-09-MOD-PW`   | Reset Password Modal             | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-reset-password.png`           |
-| `SCR-09-SAF-SELF` | Safety Alert: Self-Deactivation  | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-safety-self-deactivation.png` |
-| `SCR-09-SAF-LAST` | Safety Alert: Last Admin Protect | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/09-user-modal-safety-last-admin.png`        |
+| Image Identifier  | Screen View                      | Viewport & Resolution       | Prescribed Folder Path (AC-17-04)                                         | Flat File Alias Path                                                      |
+| :---------------- | :------------------------------- | :-------------------------- | :------------------------------------------------------------------------ | :------------------------------------------------------------------------ |
+| `SCR-01-D`        | Login Screen                     | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/login/desktop.png`                          | `artifacts/lab-03/screenshots/01-login-desktop.png`                       |
+| `SCR-01-T`        | Login Screen                     | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/login/tablet.png`                           | `artifacts/lab-03/screenshots/01-login-tablet.png`                        |
+| `SCR-01-M`        | Login Screen                     | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/login/mobile.png`                           | `artifacts/lab-03/screenshots/01-login-mobile.png`                        |
+| `SCR-02-D`        | Change Password Screen           | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/change-password/desktop.png`                 | `artifacts/lab-03/screenshots/02-change-password-desktop.png`             |
+| `SCR-02-T`        | Change Password Screen           | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/change-password/tablet.png`                  | `artifacts/lab-03/screenshots/02-change-password-tablet.png`              |
+| `SCR-02-M`        | Change Password Screen           | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/change-password/mobile.png`                  | `artifacts/lab-03/screenshots/02-change-password-mobile.png`              |
+| `SCR-03-D`        | My Tickets Dashboard             | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/requester-my-tickets/desktop.png`           | `artifacts/lab-03/screenshots/03-my-tickets-desktop.png`                  |
+| `SCR-03-T`        | My Tickets Dashboard             | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/requester-my-tickets/tablet.png`            | `artifacts/lab-03/screenshots/03-my-tickets-tablet.png`                   |
+| `SCR-03-M`        | My Tickets Dashboard             | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/requester-my-tickets/mobile.png`            | `artifacts/lab-03/screenshots/03-my-tickets-mobile.png`                   |
+| `SCR-04-D`        | Create Ticket Screen             | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/requester-create-ticket/desktop.png`        | `artifacts/lab-03/screenshots/04-create-ticket-desktop.png`               |
+| `SCR-04-T`        | Create Ticket Screen             | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/requester-create-ticket/tablet.png`         | `artifacts/lab-03/screenshots/04-create-ticket-tablet.png`                |
+| `SCR-04-M`        | Create Ticket Screen             | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/requester-create-ticket/mobile.png`         | `artifacts/lab-03/screenshots/04-create-ticket-mobile.png`                |
+| `SCR-05-D`        | Requester Ticket Detail          | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/requester-ticket-detail/desktop.png`        | `artifacts/lab-03/screenshots/05-ticket-detail-desktop.png`               |
+| `SCR-05-T`        | Requester Ticket Detail          | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/requester-ticket-detail/tablet.png`         | `artifacts/lab-03/screenshots/05-ticket-detail-tablet.png`                |
+| `SCR-05-M`        | Requester Ticket Detail          | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/requester-ticket-detail/mobile.png`         | `artifacts/lab-03/screenshots/05-ticket-detail-mobile.png`                |
+| `SCR-06-D`        | IT Staff Ticket Queue            | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/staff-queue/desktop.png`                    | `artifacts/lab-03/screenshots/06-staff-queue-desktop.png`                 |
+| `SCR-06-T`        | IT Staff Ticket Queue            | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/staff-queue/tablet.png`                     | `artifacts/lab-03/screenshots/06-staff-queue-tablet.png`                  |
+| `SCR-06-T-FO`     | IT Staff Queue (Filter Open)     | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/staff-queue/tablet-filter-open.png`         | `artifacts/lab-03/screenshots/06-staff-queue-tablet-filter-open.png`      |
+| `SCR-06-M`        | IT Staff Ticket Queue            | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/staff-queue/mobile.png`                     | `artifacts/lab-03/screenshots/06-staff-queue-mobile.png`                  |
+| `SCR-06-M-FO`     | IT Staff Queue (Filter Open)     | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/staff-queue/mobile-filter-open.png`         | `artifacts/lab-03/screenshots/06-staff-queue-mobile-filter-open.png`      |
+| `SCR-07-D`        | IT Staff Ticket Detail           | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/staff-ticket-detail/desktop.png`            | `artifacts/lab-03/screenshots/07-staff-ticket-detail-desktop.png`         |
+| `SCR-07-T`        | IT Staff Ticket Detail           | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/staff-ticket-detail/tablet.png`             | `artifacts/lab-03/screenshots/07-staff-ticket-detail-tablet.png`          |
+| `SCR-07-M`        | IT Staff Ticket Detail           | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/staff-ticket-detail/mobile.png`             | `artifacts/lab-03/screenshots/07-staff-ticket-detail-mobile.png`          |
+| `SCR-08-D`        | Admin User Management Table      | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/user-management/desktop.png`                | `artifacts/lab-03/screenshots/08-admin-users-desktop.png`                 |
+| `SCR-08-T`        | Admin User Management Table      | Tablet ($768 \times 1024$)  | `artifacts/lab-03/screenshots/user-management/tablet.png`                 | `artifacts/lab-03/screenshots/08-admin-users-tablet.png`                  |
+| `SCR-08-M`        | Admin User Management Table      | Mobile ($375 \times 812$)   | `artifacts/lab-03/screenshots/user-management/mobile.png`                 | `artifacts/lab-03/screenshots/08-admin-users-mobile.png`                  |
+| `SCR-09-MOD-CR`   | Create User Modal                | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/user-management/modal-create.png`           | `artifacts/lab-03/screenshots/09-user-modal-create.png`                   |
+| `SCR-09-MOD-ED`   | Edit User Profile Modal          | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/user-management/modal-edit.png`             | `artifacts/lab-03/screenshots/09-user-modal-edit.png`                     |
+| `SCR-09-MOD-PW`   | Reset Password Modal             | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/user-management/modal-reset-password.png`    | `artifacts/lab-03/screenshots/09-user-modal-reset-password.png`           |
+| `SCR-09-SAF-SELF` | Safety Alert: Self-Deactivation  | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/user-management/safety-self-deactivation.png`| `artifacts/lab-03/screenshots/09-user-modal-safety-self-deactivation.png` |
+| `SCR-09-SAF-LAST` | Safety Alert: Last Admin Protect | Desktop ($1280 \times 900$) | `artifacts/lab-03/screenshots/user-management/safety-last-admin.png`       | `artifacts/lab-03/screenshots/09-user-modal-safety-last-admin.png`        |
 
 ---
 

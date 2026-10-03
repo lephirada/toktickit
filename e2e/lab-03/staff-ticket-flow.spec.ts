@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { resetAuthUsers } from "./helpers/db-helper.js";
+import { resetAuthUsers, getPrisma } from "./helpers/db-helper.js";
 
 test.describe("Lab 03 Staff Ticket Workflow Browser Suite", () => {
   test.beforeEach(async () => {
@@ -42,7 +42,8 @@ test.describe("Lab 03 Staff Ticket Workflow Browser Suite", () => {
 
     await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
 
-    // 2. Click the first ticket from the table
+    // 2. Filter queue by "Unassigned" to guarantee opening an unassigned ticket
+    await page.click('[data-testid="queue-owner-unassigned"]');
     const firstTicketRow = page.locator('tbody tr[data-testid^="ticket-row-"]').first();
     await expect(firstTicketRow).toBeVisible();
     await firstTicketRow.click();
@@ -53,40 +54,35 @@ test.describe("Lab 03 Staff Ticket Workflow Browser Suite", () => {
     await expect(page.locator('[data-testid="ticket-number"]')).toBeVisible();
     await expect(page.locator('[data-testid="detail-status-badge"]')).toBeVisible();
 
-    // 4. Claim or Reassign
+    // 4. Claim ticket explicitly
     const ownerDisplay = page.locator('[data-testid="assigned-owner-display"]');
     await expect(ownerDisplay).toBeVisible();
 
     const claimBtn = page.locator('button:has-text("Claim Ticket")');
-    if (await claimBtn.isVisible()) {
-      await claimBtn.click();
-      await expect(ownerDisplay).toContainText(/David Lee/i);
-    }
+    await expect(claimBtn).toBeVisible();
+    await claimBtn.click();
+    await expect(ownerDisplay).toContainText(/David Lee/i);
 
-    // 5. Reassign to Alex Morgan
+    // 5. Reassign to Alex Morgan explicitly
     const reassignSelect = page.locator('select[aria-label="Select new owner"]');
-    if (await reassignSelect.isVisible()) {
-      const alexOption = reassignSelect.locator('option:has-text("Alex Morgan")');
-      if (await alexOption.count() > 0) {
-        const alexValue = await alexOption.getAttribute("value");
-        if (alexValue) {
-          await reassignSelect.selectOption(alexValue);
-          const reassignSubmit = page.locator('button[type="submit"]:has-text("Reassign")');
-          await expect(reassignSubmit).toBeEnabled();
-          await reassignSubmit.click();
-          await expect(ownerDisplay).toContainText(/Alex Morgan/i);
+    await expect(reassignSelect).toBeVisible();
+    const alexOption = reassignSelect.locator('option:has-text("Alex Morgan")');
+    await expect(alexOption).toHaveCount(1);
+    const alexValue = await alexOption.getAttribute("value");
+    await reassignSelect.selectOption(alexValue!);
+    const reassignSubmit = page.locator('button[type="submit"]:has-text("Reassign")');
+    await expect(reassignSubmit).toBeEnabled();
+    await reassignSubmit.click();
+    await expect(ownerDisplay).toContainText(/Alex Morgan/i);
 
-          // Reassign back to David Lee
-          const davidOption = reassignSelect.locator('option:has-text("David Lee")');
-          const davidValue = await davidOption.getAttribute("value");
-          if (davidValue) {
-            await reassignSelect.selectOption(davidValue);
-            await reassignSubmit.click();
-            await expect(ownerDisplay).toContainText(/David Lee/i);
-          }
-        }
-      }
-    }
+    // Reassign back to David Lee
+    const davidOption = reassignSelect.locator('option:has-text("David Lee")');
+    await expect(davidOption).toHaveCount(1);
+    const davidValue = await davidOption.getAttribute("value");
+    await reassignSelect.selectOption(davidValue!);
+    await expect(reassignSubmit).toBeEnabled();
+    await reassignSubmit.click();
+    await expect(ownerDisplay).toContainText(/David Lee/i);
   });
 
   test("staff can update status via transition modal and record internal notes", async ({
@@ -98,43 +94,42 @@ test.describe("Lab 03 Staff Ticket Workflow Browser Suite", () => {
     await page.fill('[data-testid="login-password-input"]', "Password123!");
     await page.click('[data-testid="login-submit-btn"]');
 
+    await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
+
     // 2. Open first ticket
     const firstTicketRow = page.locator('tbody tr[data-testid^="ticket-row-"]').first();
     await expect(firstTicketRow).toBeVisible();
     await firstTicketRow.click();
     await expect(page.locator('[data-testid="staff-ticket-detail-screen"]')).toBeVisible();
 
-    // 3. Ensure ticket is claimed before transitioning to OPEN/IN_PROGRESS if needed
+    // Ensure claimed if unassigned so status transition is available
     const claimBtn = page.locator('button:has-text("Claim Ticket")');
     if (await claimBtn.isVisible()) {
       await claimBtn.click();
       await expect(page.locator('[data-testid="assigned-owner-display"]')).toContainText(/David Lee/i);
     }
 
-    // 4. Open status transition modal
+    // 3. Open status transition modal explicitly
     const updateStatusBtn = page.locator('[data-testid="open-status-modal-button"]');
-    if (await updateStatusBtn.isEnabled()) {
-      await updateStatusBtn.click();
-      const modalTitle = page.locator('#transition-modal-title');
-      await expect(modalTitle).toBeVisible();
+    await expect(updateStatusBtn).toBeEnabled();
+    await updateStatusBtn.click();
+    const modalTitle = page.locator('#transition-modal-title');
+    await expect(modalTitle).toBeVisible();
 
-      // Check target status options
-      const targetSelect = page.locator('#target-status-select');
-      const options = await targetSelect.locator('option').allInnerTexts();
-
-      if (options.length > 0) {
-        // Select first available transition
-        const targetValue = await targetSelect.locator('option').first().getAttribute('value');
-        if (targetValue) {
-          await targetSelect.selectOption(targetValue);
-          if (targetValue === "RESOLVED") {
-            await page.fill('#resolution-summary-input', 'Hardware tested and confirmed functioning within normal specifications.');
-          }
-          await page.click('[data-testid="submit-status-button"]');
-          await expect(modalTitle).toBeHidden();
-        }
-      }
+    // 4. Select target transition and submit
+    const targetSelect = page.locator('#target-status-select');
+    await expect(targetSelect).toBeVisible();
+    const options = await targetSelect.locator('option').all();
+    expect(options.length).toBeGreaterThan(0);
+    const targetValue = await options[0].getAttribute('value');
+    expect(targetValue).toBeTruthy();
+    await targetSelect.selectOption(targetValue!);
+    if (targetValue === "RESOLVED") {
+      await page.fill('#resolution-summary-input', 'Hardware tested and confirmed functioning within normal specifications.');
     }
+    await page.click('[data-testid="submit-status-button"]');
+    await expect(modalTitle).toBeHidden();
+    await expect(page.locator('[data-testid="detail-status-badge"]')).toBeVisible();
 
     // 5. Test Internal Notes Tab
     const internalNotesTab = page.locator('button:has-text("Internal Notes")');
