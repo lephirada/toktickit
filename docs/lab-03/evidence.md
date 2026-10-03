@@ -20,7 +20,7 @@
 | **Issue 14** | `feature/14-staff-queue`                  | IT Staff Ticket Queue API & UI            | `[PR #36]`              | `[Approved]`                    | `[Merged]`   |
 | **Issue 15** | `feature/15-staff-ticket-operations`      | IT Staff Ticket Detail & Operations       | `[PR #37]`              | `[Request Changes -> Approved]` | `[Merge]`    |
 | **Issue 16** | `feature/16-user-management`              | Administrator User Management             | `[PR #38]`              | `[Approved]`                    | `[Merge]`    |
-| **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #39]`              | `[Request Changes -> In Review]` | `[Pending]`  |
+| **Issue 17** | `feature/17-integration-e2e`              | End-to-End E2E Verification & Audit       | `[PR #39]`              | `[Approved]`                    | `[Merge]`    |
 
 ---
 
