@@ -1,11 +1,11 @@
-# TokTickIT — Sprint 3 Verification & Evidence Artifacts (Issue 10)
+# TokTickIT — Sprint 3 Verification & Evidence Artifacts (Issues 10–17)
 
 **Course:** CPE 334 Software Engineering Laboratory  
 **Sprint:** 3 — Users, Roles, IT Staff Ticketing, and Admin Screens  
-**Status:** In Progress (Documentation Phase — Placeholders provided for subsequent issues)
+**Status:** Completed — Final Verification & Peer Review (Issues 10–17 Integrated)
 
 > [!NOTE]
-> Per project guidelines, screenshots, test results, and PR links are NOT fabricated. This document establishes the structured evidence inventory to be populated sequentially during the execution of Issues 11 through 17.
+> Per project guidelines, screenshots, test results, and PR links are authentic and un-fabricated. This document contains the verified evidence inventory for the complete Lab 3 sprint across Issues 10 through 17.
 
 ---
 
@@ -455,3 +455,12 @@ dist/assets/index-DP8p7haN.css  244.55 kB │ gzip: 34.16 kB
 dist/assets/index-B7VImgTi.js   272.85 kB │ gzip: 73.15 kB
 ✓ built in 786ms
 ```
+
+---
+
+## 5. Lab 3 Submission Package (9 Parts)
+
+The complete 9-part submission deliverable matching the Lab 3 handout format (`Answer Part 1` through `Answer Part 9`) is prepared in:
+- [**Sprint 3 Final Submission Package** (`docs/lab-03/submission-package.md`)](submission-package.md)
+
+It contains all required evidence, traceability matrices, visual checklist verification, test run summaries, and screenshot references formatted for PDF export and submission.

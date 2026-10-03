@@ -42,8 +42,10 @@ test.describe("Lab 03 Staff Ticket Workflow Browser Suite", () => {
 
     await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
 
-    // 2. Filter queue by "Unassigned" to guarantee opening an unassigned ticket
+    // 2. Filter queue by "Unassigned" and status "NEW" to guarantee opening an active unassigned ticket
+    await page.selectOption('[data-testid="queue-status-filter"]', "NEW");
     await page.click('[data-testid="queue-owner-unassigned"]');
+    await page.waitForLoadState("networkidle");
     const firstTicketRow = page.locator('tbody tr[data-testid^="ticket-row-"]').first();
     await expect(firstTicketRow).toBeVisible();
     await firstTicketRow.click();
@@ -96,18 +98,14 @@ test.describe("Lab 03 Staff Ticket Workflow Browser Suite", () => {
 
     await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
 
-    // 2. Open first ticket
+    // 2. Filter queue by "My Tickets" to guarantee opening a ticket owned by David Lee
+    await page.click('[data-testid="queue-owner-my-tickets"]');
+    await page.waitForLoadState("networkidle");
     const firstTicketRow = page.locator('tbody tr[data-testid^="ticket-row-"]').first();
     await expect(firstTicketRow).toBeVisible();
     await firstTicketRow.click();
     await expect(page.locator('[data-testid="staff-ticket-detail-screen"]')).toBeVisible();
-
-    // Ensure claimed if unassigned so status transition is available
-    const claimBtn = page.locator('button:has-text("Claim Ticket")');
-    if (await claimBtn.isVisible()) {
-      await claimBtn.click();
-      await expect(page.locator('[data-testid="assigned-owner-display"]')).toContainText(/David Lee/i);
-    }
+    await expect(page.locator('[data-testid="assigned-owner-display"]')).toContainText(/David Lee/i);
 
     // 3. Open status transition modal explicitly
     const updateStatusBtn = page.locator('[data-testid="open-status-modal-button"]');
@@ -124,8 +122,10 @@ test.describe("Lab 03 Staff Ticket Workflow Browser Suite", () => {
     const targetValue = await options[0].getAttribute('value');
     expect(targetValue).toBeTruthy();
     await targetSelect.selectOption(targetValue!);
-    if (targetValue === "RESOLVED") {
-      await page.fill('#resolution-summary-input', 'Hardware tested and confirmed functioning within normal specifications.');
+    const resSummary = page.locator('#resolution-summary-input');
+    const isResSummaryVisible = await resSummary.isVisible();
+    if (isResSummaryVisible) {
+      await resSummary.fill('Hardware tested and confirmed functioning within normal specifications.');
     }
     await page.click('[data-testid="submit-status-button"]');
     await expect(modalTitle).toBeHidden();

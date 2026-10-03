@@ -394,12 +394,28 @@ npm run test:e2e
 - [**Peer Review Records** (`docs/lab-02/reviewer.md`)](docs/lab-02/reviewer.md) — Peer review logs, PR evaluation notes, and reviewer approvals.
 - [**AI Use Disclosure** (`docs/lab-02/ai-use.md`)](docs/lab-02/ai-use.md) — Comprehensive log of AI pair-programming usage, prompts, and verification steps.
 
+### Lab 3 Documentation
+
+- [**Specification Document** (`docs/lab-03/specification.md`)](docs/lab-03/specification.md) — Sprint 3 requirements, domain models, business rules, authorization matrix, acceptance criteria, and Product Definition of Done.
+- [**API Specification** (`docs/lab-03/api-spec.md`)](docs/lab-03/api-spec.md) — REST API contract covering cookie-based JWT auth, Staff ticket queue queries, operational transitions, private notes, and Admin user management.
+- [**UI Specification** (`docs/lab-03/ui-spec.md`)](docs/lab-03/ui-spec.md) — Zen Green UI specification for Login, Password Change, Staff Queue, Staff Detail, and Minimalist Admin User Management.
+- [**Test Plan & Results** (`docs/lab-03/tests.md`)](docs/lab-03/tests.md) — Comprehensive test cases, traceability matrix, automated test execution logs, and coverage reports.
+- [**Evidence & Verification Artifacts** (`docs/lab-03/evidence.md`)](docs/lab-03/evidence.md) — Traceable verification evidence, test execution logs, PR registry, and responsive screenshot catalog.
+- [**Peer Review Records** (`docs/lab-03/reviewer.md`)](docs/lab-03/reviewer.md) — Peer review logs, PR evaluation notes, reviewer critiques, and author responses for Issues 10–17.
+- [**AI Use Disclosure** (`docs/lab-03/ai-use.md`)](docs/lab-03/ai-use.md) — Log of AI pair-programming usage, prompt engineering, verification protocols, and student reflection.
+
 ### Verification Artifacts & Screenshots
 
-- [`artifacts/lab-02/screenshots/`](artifacts/lab-02/screenshots/) — Visual verification evidence and UI captures across responsive viewports:
-  - [`create-ticket/`](artifacts/lab-02/screenshots/create-ticket/) — Ticket creation form, dynamic system dropdowns, pre-upload attachment dropzone, and dirty form guard.
-  - [`my-tickets/`](artifacts/lab-02/screenshots/my-tickets/) — My Tickets dashboard (desktop multi-column table, mobile stacked cards, debounced search, status/priority filters, pagination).
-  - [`ticket-detail/`](artifacts/lab-02/screenshots/ticket-detail/) — Ticket detail view, active attachment download, soft-removal modal with reason tracking, and chronological activity timeline.
+- [`artifacts/lab-02/screenshots/`](artifacts/lab-02/screenshots/) — Lab 2 visual verification evidence across responsive viewports (`create-ticket/`, `my-tickets/`, `ticket-detail/`).
+- [`artifacts/lab-03/screenshots/`](artifacts/lab-03/screenshots/) — Lab 3 visual verification evidence across Desktop, Tablet, and Mobile viewports organized in 8 prescribed view folders:
+  - [`login/`](artifacts/lab-03/screenshots/login/) — Login screen with validation, busy states, and safe error alerts.
+  - [`change-password/`](artifacts/lab-03/screenshots/change-password/) — First-login mandatory password change gate.
+  - [`requester-create-ticket/`](artifacts/lab-03/screenshots/requester-create-ticket/) — Requester ticket submission with authenticated session.
+  - [`requester-my-tickets/`](artifacts/lab-03/screenshots/requester-my-tickets/) — Requester ticket dashboard with real user data.
+  - [`requester-ticket-detail/`](artifacts/lab-03/screenshots/requester-ticket-detail/) — Requester ticket detail with public comments and resolution indication.
+  - [`staff-queue/`](artifacts/lab-03/screenshots/staff-queue/) — IT Staff ticket queue with responsive table/card views and filter drawers.
+  - [`staff-ticket-detail/`](artifacts/lab-03/screenshots/staff-ticket-detail/) — IT Staff detail with ticket claims, reassignments, status transitions, and confidential internal notes.
+  - [`user-management/`](artifacts/lab-03/screenshots/user-management/) — Minimalist Admin user directory with modal actions and safety guardrails.
 
 ---
 
@@ -410,6 +426,17 @@ This project enforces a structured **Git Flow** strategy to maintain code qualit
 ```text
 main (Production / Stable Releases)
  ^
+ |-- lab3-staging (Lab 3 Integration Branch)
+ |    ^
+ |    |-- feature/10-lab3-documentation       (Issue 10: Sprint 3 Specifications & Test Plan)
+ |    |-- feature/11-database-migration       (Issue 11: Schema Migration & Idempotent Seed)
+ |    |-- feature/12-authentication-authorization (Issue 12: JWT Auth, Password Hash & APIs)
+ |    |-- feature/13-client-auth-shell        (Issue 13: Client Auth Shell & Role Navigation)
+ |    |-- feature/14-staff-queue              (Issue 14: IT Staff Ticket Queue & Filter Drawer)
+ |    |-- feature/15-staff-ticket-operations  (Issue 15: Staff Claims, Transitions & Notes)
+ |    |-- feature/16-user-management          (Issue 16: Administrator User Management)
+ |    `-- feature/17-integration-e2e          (Issue 17: Full E2E Journey & Verification)
+ |
  |-- lab2-staging (Lab 2 Integration Branch)
  |    ^
  |    |-- feature/5-spec-docs          (Issue 5: Specifications & Test Plan)
@@ -429,6 +456,7 @@ main (Production / Stable Releases)
 ### Branching Strategy Guidelines
 
 - `main`: Protected release branch containing production-ready code.
-- `lab2-staging`: Integration branch where Lab 2 features are combined and verified.
+- `lab3-staging`: Integration branch where Lab 3 features are combined and verified.
+- `lab2-staging`: Integration branch where Lab 2 features were combined and verified.
 - `feature/*`: Short-lived isolation branches created per GitHub Issue.
 - **Pull Request (PR) Policy:** Direct pushes to `main` and staging branches are forbidden. All code must pass automated GitHub Actions CI and receive peer reviewer approval before merging.

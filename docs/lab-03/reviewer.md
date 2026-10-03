@@ -337,7 +337,9 @@
 
 - **My comment:**
 
-  > `[Placeholder: My review comment for partner's Issue 17 PR]`
+  > The documentation updates are now complete and the release flow is clearly documented. Please just update Issue #18 in the README from Approved to Merged to match the actual Git history.
+
+  > After that, this PR is ready for approval.
 
 - **Partner's response:**
   > `[Placeholder: Partner's response]`

@@ -24,3 +24,17 @@
 ---
 
 ## Reflection
+
+### Where AI Helped
+
+> Saving Time on Boilerplate and Test Cases: This sprint involved a lot of heavy lifting—implementing the state machine, building the auth system (JWT/cookies), and writing multi-layered test coverage. AI significantly sped things up by drafting starter code, outlining SQL migrations, and scaffolding test structures for Vitest and Playwright so we didn't have to write boilerplate from scratch.
+
+> Catching Overlooked Edge Cases: AI was effective at flagging subtle security concerns and edge cases we might have missed, such as enforcing fail-fast validation when JWT_SECRET is missing, verifying token expiration claims, and ensuring requesters cannot access confidential internal notes or resolve tickets prematurely.
+
+### Where Human Judgment Mattered
+
+> Correcting Shortcut Fixes in Tests and UI: When tests failed, AI often tried to fix them with lazy shortcuts like arbitrary delays (sleep/timeout), which led to flaky tests. We had to intervene by replacing these with proper DOM assertions and resolving React act(...) warnings using asynchronous testing utilities. The same applied to CSS and Bootstrap styling—AI frequently misjudged layout alignment, so we had to inspect the live DOM in DevTools and tune the design details ourselves.
+
+### Key Takeaways
+
+> AI acts much like a very fast-typing junior pair programmer—it provides great speed, but it cannot make strategic architectural decisions for us. To collaborate successfully with AI on complex features, having precise specifications and clear Acceptance Criteria from the start is essential. Most importantly, never accept AI-generated code without running tests. Having comprehensive automated tests across Unit, Integration, and E2E layers served as our essential safety net to ensure that AI-suggested changes never introduced silent regressions into our existing system.
