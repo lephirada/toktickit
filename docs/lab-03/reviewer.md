@@ -16,7 +16,7 @@
 | `[PR #36]`              | `feature/14-staff-queue`                  | `[Approved]`                    |
 | `[PR #37]`              | `feature/15-staff-ticket-operations`      | `[Request Changes -> Approved]` |
 | `[PR #38]`              | `feature/16-user-management`              | `[Approved]`                    |
-| `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Pending]`                     |
+| `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Approved]`                     |
 
 ---
 
