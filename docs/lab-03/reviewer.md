@@ -7,16 +7,16 @@
 
 ## Pull Requests I authored (reviewed by my partner)
 
-| PR                      | Branch                                    | Reviewer verdict                |
-| :---------------------- | :---------------------------------------- | :------------------------------ |
-| `[PR #32]`              | `feature/10-lab3-documentation`           | `[Approved]`                    |
-| `[PR #33]`              | `feature/11-database-migration`           | `[Request Changes -> Approved]` |
-| `[PR #34]`              | `feature/12-authentication-authorization` | `[Request Changes -> Approved]` |
-| `[PR #35]`              | `feature/13-client-auth-shell`            | `[Approved]`                    |
-| `[PR #36]`              | `feature/14-staff-queue`                  | `[Approved]`                    |
-| `[PR #37]`              | `feature/15-staff-ticket-operations`      | `[Request Changes -> Approved]` |
-| `[PR #38]`              | `feature/16-user-management`              | `[Approved]`                    |
-| `[PR #... Placeholder]` | `feature/17-integration-e2e`              | `[Approved]`                     |
+| PR         | Branch                                    | Reviewer verdict                |
+| :--------- | :---------------------------------------- | :------------------------------ |
+| `[PR #32]` | `feature/10-lab3-documentation`           | `[Approved]`                    |
+| `[PR #33]` | `feature/11-database-migration`           | `[Request Changes -> Approved]` |
+| `[PR #34]` | `feature/12-authentication-authorization` | `[Request Changes -> Approved]` |
+| `[PR #35]` | `feature/13-client-auth-shell`            | `[Approved]`                    |
+| `[PR #36]` | `feature/14-staff-queue`                  | `[Approved]`                    |
+| `[PR #37]` | `feature/15-staff-ticket-operations`      | `[Request Changes -> Approved]` |
+| `[PR #38]` | `feature/16-user-management`              | `[Approved]`                    |
+| `[PR #39]` | `feature/17-integration-e2e`              | `[Approved]`                    |
 
 ---
 
