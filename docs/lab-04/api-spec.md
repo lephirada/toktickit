@@ -149,7 +149,7 @@ To prevent dirty writes and silent overwrite collisions when multiple IT Staff m
   }
   ```
 
-### 3.2 Resolution Gate Execution Flow
+### 3.2 Resolution Gate Execution Flow & Boundary Validation Matrix
 
 When `status === "RESOLVED"`:
 1. **Pure Structural Transition Check (`shared/ticketStateMachine.ts`):**
@@ -163,23 +163,36 @@ When `status === "RESOLVED"`:
        where: { ticketId }
      });
      ```
-   - If `actionsCount < 1`, the server halts execution and returns HTTP **`422 Unprocessable Entity`**:
-     ```json
-     {
-       "error": {
-         "code": "RESOLUTION_ACTION_REQUIRED",
-         "message": "At least one action taken must be recorded before resolving this ticket.",
-         "details": {
-           "ticketId": 14,
-           "currentStatus": "IN_PROGRESS",
-           "requestedStatus": "RESOLVED",
-           "actionsCount": 0
-         }
+   - If `actionsCount < 1`, the server halts execution and returns HTTP **`422 Unprocessable Entity`** (`RESOLUTION_ACTION_REQUIRED`).
+3. **Resolution Gate Boundary Validation Matrix:**
+
+| Test / Evaluation Case | Input Values | Server Evaluation | HTTP Status & Error Code | Expected Result |
+| :--- | :--- | :--- | :---: | :--- |
+| **Missing Summary** | `resolutionSummary: undefined` or `null` | Field is required | `422 VALIDATION_ERROR` | Request rejected; status unchanged |
+| **Below Min Length** | `resolutionSummary: "Fixed it."` (9 chars) | Length $< 10$ | `422 VALIDATION_ERROR` | Request rejected; status unchanged |
+| **Exact Min Length** | `resolutionSummary: "1234567890"` (10 chars), `actionsCount >= 1` | Lower boundary satisfied | `200 OK` | Ticket status transitions to `RESOLVED` |
+| **Exact Max Length** | `resolutionSummary: "a".repeat(1000)` (1000 chars), `actionsCount >= 1` | Upper boundary satisfied | `200 OK` | Ticket status transitions to `RESOLVED` |
+| **Exceeds Max Length**| `resolutionSummary: "a".repeat(1001)` (1001 chars) | Length $> 1000$ | `422 VALIDATION_ERROR` | Request rejected; status unchanged |
+| **Zero Actions Taken**| Valid summary (e.g. 50 chars), `actionsCount === 0` | Action count $< 1$ | `422 RESOLUTION_ACTION_REQUIRED` | Request rejected; status unchanged |
+| **Valid Resolution** | Valid summary (e.g. 50 chars), `actionsCount >= 1` | Both criteria satisfied | `200 OK` | Ticket status transitions to `RESOLVED`, activity logged |
+
+4. **Failure Payload for Zero Actions:**
+   ```json
+   {
+     "error": {
+       "code": "RESOLUTION_ACTION_REQUIRED",
+       "message": "At least one action taken must be recorded before resolving this ticket.",
+       "details": {
+         "ticketId": 14,
+         "currentStatus": "IN_PROGRESS",
+         "requestedStatus": "RESOLVED",
+         "actionsCount": 0
        }
      }
-     ```
-3. **Commit & Activity Audit:**
-   - If `actionsCount >= 1` and `resolutionSummary` is valid, the server updates ticket status to `RESOLVED`, sets `resolutionSummary`, records `updatedAt`, and writes a `TicketActivity` entry (`STATUS_CHANGED`).
+   }
+   ```
+5. **Commit & Activity Audit:**
+   - If `actionsCount >= 1` and `resolutionSummary` satisfies boundary checks (10–1,000 chars), the server updates ticket status to `RESOLVED`, sets `resolutionSummary`, records `updatedAt`, and writes a `TicketActivity` entry (`STATUS_CHANGED`).
 
 ---
 
@@ -258,7 +271,7 @@ Records a new technical action taken on an active ticket.
   - `description`: String, required, 10–2,000 characters (trimmed).
   - `actionType`: String, optional (default `"INVESTIGATION"`), max 50 characters. Allowed values: `"INVESTIGATION"`, `"CONFIGURATION"`, `"REPAIR"`, `"COMMUNICATION"`, `"OTHER"`.
   - `timeSpentMinutes`: Integer, required, positive integer between 1 and 1,440.
-  - `performedAt`: ISO-8601 string, optional (default: `now()`), cannot be future-dated by more than 5 minutes.
+  - `performedAt`: ISO-8601 string, optional (default: `now()`). **Cannot be in the future** (`performedAt <= now()`). Any timestamp where `performedAt > now()` (future server time) is strictly rejected with `422 Unprocessable Entity` (`VALIDATION_ERROR`).
   - `performedById`: Disallowed in payload; derived from `req.user.id`.
 * **Business Rule Validation:**
   - Parent ticket must be in a workable status (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`).
@@ -432,17 +445,17 @@ Allows a Requester to indicate that a problem appears solved on their own ticket
 * **Access Control:** `REQUESTER` (strictly ticket owner: `ticket.requesterId === req.user.id`). IT Staff or Admin calling this receive `403 Forbidden`.
 * **State Behavior:**
   1. Sets `ticket.resolutionIndicated = true`.
-  2. If `ticket.status === 'WAITING_FOR_REQUESTER'`, auto-transitions to `'IN_PROGRESS'`.
+  2. Leaves `ticket.status` completely unchanged (no automatic status transition occurs; the ticket strictly retains its existing status).
   3. Appends an automated public comment: `"Requester indicated the problem appears resolved."`
   4. Records activity in `TicketActivity` (`REQUESTER_CONFIRMED_RESOLVED`).
-* **Strict Invariant:** This endpoint **never** sets status to `RESOLVED` or `CLOSED`. Ticket status remains `IN_PROGRESS` or unchanged. Formal resolution is strictly reserved for IT Staff after meeting Resolution Gate criteria.
+* **Strict Invariant:** This endpoint is strictly advisory and **never alters ticket status** under any circumstance. It cannot transition `WAITING_FOR_REQUESTER` to `IN_PROGRESS`, nor can it set status to `RESOLVED` or `CLOSED`. Formal resolution is strictly reserved for IT Staff and Administrators after satisfying the Resolution Gate.
 * **Response (200 OK):**
   ```json
   {
     "data": {
       "id": 14,
       "ticketNo": "TKT-2026-00014",
-      "status": "IN_PROGRESS",
+      "status": "WAITING_FOR_REQUESTER",
       "resolutionIndicated": true,
       "updatedAt": "2026-10-08T11:30:00.000Z"
     }

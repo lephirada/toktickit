@@ -144,7 +144,7 @@ Located beneath the ticket details panel on the Staff Ticket Detail screen:
      - `COMMUNICATION`
      - `OTHER`
   2. **Time Spent (Minutes):** Numeric input with step `5`, min `1`, max `1440`. Includes helper presets: `[ 15m ] [ 30m ] [ 45m ] [ 1h ] [ 2h ]`.
-  3. **Performed At:** DateTime-local picker defaulting to current time. Cannot be set beyond current time + 5 minutes.
+  3. **Performed At:** DateTime-local picker defaulting to current time. Sets HTML `max` attribute to current time (`now()`), strictly preventing future date/time selection. Client validation blocks submission and displays an error if a future timestamp is entered.
   4. **Description:** Textarea with live character counter (10 to 2,000 characters). Displays validation error if trimmed length is $< 10$ characters.
 * **Actions:**
   - `Cancel`: Closes modal without saving.

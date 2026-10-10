@@ -53,7 +53,7 @@ TokTickIT implements a rigorous multi-tiered automated testing pyramid ensuring 
 | :--- | :--- | :--- | :--- |
 | **AC-18-01** | Specification defines FR-01..12 and BR-01..10, including parent-child `Ticket 1:N ActionTaken` rules | `docs/lab-04/specification.md` | Static Specification Audit |
 | **AC-18-02** | Specification defines server-enforced Resolution Gate (`actionsCount >= 1`), decoupling from state machine | `docs/lab-04/specification.md` | Static Architecture Audit |
-| **AC-18-03** | Specification specifies Requester `resolutionIndicated = true` is strictly advisory | `docs/lab-04/specification.md` | Static Contract Audit |
+| **AC-18-03** | Specification specifies Requester `resolutionIndicated = true` is strictly advisory and does not alter ticket status | `docs/lab-04/specification.md` | Static Contract Audit |
 | **AC-18-04** | API spec defines `expectedUpdatedAt` for optimistic concurrency (409 conflict, 400 missing token) | `docs/lab-04/api-spec.md` | Static API Contract Audit |
 | **AC-18-05** | API spec specifies server derivation of `performedById` from session auth token | `docs/lab-04/api-spec.md` | Static Security Audit |
 | **AC-18-06** | API spec documents dashboard calculations, distinguishing mandates from 7-day rolling window | `docs/lab-04/api-spec.md` | Static Metric Contract Audit |
@@ -62,15 +62,20 @@ TokTickIT implements a rigorous multi-tiered automated testing pyramid ensuring 
 | **AC-19-01** | `ActionTaken` model schema with mandatory fields and foreign keys | `server/tests/lab-04/migration-verification.test.ts` | Prisma DB Test |
 | **AC-19-02** | Non-destructive migration preserving existing Lab 1–3 records | `server/tests/lab-04/migration-verification.test.ts` | Prisma DB Test |
 | **AC-19-03** | Idempotent seed script populating historical action records | `server/tests/lab-04/migration-verification.test.ts` | Seed Script Test |
-| **AC-20-01** | `POST /api/tickets/:id/actions` creates action with validation | `server/tests/lab-04/actions-taken.api.test.ts` | Supertest API |
+| **AC-20-01** | `POST /api/tickets/:id/actions` creates action with validation (duration, past/present timestamp) | `server/tests/lab-04/actions-taken.api.test.ts` | Supertest API |
 | **AC-20-02** | `performedById` populated server-side; client overrides rejected/ignored | `server/tests/lab-04/actions-taken.api.test.ts` | Supertest API |
 | **AC-20-03** | `GET /api/tickets/:id/actions` lists actions with role scoping | `server/tests/lab-04/actions-taken.api.test.ts` | Supertest API |
 | **AC-20-04** | `PUT /api/tickets/:id/actions/:actionId` enforces `expectedUpdatedAt` (409 / 400) | `server/tests/lab-04/actions-taken.api.test.ts` | Supertest API |
 | **AC-20-05** | Action creation and update emit `TicketActivity` audit records | `server/tests/lab-04/actions-taken.api.test.ts` | Supertest API |
-| **AC-21-01** | Transitioning `IN_PROGRESS -> RESOLVED` without actions returns 422 `RESOLUTION_ACTION_REQUIRED` | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
-| **AC-21-02** | Transitioning `IN_PROGRESS -> RESOLVED` with `actionsCount >= 1` succeeds | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
-| **AC-21-03** | `shared/ticketStateMachine.ts` retains pure structural validation logic | `server/tests/lab-04/ticket-state-machine.test.ts` | Vitest Unit Test |
-| **AC-21-04** | Requester `POST /confirm-resolved` sets flag without setting `RESOLVED` status | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
+| **AC-21-01** | Transitioning `IN_PROGRESS -> RESOLVED` with `actionsCount = 0` returns 422 `RESOLUTION_ACTION_REQUIRED` | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
+| **AC-21-02** | Transitioning with missing `resolutionSummary` returns 422 `VALIDATION_ERROR` | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
+| **AC-21-03** | Transitioning with `resolutionSummary` $< 10$ characters returns 422 `VALIDATION_ERROR` | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
+| **AC-21-04** | Transitioning with exactly 10 characters and $\ge 1$ action succeeds (200 OK, status `RESOLVED`) | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
+| **AC-21-05** | Transitioning with exactly 1,000 characters and $\ge 1$ action succeeds (200 OK, status `RESOLVED`) | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
+| **AC-21-06** | Transitioning with `resolutionSummary` $> 1,000$ characters returns 422 `VALIDATION_ERROR` | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
+| **AC-21-07** | Valid resolution with $\ge 1$ action and valid summary transitions to `RESOLVED` and logs activity | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
+| **AC-21-08** | `shared/ticketStateMachine.ts` retains pure structural validation logic decoupled from database | `server/tests/lab-04/ticket-state-machine.test.ts` | Vitest Unit Test |
+| **AC-21-09** | Requester `POST /confirm-resolved` sets flag without altering ticket status (status unchanged) | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
 | **AC-22-01** | `GET /api/staff/dashboard` returns aggregated counts for queue states | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
 | **AC-22-02** | `recentlyResolved` metric accurately calculated using rolling 7-day window | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
 | **AC-22-03** | Dashboard calculations distinguish mandates from design decisions | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
@@ -100,14 +105,26 @@ This matrix establishes end-to-end traceability from each numbered Functional Re
 | **FR-02** | Authenticated Performer Identity Authority | AC-20-02 | `server/tests/lab-04/actions-taken.api.test.ts` | Supertest API | Status 201; `performedById === req.user.id`; client-provided ID ignored/rejected. | Supertest Assertions |
 | **FR-03** | Actions Taken Query & Role-Based Access | AC-20-03<br>AC-23-04 | `server/tests/lab-04/actions-taken.api.test.ts`<br>`client/tests/lab-04/RequesterTicketDetail.test.tsx` | Supertest API<br>RTL Component | Status 200 array; Requesters see only owned tickets; unowned returns 404; controls hidden. | API Response Logs<br>DOM Snapshot |
 | **FR-04** | Action Taken Modification & Concurrency Control | AC-20-04<br>AC-23-03 | `server/tests/lab-04/actions-taken.api.test.ts`<br>`client/tests/lab-04/EditActionModal.test.tsx` | Supertest API<br>RTL Component | Returns 409 `STALE_ACTION_CONFLICT` on stale token; 400 on missing token; 200 on match. | Concurrency Conflict Logs |
-| **FR-05** | Server-Enforced Resolution Gate | AC-21-01<br>AC-21-02 | `server/tests/lab-04/resolution-gate.api.test.ts`<br>`client/tests/lab-04/StatusTransitionModal.test.tsx` | Supertest API<br>RTL Component | Returns 422 `RESOLUTION_ACTION_REQUIRED` if `actionsCount === 0`; succeeds if $\ge 1$. | Resolution Gate Logs |
-| **FR-06** | Advisory Requester Resolution Indication | AC-21-04 | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API | `resolutionIndicated = true`; status remains `IN_PROGRESS`; does not set `RESOLVED`. | Audit & Status Logs |
+| **FR-05** | Server-Enforced Resolution Gate | AC-21-01..<br>AC-21-07 | `server/tests/lab-04/resolution-gate.api.test.ts`<br>`client/tests/lab-04/StatusTransitionModal.test.tsx` | Supertest API<br>RTL Component | Full boundary validation: missing summary, $< 10$ chars, $= 10$ chars, $= 1000$ chars, $> 1000$ chars, `actionsCount = 0`, and valid resolution with $\ge 1$ action. | Resolution Gate Boundary Logs |
+| **FR-06** | Advisory Requester Resolution Indication | AC-21-09 | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API | `resolutionIndicated = true`; ticket status strictly unaltered (remains unchanged); does not set `RESOLVED`. | Audit & Status Logs |
 | **FR-07** | Operational Dashboard Metrics API | AC-22-01<br>AC-22-02 | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API | Status 200; `totalOpen`, `inProgress`, `recentlyResolved` (7 days) counts verified. | Dashboard Metrics JSON |
 | **FR-08** | Metric Calculation Specification Separation | AC-22-03 | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API | Rolling 7-day boundary test ($t = \text{now} - 6\text{d}$ included, $t = \text{now} - 8\text{d}$ excluded). | Boundary Test Assertions |
 | **FR-09** | Role-Based Action UI Controls Visibility | AC-23-04 | `client/tests/lab-04/RequesterTicketDetail.test.tsx`<br>`e2e/lab-04/full-journey.spec.ts` | RTL Component<br>Playwright E2E | `queryByText('+ Log Action') === null`; edit buttons absent for Requester persona. | Responsive Screenshot Evidence |
 | **FR-10** | Optimistic Concurrency Conflict UI Handling | AC-23-03<br>AC-25-01 | `client/tests/lab-04/EditActionModal.test.tsx`<br>`e2e/lab-04/full-journey.spec.ts` | RTL Component<br>Playwright E2E | Conflict alert renders with server diff; "Reload Latest" fetches updated revision. | Screenshot of 409 Dialog |
 | **FR-11** | Operational Dashboard UI & Responsiveness | AC-24-01<br>AC-24-04 | `client/tests/lab-04/OperationalDashboard.test.tsx`<br>`e2e/lab-04/responsive-overflow.spec.ts` | RTL Component<br>Playwright E2E | KPI cards render; zero horizontal page overflow across 1280px, 768px, 375px viewports. | Responsive Screenshot Catalog |
 | **FR-12** | Audit Logging for Actions Taken | AC-20-05 | `server/tests/lab-04/actions-taken.api.test.ts` | Supertest API | `TicketActivity` entries created for `ACTION_TAKEN_ADDED` and `ACTION_TAKEN_UPDATED`. | Activity Timeline Audit |
+
+### 3.1 Resolution Gate Comprehensive Boundary Test Cases
+
+The Resolution Gate test suite (`server/tests/lab-04/resolution-gate.api.test.ts`) must explicitly cover all 7 deterministic boundary conditions:
+
+1. **Missing `resolutionSummary`:** Payload omitting `resolutionSummary` or submitting `null` $\to$ rejected with HTTP **`422 Unprocessable Entity`** (`VALIDATION_ERROR`).
+2. **Fewer than 10 Characters:** `resolutionSummary` with 9 characters (or whitespace-padded $< 10$ non-whitespace chars) $\to$ rejected with HTTP **`422 Unprocessable Entity`** (`VALIDATION_ERROR`).
+3. **Exactly 10 Characters (Lower Boundary):** `resolutionSummary` with exactly 10 characters and $\ge 1$ recorded action $\to$ succeeds with HTTP **`200 OK`**, transitioning ticket status to `RESOLVED`.
+4. **Exactly 1,000 Characters (Upper Boundary):** `resolutionSummary` with exactly 1,000 characters and $\ge 1$ recorded action $\to$ succeeds with HTTP **`200 OK`**, transitioning ticket status to `RESOLVED`.
+5. **More than 1,000 Characters:** `resolutionSummary` with 1,001 characters $\to$ rejected with HTTP **`422 Unprocessable Entity`** (`VALIDATION_ERROR`).
+6. **Zero Actions Taken (`actionsCount = 0`):** Valid `resolutionSummary` (e.g. 50 characters) submitted on a ticket with no `ActionTaken` records $\to$ rejected with HTTP **`422 Unprocessable Entity`** (`RESOLUTION_ACTION_REQUIRED`).
+7. **Valid Resolution with At Least One Action (`actionsCount >= 1`):** Valid `resolutionSummary` submitted on a ticket with $\ge 1$ `ActionTaken` records $\to$ succeeds with HTTP **`200 OK`**, status set to `RESOLVED`, and activity logged.
 
 ---
 
@@ -120,9 +137,9 @@ This matrix maps every numbered Business Rule to its enforcement layer, verifyin
 | **BR-01** | Parent-Child Relational Integrity | DB Schema & API | `server/tests/lab-04/migration-verification.test.ts` | Attempt creating action with non-existent `ticketId`; assert foreign key cascade. | Database foreign key error; cascade deletes child actions on ticket drop. |
 | **BR-02** | Workable State for Action Logging | Server Controller | `server/tests/lab-04/actions-taken.api.test.ts` | Attempt `POST /actions` on ticket in `NEW`, `RESOLVED`, `CLOSED`, or `CANCELLED`. | Rejection with `422 Unprocessable Entity` (`TICKET_NOT_IN_WORKABLE_STATE`). |
 | **BR-03** | Server Authority for Performer Identity | Server Controller | `server/tests/lab-04/actions-taken.api.test.ts` | Client submits body containing `"performedById": 999` while authenticated as User 6. | Server inserts `performedById = 6`; ignores client spoof. |
-| **BR-04** | Mandatory Resolution Gate | Server Controller | `server/tests/lab-04/resolution-gate.api.test.ts` | Attempt transitioning `IN_PROGRESS -> RESOLVED` on ticket with 0 actions taken. | Rejection with `422 Unprocessable Entity` (`RESOLUTION_ACTION_REQUIRED`). |
-| **BR-05** | Advisory Requester Resolution Limitation | Server Controller | `server/tests/lab-04/resolution-gate.api.test.ts` | Requester calls `POST /confirm-resolved` on eligible ticket. | `resolutionIndicated` set to `true`; status is NOT `RESOLVED` or `CLOSED`. |
-| **BR-06** | Action Validation & Time Constraints | Validation Layer | `server/tests/lab-04/actions-taken.api.test.ts` | Description $< 10$ chars; duration $\le 0$ or $> 1440$; timestamp set to tomorrow. | Rejection with `422 Unprocessable Entity` (`VALIDATION_ERROR`). |
+| **BR-04** | Mandatory Resolution Gate | Server Controller | `server/tests/lab-04/resolution-gate.api.test.ts` | Test all 7 boundary cases: missing summary, $< 10$ chars, $= 10$ chars, $= 1000$ chars, $> 1000$ chars, `actionsCount = 0`, and valid resolution with $\ge 1$ action. | 422 `VALIDATION_ERROR` for invalid text bounds; 422 `RESOLUTION_ACTION_REQUIRED` when `actionsCount = 0`; 200 OK when bounds and action count are satisfied. |
+| **BR-05** | Advisory Requester Resolution Limitation | Server Controller | `server/tests/lab-04/resolution-gate.api.test.ts` | Requester calls `POST /confirm-resolved` on ticket in `WAITING_FOR_REQUESTER` or `IN_PROGRESS`. | `resolutionIndicated` set to `true`; ticket status is **strictly unaltered** (remains unchanged; does not alter status to `IN_PROGRESS`, `RESOLVED`, or `CLOSED`). |
+| **BR-06** | Action Validation & Time Constraints | Validation Layer | `server/tests/lab-04/actions-taken.api.test.ts` | Description $< 10$ or $> 2000$ chars; duration $\le 0$ or $> 1440$; timestamp set in the future (`performedAt > now()`). | Rejection with `422 Unprocessable Entity` (`VALIDATION_ERROR`), confirming future timestamps are strictly disallowed. |
 | **BR-07** | Optimistic Concurrency Control Token | Server Controller | `server/tests/lab-04/actions-taken.api.test.ts` | `PUT /actions/:id` called with stale timestamp vs. omitted token. | Returns `409 STALE_ACTION_CONFLICT` on mismatch; `400 MISSING_CONCURRENCY_TOKEN` if omitted. |
 | **BR-08** | Role-Based Action Permissions | RBAC Middleware | `server/tests/lab-04/actions-taken.api.test.ts` | Requester calls `POST` or `PUT /actions`; calls `GET /actions` on foreign ticket. | `403 Forbidden` for create/update; `404 Not Found` for unowned query. |
 | **BR-09** | Dashboard Authorization & 7-Day Window | Server Controller | `server/tests/lab-04/dashboard.api.test.ts` | Requester calls `GET /dashboard`; ticket resolved 6 days ago vs. 8 days ago. | Requester receives 403; 6-day ticket counted in `recentlyResolved`, 8-day excluded. |
