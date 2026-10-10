@@ -7,16 +7,16 @@
 
 ## Pull Requests I authored (reviewed by my partner)
 
-| PR                      | Branch                         | Reviewer verdict    |
-| :---------------------- | :----------------------------- | :------------------ |
-| `[PR #41]`              | `feature/18-lab4-spec-docs`    | `[Request Changes]` |
-| `[PR #... Placeholder]` | `feature/19-actions-taken-db`  | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/20-actions-taken-api` | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/21-resolution-gate`   | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/22-dashboard-api`     | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/23-actions-taken-ui`  | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/24-dashboard-ui`      | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/25-integration-e2e`   | `[Planned]`         |
+| PR                      | Branch                         | Reviewer verdict                |
+| :---------------------- | :----------------------------- | :------------------------------ |
+| `[PR #50]`              | `feature/18-lab4-spec-docs`    | `[Request Changes -> Approved]` |
+| `[PR #... Placeholder]` | `feature/19-actions-taken-db`  | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/20-actions-taken-api` | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/21-resolution-gate`   | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/22-dashboard-api`     | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/23-actions-taken-ui`  | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/24-dashboard-ui`      | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/25-integration-e2e`   | `[Planned]`                     |
 
 ---
 
