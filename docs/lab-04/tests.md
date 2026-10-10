@@ -76,10 +76,12 @@ TokTickIT implements a rigorous multi-tiered automated testing pyramid ensuring 
 | **AC-21-07** | Valid resolution with $\ge 1$ action and valid summary transitions to `RESOLVED` and logs activity | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
 | **AC-21-08** | `shared/ticketStateMachine.ts` retains pure structural validation logic decoupled from database | `server/tests/lab-04/ticket-state-machine.test.ts` | Vitest Unit Test |
 | **AC-21-09** | Requester `POST /confirm-resolved` sets flag without altering ticket status (status unchanged) | `server/tests/lab-04/resolution-gate.api.test.ts` | Supertest API |
-| **AC-22-01** | `GET /api/staff/dashboard` returns aggregated counts for queue states | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
-| **AC-22-02** | `recentlyResolved` metric accurately calculated using rolling 7-day window | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
-| **AC-22-03** | Dashboard calculations distinguish mandates from design decisions | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
-| **AC-22-04** | Dashboard restricted to `IT_STAFF` and `ADMINISTRATOR` (403 for Requesters) | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
+| **AC-22-01** | `GET /api/staff/dashboard` returns aggregated counts for queue states (`totalOpen`, `inProgress`, `waitingForRequester`, `unassignedCount`) | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
+| **AC-22-02** | `recentlyResolved` metric accurately calculated using rolling 7-day window on `status = 'RESOLVED'` | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
+| **AC-22-03** | `totalTimeSpentMinutes` aggregates action durations on active workable tickets or recently resolved (7 days), excluding `CLOSED`/`CANCELLED` | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
+| **AC-22-04** | `categoryBreakdown.ticketCount` and `priorityBreakdown` count non-terminal tickets (`status NOT IN ('CLOSED', 'CANCELLED')`) | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
+| **AC-22-05** | Dashboard calculations distinguish mandates from design decisions | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
+| **AC-22-06** | Dashboard restricted to `IT_STAFF` and `ADMINISTRATOR` (403 for Requesters) | `server/tests/lab-04/dashboard.api.test.ts` | Supertest API |
 | **AC-23-01** | Staff Ticket Detail displays Actions Taken timeline with duration badges | `client/tests/lab-04/ActionsTakenSection.test.tsx` | RTL / Vitest |
 | **AC-23-02** | Staff can log new actions via interactive modal with validation | `client/tests/lab-04/LogActionModal.test.tsx` | RTL / Vitest |
 | **AC-23-03** | Optimistic concurrency conflict dialog renders on 409 with reload option | `client/tests/lab-04/EditActionModal.test.tsx` | RTL / Vitest |
@@ -126,6 +128,27 @@ The Resolution Gate test suite (`server/tests/lab-04/resolution-gate.api.test.ts
 6. **Zero Actions Taken (`actionsCount = 0`):** Valid `resolutionSummary` (e.g. 50 characters) submitted on a ticket with no `ActionTaken` records $\to$ rejected with HTTP **`422 Unprocessable Entity`** (`RESOLUTION_ACTION_REQUIRED`).
 7. **Valid Resolution with At Least One Action (`actionsCount >= 1`):** Valid `resolutionSummary` submitted on a ticket with $\ge 1$ `ActionTaken` records $\to$ succeeds with HTTP **`200 OK`**, status set to `RESOLVED`, and activity logged.
 
+### 3.2 Dashboard Metric Boundary and Calculation Test Cases
+
+The Dashboard test suite (`server/tests/lab-04/dashboard.api.test.ts`) must explicitly verify ticket counting status scopes, action duration status scopes, and mathematical consistency:
+
+1. **`totalOpen` Queue Statuses:** Verifies count strictly includes `NEW` and `OPEN` tickets; excludes `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `RESOLVED`, `CLOSED`, `CANCELLED`.
+2. **`inProgress` & `waitingForRequester`:** Verifies mutually exclusive counts for `IN_PROGRESS` and `WAITING_FOR_REQUESTER` respectively.
+3. **`recentlyResolved` 7-Day Rolling Boundary:**
+   - Ticket resolved $6$ days ago ($t = \text{now} - 6\text{d}$) $\to$ included in count.
+   - Ticket resolved exactly $7$ days ago ($t = \text{now} - 7\text{d}$) $\to$ included in count.
+   - Ticket resolved $8$ days ago ($t = \text{now} - 8\text{d}$) $\to$ strictly excluded from count.
+4. **`unassignedCount` Active Workable Scope:** Verifies tickets with `ownerId IS NULL` in `NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED` are counted; tickets in `RESOLVED`, `CLOSED`, or `CANCELLED` with `ownerId IS NULL` are strictly excluded.
+5. **`totalTimeSpentMinutes` Action Status Eligibility:**
+   - Action linked to ticket in `IN_PROGRESS`, `OPEN`, `WAITING_FOR_REQUESTER`, or `REOPENED` $\to$ time included.
+   - Action linked to ticket in `RESOLVED` updated $\le 7$ days ago $\to$ time included.
+   - Action linked to ticket in `RESOLVED` updated $> 7$ days ago $\to$ time strictly excluded.
+   - Action linked to ticket in `CLOSED` or `CANCELLED` $\to$ time strictly excluded.
+6. **`categoryBreakdown.ticketCount` Non-Terminal Scope:** Verifies count includes all non-terminal tickets (`NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`, `RESOLVED`), while excluding `CLOSED` and `CANCELLED`.
+7. **Category vs. Global Time Duration Invariant:**
+   - Asserts $\sum_{c} \text{categoryBreakdown}[c].\text{totalTimeSpentMinutes} \equiv \text{totalTimeSpentMinutes}$.
+   - Verifies each category sums action duration using identical ticket status inclusion criteria as top-level `totalTimeSpentMinutes`.
+
 ---
 
 ## 4. Business Rules Traceability Matrix (BR-01 through BR-10)
@@ -142,7 +165,7 @@ This matrix maps every numbered Business Rule to its enforcement layer, verifyin
 | **BR-06** | Action Validation & Time Constraints | Validation Layer | `server/tests/lab-04/actions-taken.api.test.ts` | Description $< 10$ or $> 2000$ chars; duration $\le 0$ or $> 1440$; timestamp set in the future (`performedAt > now()`). | Rejection with `422 Unprocessable Entity` (`VALIDATION_ERROR`), confirming future timestamps are strictly disallowed. |
 | **BR-07** | Optimistic Concurrency Control Token | Server Controller | `server/tests/lab-04/actions-taken.api.test.ts` | `PUT /actions/:id` called with stale timestamp vs. omitted token. | Returns `409 STALE_ACTION_CONFLICT` on mismatch; `400 MISSING_CONCURRENCY_TOKEN` if omitted. |
 | **BR-08** | Role-Based Action Permissions | RBAC Middleware | `server/tests/lab-04/actions-taken.api.test.ts` | Requester calls `POST` or `PUT /actions`; calls `GET /actions` on foreign ticket. | `403 Forbidden` for create/update; `404 Not Found` for unowned query. |
-| **BR-09** | Dashboard Authorization & 7-Day Window | Server Controller | `server/tests/lab-04/dashboard.api.test.ts` | Requester calls `GET /dashboard`; ticket resolved 6 days ago vs. 8 days ago. | Requester receives 403; 6-day ticket counted in `recentlyResolved`, 8-day excluded. |
+| **BR-09** | Dashboard Authorization & Status Scopes | Server Controller | `server/tests/lab-04/dashboard.api.test.ts` | Requester calls `GET /dashboard`; test ticket counts and action time scopes across active, 7-day `RESOLVED`, and terminal tickets. | Requester receives 403; ticket counts follow non-terminal / queue rules; action time sums strictly active and 7-day `RESOLVED` actions. |
 | **BR-10** | Decoupled State Machine Architecture | Shared Module & API | `server/tests/lab-04/ticket-state-machine.test.ts` | Pure `validateStatusTransition` function tested synchronously without database. | State machine evaluates pure structural transitions without DB dependencies. |
 
 ---

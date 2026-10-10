@@ -82,6 +82,22 @@
 
   All 4 specification files now provide a single, deterministic engineering contract ready for implementation.
 
+- **Reviewer comment I received:**
+
+  > Request Changes — Clarify Dashboard Metric Definitions
+
+  The dashboard metric definitions would benefit from more explicit and consistent scope rules.
+
+  Currently, totalTimeSpentMinutes sums action durations associated with active or recently resolved tickets, while categoryBreakdown aggregates non-terminal tickets and their action durations. Although these definitions may be intentional, the specification should clarify the exact ticket-status scope used for each metric to ensure consistent implementation and testing.
+
+  Please explicitly define which ticket statuses and associated ActionTaken records are included in each metric, and ensure the definitions are consistent across api-spec.md and tests.md.
+
+  This will help prevent different implementations from producing different results while still appearing to follow the specification.
+
+- **How I responded:**
+
+  > Thank you for the excellent suggestion! I completely agree that clarifying the exact ticket-status scopes for dashboard metrics is essential for ensuring consistent implementation and testing. I have updated the documentation suite to incorporate explicit definitions and mathematical consistency guarantees.
+
 ---
 
 ### PR — Issue 19 (Database Schema, Migration, and Seed)

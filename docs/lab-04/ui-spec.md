@@ -250,7 +250,7 @@ The Operational Dashboard is accessible via the top navigation bar (`Dashboard` 
 * **In Progress Card:** Pale amber container (`--zg-status-progress-bg`), amber text (`--zg-status-progress-text`), deep link: `/staff/queue?status=IN_PROGRESS`.
 * **Waiting for Requester Card:** Pale orange container (`--zg-status-waiting-bg`), orange text (`--zg-status-waiting-text`), deep link: `/staff/queue?status=WAITING_FOR_REQUESTER`.
 * **Recently Resolved Card:** Pale mint container (`--zg-pale`), deep green text (`--zg-primary`), subtitle `"Rolling 7-day window"`, deep link: `/staff/queue?status=RESOLVED`.
-* **Total Time Spent Card:** Neutral container (`--zg-surface-subtle`), dark charcoal text (`--zg-text-primary`), subtitle `"Sum of recorded actions"`.
+* **Total Time Spent Card:** Neutral container (`--zg-surface-subtle`), dark charcoal text (`--zg-text-primary`), subtitle `"Active & 7-day resolved actions"`.
 
 ---
 

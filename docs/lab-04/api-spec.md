@@ -420,18 +420,70 @@ Returns operational KPI summary metrics and workload distribution for IT operati
 
 ### 5.2 Metric Calculation Specifications: Mandates vs. Project Decisions
 
-To ensure full transparency between coursework specifications and engineering implementation decisions:
+To ensure full transparency between coursework specifications, engineering implementation, and test suites, the status scope of each metric and the exact inclusion criteria for Action Taken durations are explicitly defined below:
 
-| Metric Name | Calculation Formula / SQL Definition | Source / Classification |
-| :--- | :--- | :--- |
-| **`totalOpen`** | Count of tickets where `status IN ('NEW', 'OPEN')` | **Lab Sheet Mandate:** Represents new and acknowledged incoming queue volume. |
-| **`inProgress`** | Count of tickets where `status = 'IN_PROGRESS'` | **Lab Sheet Mandate:** Represents active work underway by assigned staff. |
-| **`waitingForRequester`** | Count of tickets where `status = 'WAITING_FOR_REQUESTER'` | **Lab Sheet Mandate:** Blocked tickets awaiting requester input. |
-| **`recentlyResolved`** | Count of tickets where `status = 'RESOLVED'` AND `updatedAt >= (NOW() - INTERVAL '7 DAYS')` | **Project Design Decision:** The Lab Sheet requests "recently resolved" tickets without specifying an arbitrary fixed cutoff; TokTickIT formally defines this as a **rolling 7-day window** ($t \ge \text{now}() - 7\text{ days}$) to maintain operational relevance and prevent historical count bloat. |
-| **`unassignedCount`** | Count of tickets where `ownerId IS NULL` AND `status NOT IN ('RESOLVED', 'CLOSED', 'CANCELLED')` | **Project Design Decision:** Essential operational metric identifying unowned triage items. |
-| **`totalTimeSpentMinutes`** | Sum of `ActionTaken.timeSpentMinutes` across all actions linked to active or recently resolved tickets | **Lab Sheet Mandate:** Workload aggregation proving time accounting. |
-| **`categoryBreakdown`** | Group by `categoryId` aggregating count of non-terminal tickets and sum of action durations | **Lab Sheet Mandate:** Resource distribution across IT domains. |
-| **`priorityBreakdown`** | Group by effective IT priority (`itPriority` if present, else `requestedPriority`) | **Project Design Decision:** Prioritization visibility across active queue. |
+#### 5.2.1 Status Scope Taxonomy
+* **Active Workable Queue Statuses:** `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`
+* **Incoming Unassigned Status:** `NEW`
+* **Operational Completion (Temporary):** `RESOLVED`
+* **Terminal Statuses:** `CLOSED`, `CANCELLED`
+* **Non-Terminal Statuses:** `status NOT IN ('CLOSED', 'CANCELLED')` (i.e. `NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`, `RESOLVED`)
+
+#### 5.2.2 Metric Specifications Matrix
+
+| Metric Name | Included Ticket Status Scope | Action Taken Time Inclusion Criteria | SQL / Prisma Definition | Classification |
+| :--- | :--- | :--- | :--- | :--- |
+| **`totalOpen`** | `status IN ('NEW', 'OPEN')` | N/A (ticket count only) | `COUNT(*) WHERE status IN ('NEW', 'OPEN')` | **Lab Sheet Mandate:** Incoming and unassigned queue volume. |
+| **`inProgress`** | `status = 'IN_PROGRESS'` | N/A (ticket count only) | `COUNT(*) WHERE status = 'IN_PROGRESS'` | **Lab Sheet Mandate:** Active tickets currently being worked on. |
+| **`waitingForRequester`** | `status = 'WAITING_FOR_REQUESTER'` | N/A (ticket count only) | `COUNT(*) WHERE status = 'WAITING_FOR_REQUESTER'` | **Lab Sheet Mandate:** Tickets blocked awaiting requester input. |
+| **`recentlyResolved`** | `status = 'RESOLVED'` AND `updatedAt >= (NOW() - INTERVAL '7 DAYS')` | N/A (ticket count only) | `COUNT(*) WHERE status = 'RESOLVED' AND updatedAt >= NOW() - INTERVAL '7 DAYS'` | **Project Design Decision:** Rolling 7-day window ($t \ge \text{now}() - 7\text{d}$) preventing historical resolved count bloat. |
+| **`unassignedCount`** | `ownerId IS NULL` AND `status IN ('NEW', 'OPEN', 'IN_PROGRESS', 'WAITING_FOR_REQUESTER', 'REOPENED')` | N/A (ticket count only) | `COUNT(*) WHERE ownerId IS NULL AND status IN ('NEW', 'OPEN', 'IN_PROGRESS', 'WAITING_FOR_REQUESTER', 'REOPENED')` | **Project Design Decision:** Active workable tickets needing owner triage; excludes `RESOLVED`, `CLOSED`, `CANCELLED`. |
+| **`totalTimeSpentMinutes`** | Parent tickets in: (1) Active workable states (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`), OR (2) Recently resolved (`RESOLVED` with `updatedAt >= NOW() - INTERVAL '7 DAYS'`) | Sum of `ActionTaken.timeSpentMinutes` for actions whose parent ticket matches the included ticket statuses. Actions on `CLOSED`, `CANCELLED`, or stale `RESOLVED` ($> 7$ days) tickets are **excluded**. | `SELECT COALESCE(SUM(a."timeSpentMinutes"), 0) FROM "ActionTaken" a JOIN "Ticket" t ON a."ticketId" = t."id" WHERE t."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING_FOR_REQUESTER', 'REOPENED') OR (t."status" = 'RESOLVED' AND t."updatedAt" >= NOW() - INTERVAL '7 DAYS')` | **Lab Sheet Mandate:** Reflects active labor and current-cycle throughput without accumulating ancient closed tickets. |
+| **`categoryBreakdown`** | **`ticketCount`:** Non-terminal tickets (`status NOT IN ('CLOSED', 'CANCELLED')`) grouped by `categoryId`.<br>**`totalTimeSpentMinutes`:** Actions linked to tickets in that category adhering to the `totalTimeSpentMinutes` status scope. | Sum of `ActionTaken.timeSpentMinutes` for actions linked to tickets in active states or recently resolved ($7$ days) within each category. Actions on `CLOSED` or `CANCELLED` tickets are **excluded**. | See Section 5.2.3 SQL implementation below. | **Lab Sheet Mandate:** Domain resource and workload distribution. |
+| **`priorityBreakdown`** | Non-terminal tickets (`status NOT IN ('CLOSED', 'CANCELLED')`) grouped by effective priority (`COALESCE(itPriority, requestedPriority)`). | N/A (ticket count only) | `COUNT(*) WHERE status NOT IN ('CLOSED', 'CANCELLED') GROUP BY COALESCE(itPriority, requestedPriority)` | **Project Design Decision:** Active queue priority distribution. |
+
+#### 5.2.3 Category Breakdown SQL Query Implementation
+```sql
+SELECT
+  c."id" AS "categoryId",
+  c."name" AS "categoryName",
+  COUNT(DISTINCT t."id") FILTER (
+    WHERE t."status" NOT IN ('CLOSED', 'CANCELLED')
+  ) AS "ticketCount",
+  COALESCE(SUM(a."timeSpentMinutes") FILTER (
+    WHERE t."status" IN ('OPEN', 'IN_PROGRESS', 'WAITING_FOR_REQUESTER', 'REOPENED')
+       OR (t."status" = 'RESOLVED' AND t."updatedAt" >= NOW() - INTERVAL '7 DAYS')
+  ), 0) AS "totalTimeSpentMinutes"
+FROM "Category" c
+LEFT JOIN "Ticket" t ON t."categoryId" = c."id"
+LEFT JOIN "ActionTaken" a ON a."ticketId" = t."id"
+GROUP BY c."id", c."name"
+ORDER BY c."id" ASC;
+```
+
+#### 5.2.4 Comparative Summary: Ticket Status Scopes vs. Action Duration Scopes
+
+To prevent any calculation discrepancy between developers and QA testers, the table below provides a strict, side-by-side comparison of **which ticket statuses apply to ticket counts** versus **which ticket statuses qualify for Action Taken duration aggregation**:
+
+| Metric Field | Measured Entity | Included Ticket Status Scope | Excluded Ticket Status Scope | Action Taken Time Eligibility |
+| :--- | :--- | :--- | :--- | :--- |
+| **`totalOpen`** | Ticket Count | `NEW`, `OPEN` | `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`, `RESOLVED`, `CLOSED`, `CANCELLED` | N/A (ticket count only) |
+| **`inProgress`** | Ticket Count | `IN_PROGRESS` | All other statuses | N/A (ticket count only) |
+| **`waitingForRequester`** | Ticket Count | `WAITING_FOR_REQUESTER` | All other statuses | N/A (ticket count only) |
+| **`recentlyResolved`** | Ticket Count | `RESOLVED` where `updatedAt >= NOW() - INTERVAL '7 DAYS'` | All other statuses; `RESOLVED` where `updatedAt < NOW() - INTERVAL '7 DAYS'` | N/A (ticket count only) |
+| **`unassignedCount`** | Ticket Count | `NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED` (where `ownerId IS NULL`) | `RESOLVED`, `CLOSED`, `CANCELLED`, and tickets with `ownerId IS NOT NULL` | N/A (ticket count only) |
+| **`totalTimeSpentMinutes`** | Action Duration Sum (minutes) | N/A (aggregates actions) | N/A | Actions linked to parent tickets with:<br>• `status IN ('OPEN', 'IN_PROGRESS', 'WAITING_FOR_REQUESTER', 'REOPENED')`<br>• OR `status = 'RESOLVED'` AND `updatedAt >= NOW() - INTERVAL '7 DAYS'`<br>*(Actions on `CLOSED`, `CANCELLED`, or stale `RESOLVED` tickets $> 7$ days are **strictly excluded**)* |
+| **`categoryBreakdown[i].ticketCount`** | Ticket Count | All non-terminal statuses: `NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`, `RESOLVED` | `CLOSED`, `CANCELLED` | N/A (ticket count only) |
+| **`categoryBreakdown[i].totalTimeSpentMinutes`** | Action Duration Sum (minutes) | N/A (aggregates actions) | N/A | Actions linked to tickets in category $i$ using the **exact same ticket status scope as `totalTimeSpentMinutes`**.<br>*(Actions on `CLOSED`, `CANCELLED`, or stale `RESOLVED` tickets are strictly excluded)* |
+| **`priorityBreakdown[p].ticketCount`** | Ticket Count | All non-terminal statuses: `NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`, `RESOLVED` | `CLOSED`, `CANCELLED` | N/A (ticket count only) |
+
+##### Mathematical Invariant
+$$\sum_{i} \text{categoryBreakdown}[i].\text{totalTimeSpentMinutes} \equiv \text{totalTimeSpentMinutes}$$
+*If a test or implementation yields a difference between the sum of category times and the top-level `totalTimeSpentMinutes`, it indicates a scope mismatch defect.*
+
+##### Design Rationale for Scope Differences
+1. **Why `categoryBreakdown.ticketCount` includes all non-terminal tickets:** Support leads need full operational visibility into open and pending tickets across categories. A ticket resolved yesterday or 10 days ago (awaiting requester closing confirmation) is still active operational history for that department until formally `CLOSED`.
+2. **Why `totalTimeSpentMinutes` limits `RESOLVED` to $\le 7$ days and excludes `CLOSED`/`CANCELLED`:** Summing actions on permanently closed tickets would produce an unbounded, ever-growing historical sum that ceases to be actionable. Restricting to active workable queues plus the rolling 7-day resolution window focuses metrics directly on the current operational cycle and active staff effort.
 
 ---
 
