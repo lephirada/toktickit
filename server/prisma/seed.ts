@@ -445,18 +445,18 @@ export async function seedDatabase() {
 
     // 5. Seed Actions Taken idempotently (Issue 19)
     if (david && alex && chris) {
-      try {
-        const tableCheck = await prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'ActionTaken'
-          );
-        `);
-        if (!tableCheck[0]?.exists) {
-          return;
-        }
-      } catch {
+      // Specifically check if ActionTaken table exists in the active database schema
+      // (allows seed to be executed safely on earlier lab migration test databases without failing)
+      const tableCheck = await prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'ActionTaken'
+        );
+      `);
+
+      if (!tableCheck[0]?.exists) {
+        console.warn("Table ActionTaken does not exist in the current database schema; skipping action seeding.");
         return;
       }
 
@@ -468,6 +468,46 @@ export async function seedDatabase() {
         },
       });
       const ticketMap = new Map(ticketRecords.map((t) => [t.ticketNo, t.id]));
+
+      // 5.1 Seed baseline comments and attachments to preserve Lab 1-3 integrity
+      const tkt7Id = ticketMap.get("TKT-2026-00007");
+      if (tkt7Id && chris) {
+        const existingComment = await prisma.comment.findFirst({
+          where: {
+            ticketId: tkt7Id,
+            body: "Contacted faculty portal vendor for session timeout configuration parameters and keepalive specs.",
+          },
+        });
+        if (!existingComment) {
+          await prisma.comment.create({
+            data: {
+              ticketId: tkt7Id,
+              authorId: chris.id,
+              body: "Contacted faculty portal vendor for session timeout configuration parameters and keepalive specs.",
+              isInternal: true,
+            },
+          });
+        }
+      }
+
+      const tkt1Id = ticketMap.get("TKT-2026-00001");
+      if (tkt1Id && david) {
+        const existingAttachment = await prisma.attachment.findUnique({
+          where: { storageKey: "seed-keyboard-diagnostic-report" },
+        });
+        if (!existingAttachment) {
+          await prisma.attachment.create({
+            data: {
+              ticketId: tkt1Id,
+              uploadedById: david.id,
+              originalName: "keyboard-diagnostic-report.pdf",
+              storageKey: "seed-keyboard-diagnostic-report",
+              mimeType: "application/pdf",
+              sizeBytes: 15420,
+            },
+          });
+        }
+      }
 
       const seedActions = [
         // TKT-2026-00001 (RESOLVED): 2 actions

@@ -124,10 +124,29 @@ describe("Issue 19 — Database Schema Evolution, ActionTaken Model & Seed Verif
     const categoriesCount = await prisma.category.count();
     const relatedSystemsCount = await prisma.relatedSystem.count();
     const ticketsCount = await prisma.ticket.count();
+    const commentsCount = await prisma.comment.count();
+    const attachmentsCount = await prisma.attachment.count();
 
     expect(usersCount).toBeGreaterThanOrEqual(10);
     expect(categoriesCount).toBe(4);
     expect(relatedSystemsCount).toBe(6);
     expect(ticketsCount).toBeGreaterThanOrEqual(16);
+    expect(commentsCount).toBeGreaterThanOrEqual(1);
+    expect(attachmentsCount).toBeGreaterThanOrEqual(1);
+
+    // Verify referential integrity of pre-existing comments and attachments
+    const sampleComment = await prisma.comment.findFirst({
+      include: { author: true, ticket: true },
+    });
+    expect(sampleComment).not.toBeNull();
+    expect(sampleComment!.author).toBeDefined();
+    expect(sampleComment!.ticket).toBeDefined();
+
+    const sampleAttachment = await prisma.attachment.findFirst({
+      include: { uploadedBy: true, ticket: true },
+    });
+    expect(sampleAttachment).not.toBeNull();
+    expect(sampleAttachment!.uploadedBy).toBeDefined();
+    expect(sampleAttachment!.ticket).toBeDefined();
   });
 });
