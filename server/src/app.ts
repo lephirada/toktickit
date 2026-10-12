@@ -3275,7 +3275,7 @@ app.post(
             );
           return;
         }
-        if (parsed.getTime() > Date.now() + 60000) {
+        if (parsed.getTime() > Date.now()) {
           res
             .status(422)
             .json(
@@ -3492,6 +3492,23 @@ app.put(
       }
 
       if (
+        followUpNote !== undefined &&
+        followUpNote !== null &&
+        (typeof followUpNote !== "string" ||
+          followUpNote.trim().length > 1000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Follow-up note cannot exceed 1000 characters."
+            )
+          );
+        return;
+      }
+
+      if (
         attachmentNotes !== undefined &&
         attachmentNotes !== null &&
         (typeof attachmentNotes !== "string" ||
@@ -3558,7 +3575,7 @@ app.put(
             );
           return;
         }
-        if (parsed.getTime() > Date.now() + 60000) {
+        if (parsed.getTime() > Date.now()) {
           res
             .status(422)
             .json(
@@ -3625,6 +3642,16 @@ app.put(
         const targetNote =
           followUpNote !== undefined ? followUpNote : existingAction.followUpNote;
 
+        if (targetNote !== undefined && targetNote !== null) {
+          if (typeof targetNote !== "string" || targetNote.trim().length > 1000) {
+            return {
+              status: 422,
+              code: "VALIDATION_ERROR",
+              message: "Follow-up note cannot exceed 1000 characters.",
+            };
+          }
+        }
+
         if (targetFollowUp) {
           if (
             !targetNote ||
@@ -3637,14 +3664,12 @@ app.put(
               message: "Follow-up note is required when follow-up is requested.",
             };
           }
-          if (targetNote.trim().length > 1000) {
-            return {
-              status: 422,
-              code: "VALIDATION_ERROR",
-              message: "Follow-up note cannot exceed 1000 characters.",
-            };
-          }
         }
+
+        // Guarantee concurrency token strictly changes even if update occurs in the same millisecond
+        const nowMs = Date.now();
+        const nextMs = nowMs > expectedDate.getTime() ? nowMs : expectedDate.getTime() + 1;
+        const nextUpdatedAt = new Date(nextMs);
 
         // Atomic conditional update in database: locks row and checks id, ticketId, AND updatedAt together
         const updateRes = await tx.actionTaken.updateMany({
@@ -3685,7 +3710,7 @@ app.put(
                   actionDateTime: updatedActionDate,
                 }
               : {}),
-            updatedAt: new Date(),
+            updatedAt: nextUpdatedAt,
           },
         });
 

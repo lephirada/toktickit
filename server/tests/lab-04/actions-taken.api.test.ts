@@ -443,15 +443,81 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
       expect(resExcess.body.error.code).toBe("VALIDATION_ERROR");
     });
 
-    it("rejects with 422 when performedAt is set in the future", async () => {
-      const futureDate = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
-      const res = await request(app)
+    it("rejects with 422 when performedAt is set in the future (even slightly by a few seconds)", async () => {
+      // 1. Far future (24 hours)
+      const farFutureDate = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
+      const resFar = await request(app)
         .post(`/api/tickets/${activeTicketOwner.id}/actions`)
         .set("Cookie", cookieStaff)
         .send({
-          description: "Attempting to log action with future timestamp.",
+          description: "Attempting to log action with far future timestamp.",
           result: "Future action diagnostic test.",
-          performedAt: futureDate,
+          performedAt: farFutureDate,
+        });
+
+      expect(resFar.status).toBe(422);
+      expect(resFar.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resFar.body.error.message).toContain("cannot be in the future");
+
+      // 2. Near future (5 seconds in future) - must be rejected without 60s leniency
+      const nearFutureDate = new Date(Date.now() + 5000).toISOString();
+      const resNear = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Attempting to log action 5 seconds in future.",
+          result: "Near future test.",
+          performedAt: nearFutureDate,
+        });
+
+      expect(resNear.status).toBe(422);
+      expect(resNear.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resNear.body.error.message).toContain("cannot be in the future");
+    });
+
+    it("rejects PUT with 422 when followUpNote exceeds 1000 characters even if followUpRequired is false", async () => {
+      const testAction = await prisma.actionTaken.create({
+        data: {
+          ticketId: activeTicketOwner.id,
+          performedById: staffUser.id,
+          description: "Action for PUT note length boundary test.",
+          result: "Completed.",
+          timeSpentMinutes: 15,
+        },
+      });
+
+      const res = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${testAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: testAction.updatedAt.toISOString(),
+          followUpRequired: false,
+          followUpNote: "A".repeat(1001),
+        });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(res.body.error.message).toContain("cannot exceed 1000 characters");
+    });
+
+    it("rejects PUT with 422 when performedAt is set in the near future", async () => {
+      const testAction = await prisma.actionTaken.create({
+        data: {
+          ticketId: activeTicketOwner.id,
+          performedById: staffUser.id,
+          description: "Action for PUT future timestamp boundary test.",
+          result: "Completed.",
+          timeSpentMinutes: 15,
+        },
+      });
+
+      const nearFutureDate = new Date(Date.now() + 5000).toISOString();
+      const res = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${testAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: testAction.updatedAt.toISOString(),
+          performedAt: nearFutureDate,
         });
 
       expect(res.status).toBe(422);
@@ -748,6 +814,66 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
       });
       expect(finalDbRecord!.description).toBe(successRes.body.data.description);
       expect(finalDbRecord!.result).toBe(successRes.body.data.result);
+    });
+
+    it("guarantees concurrency token advances strictly on every update, preventing replay of identical expectedUpdatedAt token", async () => {
+      // 1. Create dedicated action record
+      const tokenAction = await prisma.actionTaken.create({
+        data: {
+          ticketId: activeTicketOwner.id,
+          performedById: staffUser.id,
+          description: "Action for strict token advancement verification.",
+          result: "Initial status.",
+          timeSpentMinutes: 20,
+        },
+      });
+
+      const initialToken = tokenAction.updatedAt.toISOString();
+
+      // 2. Perform first update
+      const res1 = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${tokenAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: initialToken,
+          description: "First successful update advancing token.",
+        });
+
+      expect(res1.status).toBe(200);
+      const updatedToken = res1.body.data.updatedAt;
+
+      // Token is guaranteed to strictly change/advance (> initialToken in ms)
+      expect(new Date(updatedToken).getTime()).toBeGreaterThan(
+        new Date(initialToken).getTime()
+      );
+
+      // 3. Immediately replay the exact same initialToken
+      const resReplay = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${tokenAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: initialToken,
+          description: "Replayed update attempt with stale/consumed token.",
+        });
+
+      expect(resReplay.status).toBe(409);
+      expect(resReplay.body.error.code).toBe("STALE_ACTION_CONFLICT");
+      expect(resReplay.body.error.details.providedUpdatedAt).toBe(initialToken);
+      expect(resReplay.body.error.details.currentUpdatedAt).toBe(updatedToken);
+
+      // 4. Update using the fresh updatedToken succeeds
+      const res2 = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${tokenAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: updatedToken,
+          description: "Second successful update using new token.",
+        });
+
+      expect(res2.status).toBe(200);
+      expect(new Date(res2.body.data.updatedAt).getTime()).toBeGreaterThan(
+        new Date(updatedToken).getTime()
+      );
     });
 
     it("rejects PUT by Requester with 403 Forbidden", async () => {

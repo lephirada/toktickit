@@ -135,7 +135,21 @@ Recommendation: Approve.
 - **Branch:** `feature/20-actions-taken-backend`
 - **Reviewer comment I received:**
 
-  > <!-- Placeholder for partner review comments -->
+  > The PR implements the core Actions Taken API endpoints and covers the main acceptance criteria, including session-derived performedById, Requester ownership restrictions, role authorization, terminal-ticket guards, validation, and atomic conditional updates for optimistic concurrency control.
+
+Before approval, I recommend addressing the following issues:
+
+Optimistic concurrency token reliability: The update handler explicitly sets updatedAt to new Date(). If the new timestamp equals the previous value at the database's timestamp precision, a stale expectedUpdatedAt token may still match, undermining the guarantee that concurrent edits result in exactly one success and one 409 STALE_ACTION_CONFLICT. Please guarantee that the concurrency token changes on every successful update and add a test for same-timestamp updates.
+
+PUT follow-up note validation: The update handler does not consistently validate followUpNote length when followUpRequired is false. An oversized value may reach the database and result in a 500 instead of a validation response. Please validate the field whenever it is supplied and add a corresponding API test.
+
+Future timestamp boundary: The current validation allows timestamps up to 60 seconds in the future, despite the PR description stating that future timestamps are rejected. Please align the implementation and tests with the authoritative specification.
+
+Verification evidence consistency: docs/lab-04/evidence.md reports different full-suite totals (280/280 and 285/285). Please reconcile these values with the actual test output.
+
+The existing API test suite provides broad coverage, but I have not independently rerun the tests or build during this review.
+
+Recommendation: Request Changes until the concurrency-token guarantee and validation gaps are addressed.
 
 - **How I responded:**
   > <!-- Placeholder for author response -->
