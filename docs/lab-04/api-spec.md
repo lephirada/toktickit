@@ -288,7 +288,7 @@ Records a new technical action taken on an active ticket.
   - `followUpNote`: String, optional; mandatory (1–1,000 characters trimmed) when `followUpRequired === true`. If `followUpRequired === false`, optional with maximum length 1,000 characters. Exceeding 1,000 characters is rejected with `422 VALIDATION_ERROR`.
   - `attachmentNotes`: String, optional, max 1,000 characters.
   - `actionType`: String, optional (default `"INVESTIGATION"`), max 50 characters.
-  - `timeSpentMinutes`: Integer, required, positive integer between 1 and 1,440.
+  - `timeSpentMinutes`: Integer, required, positive integer between 1 and 1,440. Requests omitting `timeSpentMinutes` or supplying `null`, non-integers, or values outside 1–1,440 are strictly rejected with `422 VALIDATION_ERROR`.
   - `performedAt`: ISO-8601 string, optional (default: `now()`). **Cannot be in the future** (`performedAt <= now()`). Any future timestamp (even slightly by 5 seconds) is strictly rejected with `422 VALIDATION_ERROR`. The server stores both `performedAt` and internal sorting timestamp `actionDateTime`.
   - `performedById`: Disallowed in client payload; strictly derived from authenticated session (`req.user.id`).
 * **Business Rule Validation (BR-02, ACT-API-06):**
@@ -321,7 +321,7 @@ Records a new technical action taken on an active ticket.
   ```
 * **Audit Logging:** Automatically writes a `TicketActivity` entry of type `ACTION_TAKEN_ADDED`.
 * **Error Responses:**
-  - `400 Bad Request`: Invalid JSON payload or client attempts to supply `performedById`.
+  - `400 Bad Request`: Invalid JSON payload.
   - `401 Unauthorized`: Session missing, expired, or user deactivated (`ACCOUNT_DEACTIVATED`).
   - `403 Forbidden`: Authenticated user is a `REQUESTER` (`FORBIDDEN_ROLE`) or requires password change (`PASSWORD_CHANGE_REQUIRED`).
   - `404 Not Found`: Ticket not found (`TICKET_NOT_FOUND`).
@@ -353,6 +353,7 @@ Modifies an existing Action Taken record with atomic optimistic concurrency vali
   - `expectedUpdatedAt`: Required ISO-8601 string concurrency token. Missing token returns `400 Bad Request` (`MISSING_CONCURRENCY_TOKEN`).
   - `followUpRequired`: Boolean, optional. If provided, must be a strict boolean; non-boolean values rejected with `422 VALIDATION_ERROR`.
   - `followUpNote`: String, optional; validated to $\le 1,000$ characters whenever supplied, regardless of `followUpRequired`. If target `followUpRequired` is `true`, a non-empty `followUpNote` is mandatory.
+  - `timeSpentMinutes`: Integer, optional for updates. If provided, must be a positive integer between 1 and 1,440. Supplying `null`, non-integers, or values outside 1–1,440 is strictly rejected with `422 VALIDATION_ERROR`.
   - `performedAt`: Optional ISO-8601 string. Strictly past-or-present (`performedAt <= now()`), rejecting future timestamps with `422 VALIDATION_ERROR`.
   - **Atomic Conditional Update:** Single PostgreSQL conditional query matching `id`, `ticketId`, and `updatedAt: expectedDate`.
   - **Token Advancement Guarantee:** Server enforces `nextUpdatedAt = new Date(Math.max(Date.now(), expectedDate.getTime() + 1))`, ensuring that `updatedAt` strictly advances beyond `expectedUpdatedAt` even if updates occur within the same millisecond.
@@ -565,5 +566,5 @@ Allows a Requester to indicate that a problem appears solved on their own ticket
 | **422** | `RESOLUTION_ACTION_REQUIRED` | Attempting to transition `IN_PROGRESS -> RESOLVED` with `actionsCount === 0`. | Log at least one technical Action Taken before resolving. |
 | **422** | `TICKET_NOT_IN_WORKABLE_STATE` | Attempting to log/edit action on terminal ticket (`CLOSED` or `CANCELLED`). | Reopen ticket before recording work. |
 | **422** | `INVALID_STATUS_TRANSITION` | Transition violates structural state machine in `shared/ticketStateMachine.ts`. | Follow allowed lifecycle transition sequence. |
-| **422** | `VALIDATION_ERROR` | Field validation failed (missing/empty result, non-boolean followUpRequired, invalid note length, future timestamp). | Correct highlighted form fields according to constraints. |
+| **422** | `VALIDATION_ERROR` | Field validation failed (missing/empty result, missing or invalid timeSpentMinutes, non-boolean followUpRequired, invalid note length, future timestamp). | Correct highlighted form fields according to constraints. |
 | **500** | `INTERNAL_SERVER_ERROR` | Unexpected server or database exception. | Review server logs and retry request. |

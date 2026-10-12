@@ -452,6 +452,7 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
         .send({
           description: "Attempting to log action with far future timestamp.",
           result: "Future action diagnostic test.",
+          timeSpentMinutes: 30,
           performedAt: farFutureDate,
         });
 
@@ -467,6 +468,7 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
         .send({
           description: "Attempting to log action 5 seconds in future.",
           result: "Near future test.",
+          timeSpentMinutes: 30,
           performedAt: nearFutureDate,
         });
 
@@ -688,6 +690,143 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
         where: { ticketId: activeTicketOwner.id },
       });
       expect(finalCount).toBe(initialCount);
+    });
+
+    it("rejects POST with 422 VALIDATION_ERROR when timeSpentMinutes is missing or null and creates no record", async () => {
+      const initialCount = await prisma.actionTaken.count({
+        where: { ticketId: activeTicketOwner.id },
+      });
+
+      // 1. Missing timeSpentMinutes
+      const resMissing = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action missing timeSpentMinutes field.",
+          result: "Diagnostic test.",
+          followUpRequired: false,
+        });
+
+      expect(resMissing.status).toBe(422);
+      expect(resMissing.body.error).toBeDefined();
+      expect(resMissing.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resMissing.body.error.message).toContain("Time spent is required");
+
+      // 2. timeSpentMinutes is null
+      const resNull = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action with null timeSpentMinutes.",
+          result: "Diagnostic test.",
+          timeSpentMinutes: null,
+          followUpRequired: false,
+        });
+
+      expect(resNull.status).toBe(422);
+      expect(resNull.body.error).toBeDefined();
+      expect(resNull.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resNull.body.error.message).toContain("Time spent is required");
+
+      // Assert zero database mutations
+      const finalCount = await prisma.actionTaken.count({
+        where: { ticketId: activeTicketOwner.id },
+      });
+      expect(finalCount).toBe(initialCount);
+    });
+
+    it("rejects PUT with 422 VALIDATION_ERROR when timeSpentMinutes is null or invalid and preserves database state", async () => {
+      const testAction = await prisma.actionTaken.create({
+        data: {
+          ticketId: activeTicketOwner.id,
+          performedById: staffUser.id,
+          description: "Initial action to test PUT timeSpentMinutes validation.",
+          result: "Completed inspection.",
+          actionType: "INSPECTION",
+          followUpRequired: false,
+          timeSpentMinutes: 45,
+        },
+      });
+
+      const originalToken = testAction.updatedAt.toISOString();
+
+      // 1. timeSpentMinutes: null
+      const resNull = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${testAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: originalToken,
+          timeSpentMinutes: null,
+          description: "Attempted illegal modification with null time.",
+        });
+
+      expect(resNull.status).toBe(422);
+      expect(resNull.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resNull.body.error.message).toContain("Time spent must be an integer between 1 and 1440");
+
+      // 2. timeSpentMinutes: 0
+      const resZero = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${testAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: originalToken,
+          timeSpentMinutes: 0,
+        });
+
+      expect(resZero.status).toBe(422);
+      expect(resZero.body.error.code).toBe("VALIDATION_ERROR");
+
+      // 3. timeSpentMinutes: 1500 (> 1440)
+      const resExceed = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${testAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: originalToken,
+          timeSpentMinutes: 1500,
+        });
+
+      expect(resExceed.status).toBe(422);
+      expect(resExceed.body.error.code).toBe("VALIDATION_ERROR");
+
+      // Verify the record in DB was untouched: timeSpentMinutes is still 45
+      const persisted = await prisma.actionTaken.findUnique({
+        where: { id: testAction.id },
+      });
+      expect(persisted!.timeSpentMinutes).toBe(45);
+      expect(persisted!.updatedAt.toISOString()).toBe(originalToken);
+    });
+
+    it("allows PUT to omit timeSpentMinutes and preserves original timeSpentMinutes", async () => {
+      const testAction = await prisma.actionTaken.create({
+        data: {
+          ticketId: activeTicketOwner.id,
+          performedById: staffUser.id,
+          description: "Initial action to test partial PUT.",
+          result: "Completed inspection.",
+          actionType: "INSPECTION",
+          followUpRequired: false,
+          timeSpentMinutes: 50,
+        },
+      });
+
+      const originalToken = testAction.updatedAt.toISOString();
+
+      const res = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${testAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: originalToken,
+          description: "Updated description without specifying timeSpentMinutes.",
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.timeSpentMinutes).toBe(50);
+      expect(res.body.data.description).toBe("Updated description without specifying timeSpentMinutes.");
+
+      const persisted = await prisma.actionTaken.findUnique({
+        where: { id: testAction.id },
+      });
+      expect(persisted!.timeSpentMinutes).toBe(50);
     });
   });
 

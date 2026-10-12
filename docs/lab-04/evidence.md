@@ -53,7 +53,7 @@ To fulfill the Spec-Driven Development (Spec DD) grading criterion proving speci
 ### 3.1 Database Migration & Seed Verification (Issue 19)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/migration-verification.test.ts`
-- **Verification Status:** **Verified (8/8 passing, 280/280 full suite passing at Issue 19 completion; 292/292 in current full suite)**
+- **Verification Status:** **Verified (8/8 passing, 280/280 full suite passing at Issue 19 completion; 295/295 in current full suite)**
 - **Prisma Migration Status:** `npx --prefix server prisma migrate status` reports 6 migrations applied (`20261011000000_add_action_taken`), database schema up to date.
 - **Model & Schema Constraints:** `ActionTaken` table verified via `information_schema` with mandatory fields `id`, `ticketId`, `performedById`, `actionDateTime`, `description` (VarChar 2000), `result` (VarChar 2000), `followUpRequired` (Boolean), nullable `followUpNote` (VarChar 1000) / `attachmentNotes` (VarChar 1000), `timeSpentMinutes`, `actionType` (VarChar 50), `performedAt`, `createdAt`, `updatedAt`.
 - **Referential Integrity & User Protection:** `performedById` enforces `ON DELETE RESTRICT` (preserving user deactivation rule BR-15); `ticketId` enforces `ON DELETE CASCADE`.
@@ -144,11 +144,11 @@ $ npm --prefix server run test
 ### 3.2 Actions Taken & Concurrency Control API Tests (Issue 20)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts`
-- **Verification Status:** **Verified (34/34 passing, 292/292 full server suite passing)**
+- **Verification Status:** **Verified (37/37 passing, 295/295 full server suite passing)**
 - **Endpoints Implemented & Hardened:**
   - `GET /api/tickets/:ticketId/actions`: Chronological listing (`actionDateTime ASC`), requester ownership scoping, anti-leakage 403 on foreign ticket, IT Staff queue access across tickets.
-  - `POST /api/tickets/:ticketId/actions`: IT Staff / Admin action recording, server-derived `performedById = req.user.id`, terminal ticket guard (`CLOSED`, `CANCELLED` $\to$ 422), mandatory `result` field validation (1–2,000 characters, rejecting missing or empty submissions with 422 `VALIDATION_ERROR`), strict `followUpRequired` boolean validation (rejecting non-booleans with 422), strict `followUpNote` string/null validation (rejecting non-string types with 422), mandatory `followUpNote` when `followUpRequired=true`, duration validation (1–1440 min), strict future timestamp rejection (`performedAt <= now()` without any 60-second tolerance $\to$ 422 `VALIDATION_ERROR`), `ACTION_TAKEN_ADDED` audit activity logging.
-  - `PUT /api/tickets/:ticketId/actions/:actionId`: True atomic conditional database update (`tx.actionTaken.updateMany({ where: { id: actionId, ticketId, updatedAt: expectedDate } })`) checking `id` and `expectedUpdatedAt` in a single database query to prevent TOCTOU race conditions. Concurrency token strictly advances on every successful update (`nextUpdatedAt = new Date(Math.max(Date.now(), expectedDate.getTime() + 1))`), guaranteeing token change even if executed within the same millisecond and preventing token replay. Strict field validation on updates (validating `followUpRequired` as boolean, `followUpNote <= 1000 chars` regardless of whether `followUpRequired` is true or false, and strictly rejecting future timestamps $\to$ 422). If no row matches, returns 409 `STALE_ACTION_CONFLICT` with current record state and fresh `currentUpdatedAt`.
+  - `POST /api/tickets/:ticketId/actions`: IT Staff / Admin action recording, server-derived `performedById = req.user.id`, terminal ticket guard (`CLOSED`, `CANCELLED` $\to$ 422), mandatory `result` field validation (1–2,000 characters, rejecting missing or empty submissions with 422 `VALIDATION_ERROR`), strict `followUpRequired` boolean validation (rejecting non-booleans with 422), strict `followUpNote` string/null validation (rejecting non-string types with 422), mandatory `followUpNote` when `followUpRequired=true`, mandatory `timeSpentMinutes` integer validation (1–1440 min, rejecting omitted, null, or invalid values with 422 `VALIDATION_ERROR`), strict future timestamp rejection (`performedAt <= now()` without any 60-second tolerance $\to$ 422 `VALIDATION_ERROR`), `ACTION_TAKEN_ADDED` audit activity logging.
+  - `PUT /api/tickets/:ticketId/actions/:actionId`: True atomic conditional database update (`tx.actionTaken.updateMany({ where: { id: actionId, ticketId, updatedAt: expectedDate } })`) checking `id` and `expectedUpdatedAt` in a single database query to prevent TOCTOU race conditions. Concurrency token strictly advances on every successful update (`nextUpdatedAt = new Date(Math.max(Date.now(), expectedDate.getTime() + 1))`), guaranteeing token change even if executed within the same millisecond and preventing token replay. Strict field validation on updates (validating `followUpRequired` as boolean, `followUpNote <= 1000 chars`, validating `timeSpentMinutes` 1–1440 min while rejecting null, allowing omission for partial update, and strictly rejecting future timestamps $\to$ 422). If no row matches, returns 409 `STALE_ACTION_CONFLICT` with current record state and fresh `currentUpdatedAt`.
   - **IT Staff Access Scope (Aligned with Lab 3):** IT Staff can collaborate and record actions on any workable ticket in the queue (unassigned or assigned to peer staff). Inactive staff accounts (`isActive: false`) reject with 401 `ACCOUNT_DEACTIVATED`, and accounts requiring password reset (`mustChangePassword: true`) reject with 403 `PASSWORD_CHANGE_REQUIRED`.
 
 #### Terminal Execution Logs (Executed from Project Root)
@@ -179,6 +179,9 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
        ✓ rejects POST with 422 VALIDATION_ERROR when followUpRequired is non-boolean ('invalid', 123, null) and creates no record
        ✓ rejects PUT with 422 VALIDATION_ERROR when followUpRequired is non-boolean ('invalid', 123, null) and does not modify record or updatedAt
        ✓ rejects POST with 422 VALIDATION_ERROR when followUpNote is non-string (number, object) even if followUpRequired is false and creates no record
+       ✓ rejects POST with 422 VALIDATION_ERROR when timeSpentMinutes is missing or null and creates no record
+       ✓ rejects PUT with 422 VALIDATION_ERROR when timeSpentMinutes is null or invalid and preserves database state
+       ✓ allows PUT to omit timeSpentMinutes and preserves original timeSpentMinutes
      ✓ ACT-API-04: Requester Query Boundaries & Role Access Scoping (8)
        ✓ allows Requester to view actions for their owned ticket (200 OK)
        ✓ rejects Requester with 403 Forbidden when attempting to view actions for another user's ticket
@@ -309,7 +312,7 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
 }
 ```
 
-**Log 2: Full Server Test Suite Execution (292/292 Passing — Zero Regressions)**
+**Log 2: Full Server Test Suite Execution (295/295 Passing — Zero Regressions)**
 
 ```text
 $ npm --prefix server run test
@@ -323,22 +326,22 @@ $ npm --prefix server run test
  ✓ tests/lab-02/my-tickets.api.test.ts (17)
  ✓ tests/lab-02/requesters.test.ts (5)
  ✓ tests/lab-02/ticket-detail.api.test.ts (20)
- ✓ tests/lab-04/actions-taken.api.test.ts (34)
+ ✓ tests/lab-04/actions-taken.api.test.ts (37)
  ✓ tests/lab-04/migration-verification.test.ts (8)
- ✓ tests/lab-03/auth.api.test.ts (20) 579ms
+ ✓ tests/lab-03/auth.api.test.ts (20) 578ms
  ✓ tests/lab-03/authorization.api.test.ts (28)
  ✓ tests/lab-03/comments-notes.api.test.ts (16)
  ✓ tests/lab-03/jwt-password.test.ts (9)
- ✓ tests/lab-03/migration-verification.test.ts (3) 2221ms
- ✓ tests/lab-03/migration.test.ts (3) 2024ms
+ ✓ tests/lab-03/migration-verification.test.ts (3) 1848ms
+ ✓ tests/lab-03/migration.test.ts (3) 1815ms
  ✓ tests/lab-03/staff-queue.api.test.ts (23)
- ✓ tests/lab-03/staff-ticket-detail.api.test.ts (54) 583ms
- ✓ tests/lab-03/users-admin.api.test.ts (30) 1374ms
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (54) 455ms
+ ✓ tests/lab-03/users-admin.api.test.ts (30) 1383ms
 
  Test Files  18 passed (18)
-      Tests  292 passed (292)
-   Start at  00:10:46
-   Duration  13.42s
+      Tests  295 passed (295)
+   Start at  00:45:11
+   Duration  12.82s
 ```
 
 ### 3.3 Resolution Gate Boundary Suite (Issue 21)

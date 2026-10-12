@@ -3254,24 +3254,24 @@ app.post(
         return;
       }
 
-      // 6. Time spent validation: integer between 1 and 1440
-      if (timeSpentMinutes !== undefined && timeSpentMinutes !== null) {
-        if (
-          typeof timeSpentMinutes !== "number" ||
-          !Number.isInteger(timeSpentMinutes) ||
-          timeSpentMinutes < 1 ||
-          timeSpentMinutes > 1440
-        ) {
-          res
-            .status(422)
-            .json(
-              createErrorEnvelope(
-                "VALIDATION_ERROR",
-                "Time spent must be an integer between 1 and 1440 minutes."
-              )
-            );
-          return;
-        }
+      // 6. Time spent validation: required integer between 1 and 1440
+      if (
+        timeSpentMinutes === undefined ||
+        timeSpentMinutes === null ||
+        typeof timeSpentMinutes !== "number" ||
+        !Number.isInteger(timeSpentMinutes) ||
+        timeSpentMinutes < 1 ||
+        timeSpentMinutes > 1440
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Time spent is required and must be an integer between 1 and 1440 minutes."
+            )
+          );
+        return;
       }
 
       // 7. Timestamp validation: cannot be in the future
@@ -3315,10 +3315,7 @@ app.post(
             actionType !== undefined && actionType !== null
               ? actionType.trim()
               : "INVESTIGATION",
-          timeSpentMinutes:
-            timeSpentMinutes !== undefined && timeSpentMinutes !== null
-              ? timeSpentMinutes
-              : 30,
+          timeSpentMinutes,
           followUpRequired: isFollowUp,
           followUpNote: isFollowUp
             ? followUpNote.trim()
@@ -3571,8 +3568,9 @@ app.put(
         return;
       }
 
-      if (timeSpentMinutes !== undefined && timeSpentMinutes !== null) {
+      if (timeSpentMinutes !== undefined) {
         if (
+          timeSpentMinutes === null ||
           typeof timeSpentMinutes !== "number" ||
           !Number.isInteger(timeSpentMinutes) ||
           timeSpentMinutes < 1 ||
