@@ -3204,8 +3204,9 @@ app.post(
         }
       } else if (
         followUpNote !== undefined &&
-        typeof followUpNote === "string" &&
-        followUpNote.trim().length > 1000
+        followUpNote !== null &&
+        (typeof followUpNote !== "string" ||
+          followUpNote.trim().length > 1000)
       ) {
         res
           .status(422)

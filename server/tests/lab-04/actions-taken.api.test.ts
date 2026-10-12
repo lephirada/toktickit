@@ -645,6 +645,50 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
       expect(persisted!.description).toBe("Action for PUT followUpRequired type boundary test.");
       expect(persisted!.updatedAt.toISOString()).toBe(originalToken);
     });
+
+    it("rejects POST with 422 VALIDATION_ERROR when followUpNote is non-string (number, object) even if followUpRequired is false and creates no record", async () => {
+      const initialCount = await prisma.actionTaken.count({
+        where: { ticketId: activeTicketOwner.id },
+      });
+
+      // 1. Numeric followUpNote
+      const resNumber = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action with numeric followUpNote.",
+          result: "Diagnostic test.",
+          followUpRequired: false,
+          followUpNote: 12345,
+        });
+
+      expect(resNumber.status).toBe(422);
+      expect(resNumber.body.error).toBeDefined();
+      expect(resNumber.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resNumber.body.error.message).toContain("cannot exceed 1000 characters");
+
+      // 2. Object followUpNote
+      const resObject = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action with object followUpNote.",
+          result: "Diagnostic test.",
+          followUpRequired: false,
+          followUpNote: { note: "nested object payload" },
+        });
+
+      expect(resObject.status).toBe(422);
+      expect(resObject.body.error).toBeDefined();
+      expect(resObject.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resObject.body.error.message).toContain("cannot exceed 1000 characters");
+
+      // Assert no records created in database
+      const finalCount = await prisma.actionTaken.count({
+        where: { ticketId: activeTicketOwner.id },
+      });
+      expect(finalCount).toBe(initialCount);
+    });
   });
 
   // =========================================================================

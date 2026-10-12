@@ -292,9 +292,8 @@ Records a new technical action taken on an active ticket.
   - `timeSpentMinutes`: Integer, required, positive integer between 1 and 1,440.
   - `performedAt`: ISO-8601 string, optional (default: `now()`). **Cannot be in the future** (`performedAt <= now()`). Any future timestamp (even slightly by 5 seconds) is strictly rejected with `422 VALIDATION_ERROR`. The server stores both `performedAt` and internal sorting timestamp `actionDateTime`.
   - `performedById`: Disallowed in client payload; strictly derived from authenticated session (`req.user.id`).
-* **Business Rule Validation:**
-  - Parent ticket must be in an active workable status (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`).
-  - If ticket is in terminal status (`CLOSED`, `CANCELLED`), returns `422 Unprocessable Entity` (`TICKET_NOT_IN_WORKABLE_STATE`).
+* **Business Rule Validation (BR-02, ACT-API-06):**
+  - Parent ticket must not be in a terminal status. Attempting to record or modify actions on tickets in terminal status (`CLOSED`, `CANCELLED`) returns `422 Unprocessable Entity` (`TICKET_NOT_IN_WORKABLE_STATE`).
 * **Response (201 Created):**
   ```json
   {
@@ -562,11 +561,11 @@ Allows a Requester to indicate that a problem appears solved on their own ticket
 | **400** | `MISSING_CONCURRENCY_TOKEN` | `PUT /api/tickets/:id/actions/:actionId` called without `expectedUpdatedAt`. | Provide `expectedUpdatedAt` from the loaded action record. |
 | **400** | `IMMUTABLE_IDENTITY_OVERRIDE` | Client explicitly sent `performedById` in action creation/update. | Remove client-supplied ID; server populates it automatically. |
 | **401** | `UNAUTHORIZED` | Session cookie is absent, expired, or invalid. | Log in to obtain a valid session cookie. |
-| **403** | `FORBIDDEN` | Caller lacks role permission (e.g. Requester accessing dashboard or creating actions). | Access denied; route restricted to IT Staff/Admin. |
-| **404** | `NOT_FOUND` | Ticket or Action Taken ID does not exist, or unowned Requester ticket. | Verify ID; avoid unauthorized resource access. |
+| **403** | `FORBIDDEN_ROLE` / `FORBIDDEN_TICKET_ACCESS` | Caller lacks role permission (e.g. Requester creating actions) or Requester accessing unowned ticket. | Access denied; route restricted to IT Staff/Admin or ticket owner. |
+| **404** | `TICKET_NOT_FOUND` / `ACTION_NOT_FOUND` | Ticket or Action Taken ID does not exist in the database. | Verify target ID. |
 | **409** | `STALE_ACTION_CONFLICT` | `expectedUpdatedAt` does not match database `updatedAt`. | Reload latest action record and review conflicting changes. |
 | **422** | `RESOLUTION_ACTION_REQUIRED` | Attempting to transition `IN_PROGRESS -> RESOLVED` with `actionsCount === 0`. | Log at least one technical Action Taken before resolving. |
-| **422** | `TICKET_NOT_IN_WORKABLE_STATE` | Attempting to log/edit action on `NEW`, `RESOLVED`, `CLOSED`, or `CANCELLED` ticket. | Claim or reopen ticket before recording work. |
+| **422** | `TICKET_NOT_IN_WORKABLE_STATE` | Attempting to log/edit action on terminal ticket (`CLOSED` or `CANCELLED`). | Reopen ticket before recording work. |
 | **422** | `INVALID_STATUS_TRANSITION` | Transition violates structural state machine in `shared/ticketStateMachine.ts`. | Follow allowed lifecycle transition sequence. |
-| **422** | `VALIDATION_ERROR` | Description $< 10$ or $> 2000$ chars; time spent $< 1$ or $> 1440$; future timestamp. | Correct highlighted form fields according to constraints. |
+| **422** | `VALIDATION_ERROR` | Field validation failed (missing/empty result, non-boolean followUpRequired, invalid note length, future timestamp). | Correct highlighted form fields according to constraints. |
 | **500** | `INTERNAL_SERVER_ERROR` | Unexpected server or database exception. | Review server logs and retry request. |
