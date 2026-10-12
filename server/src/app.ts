@@ -2947,6 +2947,801 @@ app.post(
 );
 
 // ---------------------------------------------------------------------------
+// Issue 20 — Actions Taken REST API Endpoints (FR-01..04, BR-02..03, BR-06..08)
+// ---------------------------------------------------------------------------
+
+// GET /api/tickets/:id/actions (also handles :ticketId)
+app.get(
+  ["/api/tickets/:id/actions", "/api/tickets/:ticketId/actions"],
+  requireAuth,
+  requirePasswordChanged,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const rawId = req.params.ticketId || req.params.id;
+      const ticketId = parseInt(rawId, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Requester Isolation: Requesters can only view actions on their own tickets (403 Forbidden)
+      if (req.user!.role === "REQUESTER" && ticket.requesterId !== req.user!.id) {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN_TICKET_ACCESS",
+              "Forbidden: You do not have permission to access actions for this ticket."
+            )
+          );
+        return;
+      }
+
+      const actions = await getPrisma().actionTaken.findMany({
+        where: { ticketId },
+        orderBy: [{ actionDateTime: "asc" }, { id: "asc" }],
+        include: {
+          performedBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      res.status(200).json({ data: actions });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to fetch actions taken for ticket."
+          )
+        );
+    }
+  }
+);
+
+// POST /api/tickets/:id/actions (also handles :ticketId)
+app.post(
+  ["/api/tickets/:id/actions", "/api/tickets/:ticketId/actions"],
+  requireAuth,
+  requirePasswordChanged,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      // Requesters are strictly forbidden from creating actions taken
+      if (req.user!.role === "REQUESTER") {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN_ROLE",
+              "Forbidden: Requesters cannot record actions taken."
+            )
+          );
+        return;
+      }
+
+      const rawId = req.params.ticketId || req.params.id;
+      const ticketId = parseInt(rawId, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Terminal status guard (BR-02): CLOSED or CANCELLED tickets reject action creation
+      if (ticket.status === "CLOSED" || ticket.status === "CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_IN_WORKABLE_STATE",
+              `Cannot record actions taken on tickets in terminal status (${ticket.status}).`
+            )
+          );
+        return;
+      }
+
+      const {
+        description,
+        result,
+        actionType,
+        timeSpentMinutes,
+        performedAt,
+        actionDateTime,
+        followUpRequired,
+        followUpNote,
+        attachmentNotes,
+      } = req.body || {};
+
+      // 1. Description validation: required, 1-2000 chars trimmed
+      if (
+        !description ||
+        typeof description !== "string" ||
+        description.trim().length < 1 ||
+        description.trim().length > 2000
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action description is required and must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      // 2. Result validation: 1-2000 chars trimmed if provided
+      if (
+        result !== undefined &&
+        (typeof result !== "string" ||
+          result.trim().length < 1 ||
+          result.trim().length > 2000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action result must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      // 3. Follow-up validation: followUpNote required if followUpRequired is true
+      const isFollowUp =
+        followUpRequired === true || followUpRequired === "true";
+      if (isFollowUp) {
+        if (
+          !followUpNote ||
+          typeof followUpNote !== "string" ||
+          followUpNote.trim().length < 1
+        ) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Follow-up note is required when follow-up is requested."
+              )
+            );
+          return;
+        }
+        if (followUpNote.trim().length > 1000) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Follow-up note cannot exceed 1000 characters."
+              )
+            );
+          return;
+        }
+      } else if (
+        followUpNote !== undefined &&
+        typeof followUpNote === "string" &&
+        followUpNote.trim().length > 1000
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Follow-up note cannot exceed 1000 characters."
+            )
+          );
+        return;
+      }
+
+      // 4. Attachment notes validation: max 1000 chars
+      if (
+        attachmentNotes !== undefined &&
+        attachmentNotes !== null &&
+        (typeof attachmentNotes !== "string" ||
+          attachmentNotes.trim().length > 1000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Attachment notes cannot exceed 1000 characters."
+            )
+          );
+        return;
+      }
+
+      // 5. Action type validation: max 50 chars
+      if (
+        actionType !== undefined &&
+        actionType !== null &&
+        (typeof actionType !== "string" || actionType.trim().length > 50)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action type cannot exceed 50 characters."
+            )
+          );
+        return;
+      }
+
+      // 6. Time spent validation: integer between 1 and 1440
+      if (timeSpentMinutes !== undefined && timeSpentMinutes !== null) {
+        if (
+          typeof timeSpentMinutes !== "number" ||
+          !Number.isInteger(timeSpentMinutes) ||
+          timeSpentMinutes < 1 ||
+          timeSpentMinutes > 1440
+        ) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Time spent must be an integer between 1 and 1440 minutes."
+              )
+            );
+          return;
+        }
+      }
+
+      // 7. Timestamp validation: cannot be in the future
+      const rawTimestamp = performedAt || actionDateTime;
+      let actionDate = new Date();
+      if (rawTimestamp) {
+        const parsed = new Date(rawTimestamp);
+        if (isNaN(parsed.getTime())) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Invalid timestamp format."
+              )
+            );
+          return;
+        }
+        if (parsed.getTime() > Date.now() + 60000) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Action timestamp cannot be in the future."
+              )
+            );
+          return;
+        }
+        actionDate = parsed;
+      }
+
+      // Server authority: performedById is strictly derived from req.user!.id
+      const newAction = await getPrisma().actionTaken.create({
+        data: {
+          ticketId,
+          performedById: req.user!.id,
+          description: description.trim(),
+          result:
+            result !== undefined && result !== null
+              ? result.trim()
+              : "Completed",
+          actionType:
+            actionType !== undefined && actionType !== null
+              ? actionType.trim()
+              : "INVESTIGATION",
+          timeSpentMinutes:
+            timeSpentMinutes !== undefined && timeSpentMinutes !== null
+              ? timeSpentMinutes
+              : 30,
+          followUpRequired: isFollowUp,
+          followUpNote: isFollowUp
+            ? followUpNote.trim()
+            : followUpNote
+            ? followUpNote.trim()
+            : null,
+          attachmentNotes: attachmentNotes ? attachmentNotes.trim() : null,
+          performedAt: actionDate,
+          actionDateTime: actionDate,
+        },
+        include: {
+          performedBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      // Audit log in TicketActivity table (FR-12, AC-20-05)
+      await getPrisma()
+        .ticketActivity.create({
+          data: {
+            ticketId,
+            type: "ACTION_TAKEN_ADDED",
+            action: "Action Taken Added",
+            message: `${req.user!.fullName} recorded an action: ${newAction.description.slice(0, 80)}`,
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
+            metadata: {
+              actionId: newAction.id,
+              actionType: newAction.actionType,
+              timeSpentMinutes: newAction.timeSpentMinutes,
+            },
+          },
+        })
+        .catch(() => {});
+
+      res.status(201).json({ data: newAction });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to record action taken."
+          )
+        );
+    }
+  }
+);
+
+// PUT /api/tickets/:id/actions/:actionId (also handles :ticketId)
+app.put(
+  [
+    "/api/tickets/:id/actions/:actionId",
+    "/api/tickets/:ticketId/actions/:actionId",
+  ],
+  requireAuth,
+  requirePasswordChanged,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      // Requesters are strictly forbidden from modifying actions taken
+      if (req.user!.role === "REQUESTER") {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN_ROLE",
+              "Forbidden: Requesters cannot modify actions taken."
+            )
+          );
+        return;
+      }
+
+      const rawTicketId = req.params.ticketId || req.params.id;
+      const ticketId = parseInt(rawTicketId, 10);
+      const actionId = parseInt(req.params.actionId, 10);
+
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      if (isNaN(actionId) || actionId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "ACTION_NOT_FOUND",
+              "Action record not found for this ticket."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Terminal status guard (BR-02): cannot modify actions on closed/cancelled tickets
+      if (ticket.status === "CLOSED" || ticket.status === "CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_IN_WORKABLE_STATE",
+              `Cannot modify actions taken on tickets in terminal status (${ticket.status}).`
+            )
+          );
+        return;
+      }
+
+      const existingAction = await getPrisma().actionTaken.findFirst({
+        where: { id: actionId, ticketId },
+        include: {
+          performedBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      if (!existingAction) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "ACTION_NOT_FOUND",
+              "Action record not found for this ticket."
+            )
+          );
+        return;
+      }
+
+      const {
+        expectedUpdatedAt,
+        description,
+        result,
+        actionType,
+        timeSpentMinutes,
+        performedAt,
+        actionDateTime,
+        followUpRequired,
+        followUpNote,
+        attachmentNotes,
+      } = req.body || {};
+
+      // Optimistic Concurrency Control Contract: missing token -> 400
+      if (!expectedUpdatedAt) {
+        res
+          .status(400)
+          .json(
+            createErrorEnvelope(
+              "MISSING_CONCURRENCY_TOKEN",
+              "The 'expectedUpdatedAt' concurrency token is required to update an action record.",
+              undefined,
+              { actionId, requiredField: "expectedUpdatedAt" }
+            )
+          );
+        return;
+      }
+
+      // Optimistic Concurrency Control: compare expectedUpdatedAt against server updatedAt -> 409
+      const currentIso = existingAction.updatedAt.toISOString();
+      const expectedTime = new Date(expectedUpdatedAt).getTime();
+      const currentTime = existingAction.updatedAt.getTime();
+
+      if (isNaN(expectedTime) || Math.abs(expectedTime - currentTime) > 0) {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "STALE_ACTION_CONFLICT",
+              "The action record has been modified by another user since you loaded it. Please reload the latest version before applying changes.",
+              undefined,
+              {
+                actionId,
+                providedUpdatedAt: expectedUpdatedAt,
+                currentUpdatedAt: currentIso,
+                currentRecord: {
+                  id: existingAction.id,
+                  description: existingAction.description,
+                  actionType: existingAction.actionType,
+                  result: existingAction.result,
+                  timeSpentMinutes: existingAction.timeSpentMinutes,
+                  performedAt: existingAction.performedAt,
+                  updatedAt: existingAction.updatedAt,
+                  performedBy: existingAction.performedBy,
+                },
+              }
+            )
+          );
+        return;
+      }
+
+      // Validation for update fields
+      if (
+        description !== undefined &&
+        (typeof description !== "string" ||
+          description.trim().length < 1 ||
+          description.trim().length > 2000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action description must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      if (
+        result !== undefined &&
+        (typeof result !== "string" ||
+          result.trim().length < 1 ||
+          result.trim().length > 2000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action result must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      const targetFollowUp =
+        followUpRequired !== undefined
+          ? followUpRequired === true || followUpRequired === "true"
+          : existingAction.followUpRequired;
+
+      const targetNote =
+        followUpNote !== undefined ? followUpNote : existingAction.followUpNote;
+
+      if (targetFollowUp) {
+        if (
+          !targetNote ||
+          typeof targetNote !== "string" ||
+          targetNote.trim().length < 1
+        ) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Follow-up note is required when follow-up is requested."
+              )
+            );
+          return;
+        }
+        if (targetNote.trim().length > 1000) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Follow-up note cannot exceed 1000 characters."
+              )
+            );
+          return;
+        }
+      }
+
+      if (
+        attachmentNotes !== undefined &&
+        attachmentNotes !== null &&
+        (typeof attachmentNotes !== "string" ||
+          attachmentNotes.trim().length > 1000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Attachment notes cannot exceed 1000 characters."
+            )
+          );
+        return;
+      }
+
+      if (
+        actionType !== undefined &&
+        actionType !== null &&
+        (typeof actionType !== "string" || actionType.trim().length > 50)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action type cannot exceed 50 characters."
+            )
+          );
+        return;
+      }
+
+      if (timeSpentMinutes !== undefined && timeSpentMinutes !== null) {
+        if (
+          typeof timeSpentMinutes !== "number" ||
+          !Number.isInteger(timeSpentMinutes) ||
+          timeSpentMinutes < 1 ||
+          timeSpentMinutes > 1440
+        ) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Time spent must be an integer between 1 and 1440 minutes."
+              )
+            );
+          return;
+        }
+      }
+
+      const rawUpdateTimestamp = performedAt || actionDateTime;
+      let updatedActionDate: Date | undefined;
+      if (rawUpdateTimestamp) {
+        const parsed = new Date(rawUpdateTimestamp);
+        if (isNaN(parsed.getTime())) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Invalid timestamp format."
+              )
+            );
+          return;
+        }
+        if (parsed.getTime() > Date.now() + 60000) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Action timestamp cannot be in the future."
+              )
+            );
+          return;
+        }
+        updatedActionDate = parsed;
+      }
+
+      const updatedAction = await getPrisma().actionTaken.update({
+        where: { id: actionId },
+        data: {
+          ...(description !== undefined ? { description: description.trim() } : {}),
+          ...(result !== undefined ? { result: result.trim() } : {}),
+          ...(actionType !== undefined ? { actionType: actionType.trim() } : {}),
+          ...(timeSpentMinutes !== undefined ? { timeSpentMinutes } : {}),
+          ...(followUpRequired !== undefined
+            ? { followUpRequired: targetFollowUp }
+            : {}),
+          ...(followUpNote !== undefined
+            ? {
+                followUpNote:
+                  targetNote && typeof targetNote === "string"
+                    ? targetNote.trim()
+                    : null,
+              }
+            : {}),
+          ...(attachmentNotes !== undefined
+            ? {
+                attachmentNotes:
+                  attachmentNotes && typeof attachmentNotes === "string"
+                    ? attachmentNotes.trim()
+                    : null,
+              }
+            : {}),
+          ...(updatedActionDate
+            ? {
+                performedAt: updatedActionDate,
+                actionDateTime: updatedActionDate,
+              }
+            : {}),
+        },
+        include: {
+          performedBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      // Audit log in TicketActivity table (FR-12, AC-20-05)
+      await getPrisma()
+        .ticketActivity.create({
+          data: {
+            ticketId,
+            type: "ACTION_TAKEN_UPDATED",
+            action: "Action Taken Updated",
+            message: `${req.user!.fullName} updated action #${updatedAction.id}`,
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
+            metadata: {
+              actionId: updatedAction.id,
+              actionType: updatedAction.actionType,
+            },
+          },
+        })
+        .catch(() => {});
+
+      res.status(200).json({ data: updatedAction });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to update action taken."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Issue 9 — Active Attachment Streaming Download & 410 Gone Guard (AC 2 & 4)
 // GET /api/attachments/:id/download
 // ---------------------------------------------------------------------------
