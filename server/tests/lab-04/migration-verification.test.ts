@@ -229,7 +229,7 @@ describe("Issue 19 — Database Schema Evolution & Seed Verification", () => {
         expect(currentAttachment!.uploadedById).toBe(attachmentSnapshot.uploadedById);
         expect(currentAttachment!.ticketId).toBe(attachmentSnapshot.ticketId);
         expect(currentAttachment!.uploadedBy.id).toBe(author.id);
-        expect(currentAttachment!.ticket.id).toBe(testTicket.id);
+        expect(currentAttachment!.ticket?.id).toBe(testTicket.id);
 
         // 5. Assert deleting ActionTaken does not cascade or affect comment/attachment
         await prisma.actionTaken.delete({ where: { id: action.id } });
