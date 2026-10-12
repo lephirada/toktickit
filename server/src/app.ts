@@ -2988,12 +2988,27 @@ app.get(
       }
 
       // Requester Isolation: Requesters can only view actions on their own tickets (403 Forbidden)
-      if (req.user!.role === "REQUESTER" && ticket.requesterId !== req.user!.id) {
+      if (req.user!.role === "REQUESTER") {
+        if (ticket.requesterId !== req.user!.id) {
+          res
+            .status(403)
+            .json(
+              createErrorEnvelope(
+                "FORBIDDEN_TICKET_ACCESS",
+                "Forbidden: You do not have permission to access actions for this ticket."
+              )
+            );
+          return;
+        }
+      } else if (
+        req.user!.role !== "IT_STAFF" &&
+        req.user!.role !== "ADMINISTRATOR"
+      ) {
         res
           .status(403)
           .json(
             createErrorEnvelope(
-              "FORBIDDEN_TICKET_ACCESS",
+              "FORBIDDEN_ROLE",
               "Forbidden: You do not have permission to access actions for this ticket."
             )
           );
@@ -3036,14 +3051,17 @@ app.post(
   requirePasswordChanged,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      // Requesters are strictly forbidden from creating actions taken
-      if (req.user!.role === "REQUESTER") {
+      // Role scoping: only IT_STAFF and ADMINISTRATOR can create actions taken
+      if (
+        req.user!.role !== "IT_STAFF" &&
+        req.user!.role !== "ADMINISTRATOR"
+      ) {
         res
           .status(403)
           .json(
             createErrorEnvelope(
               "FORBIDDEN_ROLE",
-              "Forbidden: Requesters cannot record actions taken."
+              "Forbidden: Only IT Staff and Administrators have permission to record actions taken."
             )
           );
         return;
@@ -3122,19 +3140,19 @@ app.post(
         return;
       }
 
-      // 2. Result validation: 1-2000 chars trimmed if provided
+      // 2. Result validation: required, 1-2000 chars trimmed
       if (
-        result !== undefined &&
-        (typeof result !== "string" ||
-          result.trim().length < 1 ||
-          result.trim().length > 2000)
+        !result ||
+        typeof result !== "string" ||
+        result.trim().length < 1 ||
+        result.trim().length > 2000
       ) {
         res
           .status(422)
           .json(
             createErrorEnvelope(
               "VALIDATION_ERROR",
-              "Action result must be between 1 and 2000 characters."
+              "Action result is required and must be between 1 and 2000 characters."
             )
           );
         return;
@@ -3277,10 +3295,7 @@ app.post(
           ticketId,
           performedById: req.user!.id,
           description: description.trim(),
-          result:
-            result !== undefined && result !== null
-              ? result.trim()
-              : "Completed",
+          result: result.trim(),
           actionType:
             actionType !== undefined && actionType !== null
               ? actionType.trim()
@@ -3354,14 +3369,17 @@ app.put(
   requirePasswordChanged,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      // Requesters are strictly forbidden from modifying actions taken
-      if (req.user!.role === "REQUESTER") {
+      // Role scoping: only IT_STAFF and ADMINISTRATOR can modify actions taken
+      if (
+        req.user!.role !== "IT_STAFF" &&
+        req.user!.role !== "ADMINISTRATOR"
+      ) {
         res
           .status(403)
           .json(
             createErrorEnvelope(
               "FORBIDDEN_ROLE",
-              "Forbidden: Requesters cannot modify actions taken."
+              "Forbidden: Only IT Staff and Administrators have permission to modify actions taken."
             )
           );
         return;
@@ -3384,61 +3402,6 @@ app.put(
       }
 
       if (isNaN(actionId) || actionId <= 0) {
-        res
-          .status(404)
-          .json(
-            createErrorEnvelope(
-              "ACTION_NOT_FOUND",
-              "Action record not found for this ticket."
-            )
-          );
-        return;
-      }
-
-      const ticket = await getPrisma().ticket.findUnique({
-        where: { id: ticketId },
-      });
-
-      if (!ticket) {
-        res
-          .status(404)
-          .json(
-            createErrorEnvelope(
-              "TICKET_NOT_FOUND",
-              "Ticket with the specified ID does not exist."
-            )
-          );
-        return;
-      }
-
-      // Terminal status guard (BR-02): cannot modify actions on closed/cancelled tickets
-      if (ticket.status === "CLOSED" || ticket.status === "CANCELLED") {
-        res
-          .status(422)
-          .json(
-            createErrorEnvelope(
-              "TICKET_NOT_IN_WORKABLE_STATE",
-              `Cannot modify actions taken on tickets in terminal status (${ticket.status}).`
-            )
-          );
-        return;
-      }
-
-      const existingAction = await getPrisma().actionTaken.findFirst({
-        where: { id: actionId, ticketId },
-        include: {
-          performedBy: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              role: true,
-            },
-          },
-        },
-      });
-
-      if (!existingAction) {
         res
           .status(404)
           .json(
@@ -3478,34 +3441,16 @@ app.put(
         return;
       }
 
-      // Optimistic Concurrency Control: compare expectedUpdatedAt against server updatedAt -> 409
-      const currentIso = existingAction.updatedAt.toISOString();
-      const expectedTime = new Date(expectedUpdatedAt).getTime();
-      const currentTime = existingAction.updatedAt.getTime();
-
-      if (isNaN(expectedTime) || Math.abs(expectedTime - currentTime) > 0) {
+      const expectedDate = new Date(expectedUpdatedAt);
+      if (isNaN(expectedDate.getTime())) {
         res
-          .status(409)
+          .status(400)
           .json(
             createErrorEnvelope(
-              "STALE_ACTION_CONFLICT",
-              "The action record has been modified by another user since you loaded it. Please reload the latest version before applying changes.",
+              "INVALID_CONCURRENCY_TOKEN",
+              "The 'expectedUpdatedAt' concurrency token must be a valid ISO timestamp.",
               undefined,
-              {
-                actionId,
-                providedUpdatedAt: expectedUpdatedAt,
-                currentUpdatedAt: currentIso,
-                currentRecord: {
-                  id: existingAction.id,
-                  description: existingAction.description,
-                  actionType: existingAction.actionType,
-                  result: existingAction.result,
-                  timeSpentMinutes: existingAction.timeSpentMinutes,
-                  performedAt: existingAction.performedAt,
-                  updatedAt: existingAction.updatedAt,
-                  performedBy: existingAction.performedBy,
-                },
-              }
+              { actionId, requiredField: "expectedUpdatedAt" }
             )
           );
         return;
@@ -3544,43 +3489,6 @@ app.put(
             )
           );
         return;
-      }
-
-      const targetFollowUp =
-        followUpRequired !== undefined
-          ? followUpRequired === true || followUpRequired === "true"
-          : existingAction.followUpRequired;
-
-      const targetNote =
-        followUpNote !== undefined ? followUpNote : existingAction.followUpNote;
-
-      if (targetFollowUp) {
-        if (
-          !targetNote ||
-          typeof targetNote !== "string" ||
-          targetNote.trim().length < 1
-        ) {
-          res
-            .status(422)
-            .json(
-              createErrorEnvelope(
-                "VALIDATION_ERROR",
-                "Follow-up note is required when follow-up is requested."
-              )
-            );
-          return;
-        }
-        if (targetNote.trim().length > 1000) {
-          res
-            .status(422)
-            .json(
-              createErrorEnvelope(
-                "VALIDATION_ERROR",
-                "Follow-up note cannot exceed 1000 characters."
-              )
-            );
-          return;
-        }
       }
 
       if (
@@ -3664,50 +3572,202 @@ app.put(
         updatedActionDate = parsed;
       }
 
-      const updatedAction = await getPrisma().actionTaken.update({
-        where: { id: actionId },
-        data: {
-          ...(description !== undefined ? { description: description.trim() } : {}),
-          ...(result !== undefined ? { result: result.trim() } : {}),
-          ...(actionType !== undefined ? { actionType: actionType.trim() } : {}),
-          ...(timeSpentMinutes !== undefined ? { timeSpentMinutes } : {}),
-          ...(followUpRequired !== undefined
-            ? { followUpRequired: targetFollowUp }
-            : {}),
-          ...(followUpNote !== undefined
-            ? {
-                followUpNote:
-                  targetNote && typeof targetNote === "string"
-                    ? targetNote.trim()
-                    : null,
-              }
-            : {}),
-          ...(attachmentNotes !== undefined
-            ? {
-                attachmentNotes:
-                  attachmentNotes && typeof attachmentNotes === "string"
-                    ? attachmentNotes.trim()
-                    : null,
-              }
-            : {}),
-          ...(updatedActionDate
-            ? {
-                performedAt: updatedActionDate,
-                actionDateTime: updatedActionDate,
-              }
-            : {}),
-        },
-        include: {
-          performedBy: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              role: true,
+      // Execute ATOMIC conditional update within transaction
+      const transactionResult = await getPrisma().$transaction(async (tx) => {
+        const ticket = await tx.ticket.findUnique({
+          where: { id: ticketId },
+        });
+
+        if (!ticket) {
+          return {
+            status: 404,
+            code: "TICKET_NOT_FOUND",
+            message: "Ticket with the specified ID does not exist.",
+          };
+        }
+
+        // Terminal status guard (BR-02): cannot modify actions on closed/cancelled tickets
+        if (ticket.status === "CLOSED" || ticket.status === "CANCELLED") {
+          return {
+            status: 422,
+            code: "TICKET_NOT_IN_WORKABLE_STATE",
+            message: `Cannot modify actions taken on tickets in terminal status (${ticket.status}).`,
+          };
+        }
+
+        const existingAction = await tx.actionTaken.findFirst({
+          where: { id: actionId, ticketId },
+          include: {
+            performedBy: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                role: true,
+              },
             },
           },
-        },
+        });
+
+        if (!existingAction) {
+          return {
+            status: 404,
+            code: "ACTION_NOT_FOUND",
+            message: "Action record not found for this ticket.",
+          };
+        }
+
+        const targetFollowUp =
+          followUpRequired !== undefined
+            ? followUpRequired === true || followUpRequired === "true"
+            : existingAction.followUpRequired;
+
+        const targetNote =
+          followUpNote !== undefined ? followUpNote : existingAction.followUpNote;
+
+        if (targetFollowUp) {
+          if (
+            !targetNote ||
+            typeof targetNote !== "string" ||
+            targetNote.trim().length < 1
+          ) {
+            return {
+              status: 422,
+              code: "VALIDATION_ERROR",
+              message: "Follow-up note is required when follow-up is requested.",
+            };
+          }
+          if (targetNote.trim().length > 1000) {
+            return {
+              status: 422,
+              code: "VALIDATION_ERROR",
+              message: "Follow-up note cannot exceed 1000 characters.",
+            };
+          }
+        }
+
+        // Atomic conditional update in database: locks row and checks id, ticketId, AND updatedAt together
+        const updateRes = await tx.actionTaken.updateMany({
+          where: {
+            id: actionId,
+            ticketId,
+            updatedAt: expectedDate,
+          },
+          data: {
+            ...(description !== undefined
+              ? { description: description.trim() }
+              : {}),
+            ...(result !== undefined ? { result: result.trim() } : {}),
+            ...(actionType !== undefined ? { actionType: actionType.trim() } : {}),
+            ...(timeSpentMinutes !== undefined ? { timeSpentMinutes } : {}),
+            ...(followUpRequired !== undefined
+              ? { followUpRequired: targetFollowUp }
+              : {}),
+            ...(followUpNote !== undefined
+              ? {
+                  followUpNote:
+                    targetNote && typeof targetNote === "string"
+                      ? targetNote.trim()
+                      : null,
+                }
+              : {}),
+            ...(attachmentNotes !== undefined
+              ? {
+                  attachmentNotes:
+                    attachmentNotes && typeof attachmentNotes === "string"
+                      ? attachmentNotes.trim()
+                      : null,
+                }
+              : {}),
+            ...(updatedActionDate
+              ? {
+                  performedAt: updatedActionDate,
+                  actionDateTime: updatedActionDate,
+                }
+              : {}),
+            updatedAt: new Date(),
+          },
+        });
+
+        if (updateRes.count === 0) {
+          const latestAction = await tx.actionTaken.findFirst({
+            where: { id: actionId, ticketId },
+            include: {
+              performedBy: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                  role: true,
+                },
+              },
+            },
+          });
+
+          if (!latestAction) {
+            return {
+              status: 404,
+              code: "ACTION_NOT_FOUND",
+              message: "Action record not found for this ticket.",
+            };
+          }
+
+          // Concurrency mismatch caught atomically
+          return {
+            status: 409,
+            code: "STALE_ACTION_CONFLICT",
+            message:
+              "The action record has been modified by another user since you loaded it. Please reload the latest version before applying changes.",
+            details: {
+              actionId,
+              providedUpdatedAt: expectedUpdatedAt,
+              currentUpdatedAt: latestAction.updatedAt.toISOString(),
+              currentRecord: {
+                id: latestAction.id,
+                description: latestAction.description,
+                actionType: latestAction.actionType,
+                result: latestAction.result,
+                timeSpentMinutes: latestAction.timeSpentMinutes,
+                performedAt: latestAction.performedAt,
+                updatedAt: latestAction.updatedAt,
+                performedBy: latestAction.performedBy,
+              },
+            },
+          };
+        }
+
+        const freshRecord = await tx.actionTaken.findUnique({
+          where: { id: actionId },
+          include: {
+            performedBy: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        });
+
+        return { status: 200, data: freshRecord };
       });
+
+      if (transactionResult.status !== 200) {
+        res
+          .status(transactionResult.status)
+          .json(
+            createErrorEnvelope(
+              transactionResult.code!,
+              transactionResult.message!,
+              undefined,
+              transactionResult.details
+            )
+          );
+        return;
+      }
+
+      const updatedAction = transactionResult.data!;
 
       // Audit log in TicketActivity table (FR-12, AC-20-05)
       await getPrisma()

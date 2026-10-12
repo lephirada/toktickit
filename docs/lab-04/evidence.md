@@ -144,11 +144,12 @@ $ npm --prefix server run test
 ### 3.2 Actions Taken & Concurrency Control API Tests (Issue 20)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts`
-- **Verification Status:** **Verified (22/22 passing, 280/280 full server suite passing)**
-- **Endpoints Implemented:**
-  - `GET /api/tickets/:ticketId/actions`: Chronological listing (`actionDateTime ASC`), requester ownership scoping, anti-leakage 403 on foreign ticket.
-  - `POST /api/tickets/:ticketId/actions`: IT Staff / Admin action recording, server-derived `performedById = req.user.id`, terminal ticket guard (`CLOSED`, `CANCELLED` $\to$ 422), mandatory `followUpNote` when `followUpRequired=true`, duration validation (1–1440 min), future timestamp rejection, `ACTION_TAKEN_ADDED` audit activity logging.
-  - `PUT /api/tickets/:ticketId/actions/:actionId`: Optimistic concurrency check with `expectedUpdatedAt` (missing $\to$ 400, stale mismatch $\to$ 409 `STALE_ACTION_CONFLICT`), terminal ticket guard, `ACTION_TAKEN_UPDATED` audit activity logging.
+- **Verification Status:** **Verified (27/27 passing, 285/285 full server suite passing)**
+- **Endpoints Implemented & Hardened:**
+  - `GET /api/tickets/:ticketId/actions`: Chronological listing (`actionDateTime ASC`), requester ownership scoping, anti-leakage 403 on foreign ticket, IT Staff queue access across tickets.
+  - `POST /api/tickets/:ticketId/actions`: IT Staff / Admin action recording, server-derived `performedById = req.user.id`, terminal ticket guard (`CLOSED`, `CANCELLED` $\to$ 422), mandatory `result` field validation (1–2,000 characters, rejecting missing or empty submissions with 422 `VALIDATION_ERROR`), mandatory `followUpNote` when `followUpRequired=true`, duration validation (1–1440 min), future timestamp rejection, `ACTION_TAKEN_ADDED` audit activity logging.
+  - `PUT /api/tickets/:ticketId/actions/:actionId`: True atomic conditional database update (`tx.actionTaken.updateMany({ where: { id: actionId, ticketId, updatedAt: expectedDate } })`) checking `id` and `expectedUpdatedAt` in a single database step to prevent TOCTOU race conditions. If no row matches, returns 409 `STALE_ACTION_CONFLICT` with current record state and fresh `currentUpdatedAt`. Proven via concurrent race testing (`Promise.all`).
+  - **IT Staff Access Scope (Aligned with Lab 3):** IT Staff can collaborate and record actions on any workable ticket in the queue (unassigned or assigned to peer staff). Inactive staff accounts (`isActive: false`) reject with 401 `ACCOUNT_DEACTIVATED`, and accounts requiring password reset (`mustChangePassword: true`) reject with 403 `PASSWORD_CHANGE_REQUIRED`.
 
 #### Terminal Execution Logs (Executed from Project Root)
 
@@ -157,31 +158,36 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
 > toktickit-server@1.0.0 test
 > vitest run tests/lab-04/actions-taken.api.test.ts
 
- ✓ tests/lab-04/actions-taken.api.test.ts (22)
-   ✓ Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts) (22)
+ ✓ tests/lab-04/actions-taken.api.test.ts (27)
+   ✓ Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts) (27)
      ✓ ACT-API-01: Valid Action Creation & Server-Derived Performer Identity (2)
        ✓ creates an action successfully when called by IT Staff and derives performedById from session
        ✓ allows Administrator to create an action taken with session-derived identity
      ✓ ACT-API-02: Rejection of Requester Creation Attempts (2)
        ✓ rejects action creation by Requester with 403 Forbidden even on their own ticket
        ✓ rejects unauthenticated caller with 401 Unauthorized
-     ✓ ACT-API-03: Field Validations & Follow-up Requirement (6)
+     ✓ ACT-API-03: Field Validations & Follow-up Requirement (7)
+       ✓ rejects with 422 VALIDATION_ERROR when result is omitted or empty
        ✓ rejects with 422 VALIDATION_ERROR when followUpRequired=true and followUpNote is missing
        ✓ rejects with 422 VALIDATION_ERROR when followUpRequired=true and followUpNote is empty whitespace
        ✓ accepts valid followUpNote when followUpRequired=true
        ✓ rejects with 422 when description is empty or missing
        ✓ rejects with 422 when timeSpentMinutes is non-positive or exceeds 1440
        ✓ rejects with 422 when performedAt is set in the future
-     ✓ ACT-API-04: Requester Query Boundaries & Role Access Scoping (5)
+     ✓ ACT-API-04: Requester Query Boundaries & Role Access Scoping (8)
        ✓ allows Requester to view actions for their owned ticket (200 OK)
        ✓ rejects Requester with 403 Forbidden when attempting to view actions for another user's ticket
        ✓ returns 404 Not Found for non-existent ticket ID
        ✓ allows IT Staff to view actions for any ticket in the queue
        ✓ returns actions sorted chronologically by actionDateTime ASC
-     ✓ ACT-API-05: Optimistic Concurrency Control (expectedUpdatedAt) (4)
+       ✓ rejects inactive IT Staff with 401 Unauthorized across actions endpoints (Lab 3 boundary)
+       ✓ rejects IT Staff with mustChangePassword=true with 403 PASSWORD_CHANGE_REQUIRED (Lab 3 boundary)
+       ✓ allows IT Staff to collaborate across ticket boundaries (unassigned or assigned to peer staff)
+     ✓ ACT-API-05: Optimistic Concurrency Control (expectedUpdatedAt) (5)
        ✓ returns 400 Bad Request when expectedUpdatedAt is missing from PUT payload
        ✓ returns 409 Conflict with STALE_ACTION_CONFLICT when expectedUpdatedAt does not match server updatedAt
        ✓ successfully updates action and refreshes updatedAt when expectedUpdatedAt matches server timestamp
+       ✓ proves ATOMIC concurrency: concurrent edits with same expectedUpdatedAt allow exactly one to succeed with 200 and one to fail with 409 STALE_ACTION_CONFLICT
        ✓ rejects PUT by Requester with 403 Forbidden
      ✓ ACT-API-06: Terminal Status Check (CLOSED / CANCELLED Protection) (3)
        ✓ rejects action creation on CLOSED ticket with 422 TICKET_NOT_IN_WORKABLE_STATE
@@ -189,9 +195,9 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
        ✓ rejects action update on CLOSED ticket with 422 TICKET_NOT_IN_WORKABLE_STATE
 
  Test Files  1 passed (1)
-      Tests  22 passed (22)
-   Start at  20:41:12
-   Duration  1.11s
+      Tests  27 passed (27)
+   Start at  21:32:26
+   Duration  1.19s
 ```
 
 #### JSON Response Payloads for Error Envelopes
@@ -288,6 +294,38 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
     }
   }
 }
+```
+
+**Log 2: Full Server Test Suite Execution (285/285 Passing — Zero Regressions)**
+
+```text
+$ npm --prefix server run test
+> toktickit-server@1.0.0 test
+> vitest run
+
+ ✓ tests/lab-01/categories.test.ts (1)
+ ✓ tests/lab-01/health.test.ts (1)
+ ✓ tests/lab-02/attachments.api.test.ts (7)
+ ✓ tests/lab-02/create-ticket.api.test.ts (13)
+ ✓ tests/lab-02/my-tickets.api.test.ts (17)
+ ✓ tests/lab-02/requesters.test.ts (5)
+ ✓ tests/lab-02/ticket-detail.api.test.ts (20)
+ ✓ tests/lab-03/auth.api.test.ts (20)
+ ✓ tests/lab-03/authorization.api.test.ts (28)
+ ✓ tests/lab-03/comments-notes.api.test.ts (16)
+ ✓ tests/lab-03/jwt-password.test.ts (9)
+ ✓ tests/lab-03/migration-verification.test.ts (3)
+ ✓ tests/lab-03/migration.test.ts (3)
+ ✓ tests/lab-03/staff-queue.api.test.ts (23)
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (54)
+ ✓ tests/lab-03/users-admin.api.test.ts (30)
+ ✓ tests/lab-04/actions-taken.api.test.ts (27)
+ ✓ tests/lab-04/migration-verification.test.ts (8)
+
+ Test Files  18 passed (18)
+      Tests  285 passed (285)
+   Start at  21:32:32
+   Duration  21.40s
 ```
 
 ### 3.3 Resolution Gate Boundary Suite (Issue 21)

@@ -10,11 +10,17 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
   const prisma = getPrisma();
 
   let staffUser: any;
+  let secondStaffUser: any;
+  let inactiveStaffUser: any;
+  let mustChangePasswordStaffUser: any;
   let adminUser: any;
   let requesterOwner: any;
   let requesterOther: any;
 
   let cookieStaff: string;
+  let cookieSecondStaff: string;
+  let cookieInactiveStaff: string;
+  let cookieMustChangePasswordStaff: string;
   let cookieAdmin: string;
   let cookieRequesterOwner: string;
   let cookieRequesterOther: string;
@@ -51,6 +57,45 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
     });
     createdUserIds.push(staffUser.id);
     cookieStaff = createTestSessionCookie(staffUser);
+
+    secondStaffUser = await prisma.user.create({
+      data: {
+        email: `actions_staff2_${now}@toktickit.com`,
+        fullName: "IT Staff Jordan",
+        role: UserRole.IT_STAFF,
+        passwordHash: dummyHash,
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+    createdUserIds.push(secondStaffUser.id);
+    cookieSecondStaff = createTestSessionCookie(secondStaffUser);
+
+    inactiveStaffUser = await prisma.user.create({
+      data: {
+        email: `actions_inactive_${now}@toktickit.com`,
+        fullName: "Inactive IT Staff",
+        role: UserRole.IT_STAFF,
+        passwordHash: dummyHash,
+        isActive: false,
+        mustChangePassword: false,
+      },
+    });
+    createdUserIds.push(inactiveStaffUser.id);
+    cookieInactiveStaff = createTestSessionCookie(inactiveStaffUser);
+
+    mustChangePasswordStaffUser = await prisma.user.create({
+      data: {
+        email: `actions_mcp_${now}@toktickit.com`,
+        fullName: "Password Expired Staff",
+        role: UserRole.IT_STAFF,
+        passwordHash: dummyHash,
+        isActive: true,
+        mustChangePassword: true,
+      },
+    });
+    createdUserIds.push(mustChangePasswordStaffUser.id);
+    cookieMustChangePasswordStaff = createTestSessionCookie(mustChangePasswordStaffUser);
 
     adminUser = await prisma.user.create({
       data: {
@@ -274,9 +319,51 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
   // ACT-API-03: Field Validations & Follow-up Requirement
   // =========================================================================
   describe("ACT-API-03: Field Validations & Follow-up Requirement", () => {
+    it("rejects with 422 VALIDATION_ERROR when result is omitted or empty", async () => {
+      // 1. Missing result
+      const resMissing = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action performed without result field.",
+        });
+
+      expect(resMissing.status).toBe(422);
+      expect(resMissing.body.error).toBeDefined();
+      expect(resMissing.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resMissing.body.error.message).toContain("Action result is required");
+
+      // 2. Empty whitespace result
+      const resEmpty = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action performed with whitespace result.",
+          result: "   ",
+        });
+
+      expect(resEmpty.status).toBe(422);
+      expect(resEmpty.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resEmpty.body.error.message).toContain("Action result is required");
+
+      // 3. Exceeds 2000 chars
+      const resTooLong = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action performed with excessive result length.",
+          result: "A".repeat(2001),
+        });
+
+      expect(resTooLong.status).toBe(422);
+      expect(resTooLong.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resTooLong.body.error.message).toContain("Action result is required and must be between 1 and 2000 characters");
+    });
+
     it("rejects with 422 VALIDATION_ERROR when followUpRequired=true and followUpNote is missing", async () => {
       const payload = {
         description: "Replaced toner cartridge; noticed feeder roller squeak.",
+        result: "Hardware inspected and toner cartridge replaced.",
         followUpRequired: true,
         // followUpNote is intentionally missing
       };
@@ -295,6 +382,7 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
     it("rejects with 422 VALIDATION_ERROR when followUpRequired=true and followUpNote is empty whitespace", async () => {
       const payload = {
         description: "Replaced toner cartridge; roller issue observed.",
+        result: "Hardware inspected and toner cartridge replaced.",
         followUpRequired: true,
         followUpNote: "   ",
       };
@@ -331,7 +419,7 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
       const res = await request(app)
         .post(`/api/tickets/${activeTicketOwner.id}/actions`)
         .set("Cookie", cookieStaff)
-        .send({ description: "   " });
+        .send({ description: "   ", result: "Valid result text." });
 
       expect(res.status).toBe(422);
       expect(res.body.error.code).toBe("VALIDATION_ERROR");
@@ -341,7 +429,7 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
       const resZero = await request(app)
         .post(`/api/tickets/${activeTicketOwner.id}/actions`)
         .set("Cookie", cookieStaff)
-        .send({ description: "Valid description", timeSpentMinutes: 0 });
+        .send({ description: "Valid description", result: "Completed work.", timeSpentMinutes: 0 });
 
       expect(resZero.status).toBe(422);
       expect(resZero.body.error.code).toBe("VALIDATION_ERROR");
@@ -349,7 +437,7 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
       const resExcess = await request(app)
         .post(`/api/tickets/${activeTicketOwner.id}/actions`)
         .set("Cookie", cookieStaff)
-        .send({ description: "Valid description", timeSpentMinutes: 1500 });
+        .send({ description: "Valid description", result: "Completed work.", timeSpentMinutes: 1500 });
 
       expect(resExcess.status).toBe(422);
       expect(resExcess.body.error.code).toBe("VALIDATION_ERROR");
@@ -362,6 +450,7 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
         .set("Cookie", cookieStaff)
         .send({
           description: "Attempting to log action with future timestamp.",
+          result: "Future action diagnostic test.",
           performedAt: futureDate,
         });
 
@@ -426,6 +515,70 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
         const currTime = new Date(actions[i].actionDateTime).getTime();
         expect(currTime).toBeGreaterThanOrEqual(prevTime);
       }
+    });
+    it("rejects inactive IT Staff with 401 Unauthorized across actions endpoints (Lab 3 boundary)", async () => {
+      const resGet = await request(app)
+        .get(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieInactiveStaff);
+      expect(resGet.status).toBe(401);
+      expect(resGet.body.error.code).toBe("ACCOUNT_DEACTIVATED");
+
+      const resPost = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieInactiveStaff)
+        .send({
+          description: "Inactive staff trying to post",
+          result: "Done",
+        });
+      expect(resPost.status).toBe(401);
+      expect(resPost.body.error.code).toBe("ACCOUNT_DEACTIVATED");
+    });
+
+    it("rejects IT Staff with mustChangePassword=true with 403 PASSWORD_CHANGE_REQUIRED (Lab 3 boundary)", async () => {
+      const resGet = await request(app)
+        .get(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieMustChangePasswordStaff);
+      expect(resGet.status).toBe(403);
+      expect(resGet.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+
+      const resPost = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieMustChangePasswordStaff)
+        .send({
+          description: "Staff must change password trying to post",
+          result: "Done",
+        });
+      expect(resPost.status).toBe(403);
+      expect(resPost.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+    });
+
+    it("allows IT Staff to collaborate across ticket boundaries (unassigned or assigned to peer staff)", async () => {
+      // activeTicketOwner is owned by staffUser. Jordan is a different IT Staff member.
+      const resPostPeer = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieSecondStaff)
+        .send({
+          description: "Peer IT Staff Jordan assisting on Morgan's assigned ticket.",
+          result: "Checked switch port logs and resolved ARP cache issue.",
+          timeSpentMinutes: 15,
+        });
+
+      expect(resPostPeer.status).toBe(201);
+      expect(resPostPeer.body.data.performedById).toBe(secondStaffUser.id);
+      expect(resPostPeer.body.data.performedBy.fullName).toBe("IT Staff Jordan");
+
+      // IT Staff Jordan can also record actions on unassigned ticket activeTicketOther
+      const resPostUnassigned = await request(app)
+        .post(`/api/tickets/${activeTicketOther.id}/actions`)
+        .set("Cookie", cookieSecondStaff)
+        .send({
+          description: "Initial intake triage by Jordan on unassigned ticket.",
+          result: "Licensing key validated and applied.",
+          timeSpentMinutes: 20,
+        });
+
+      expect(resPostUnassigned.status).toBe(201);
+      expect(resPostUnassigned.body.data.performedById).toBe(secondStaffUser.id);
     });
   });
 
@@ -525,6 +678,76 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
       });
       expect(activity).not.toBeNull();
       expect(activity?.actorId).toBe(staffUser.id);
+    });
+
+    it("proves ATOMIC concurrency: concurrent edits with same expectedUpdatedAt allow exactly one to succeed with 200 and one to fail with 409 STALE_ACTION_CONFLICT", async () => {
+      // 1. Create a dedicated action record for concurrent modification
+      const raceAction = await prisma.actionTaken.create({
+        data: {
+          ticketId: activeTicketOwner.id,
+          performedById: staffUser.id,
+          description: "Baseline description before concurrent race.",
+          result: "Baseline result.",
+          actionType: "INVESTIGATION",
+          timeSpentMinutes: 10,
+        },
+      });
+
+      const initialToken = raceAction.updatedAt.toISOString();
+
+      // 2. Simulate two IT Staff members concurrently saving edits from the same base version
+      const reqStaff1 = request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${raceAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: initialToken,
+          description: "Update by Staff Morgan: Re-flashed firmware.",
+          result: "Firmware version 2.4.1 flashed successfully.",
+          timeSpentMinutes: 35,
+        });
+
+      const reqStaff2 = request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${raceAction.id}`)
+        .set("Cookie", cookieSecondStaff)
+        .send({
+          expectedUpdatedAt: initialToken,
+          description: "Update by Staff Jordan: Replaced interface module.",
+          result: "Module 10G SFP+ swapped and tested.",
+          timeSpentMinutes: 40,
+        });
+
+      // Execute concurrently
+      const [res1, res2] = await Promise.all([reqStaff1, reqStaff2]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([200, 409]);
+
+      const successRes = res1.status === 200 ? res1 : res2;
+      const conflictRes = res1.status === 409 ? res1 : res2;
+
+      // Assert winner was saved
+      expect(successRes.body.data.id).toBe(raceAction.id);
+      expect(new Date(successRes.body.data.updatedAt).getTime()).toBeGreaterThanOrEqual(
+        raceAction.updatedAt.getTime()
+      );
+
+      // Assert loser received STALE_ACTION_CONFLICT with fresh currentRecord
+      expect(conflictRes.body.error).toBeDefined();
+      expect(conflictRes.body.error.code).toBe("STALE_ACTION_CONFLICT");
+      expect(conflictRes.body.error.details.actionId).toBe(raceAction.id);
+      expect(conflictRes.body.error.details.providedUpdatedAt).toBe(initialToken);
+      expect(conflictRes.body.error.details.currentUpdatedAt).toBe(successRes.body.data.updatedAt);
+      expect(conflictRes.body.error.details.currentRecord).toBeDefined();
+      expect(conflictRes.body.error.details.currentRecord.description).toBe(
+        successRes.body.data.description
+      );
+
+      // Verify in DB that only the winner's data persisted
+      const finalDbRecord = await prisma.actionTaken.findUnique({
+        where: { id: raceAction.id },
+      });
+      expect(finalDbRecord!.description).toBe(successRes.body.data.description);
+      expect(finalDbRecord!.result).toBe(successRes.body.data.result);
     });
 
     it("rejects PUT by Requester with 403 Forbidden", async () => {
