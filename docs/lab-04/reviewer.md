@@ -152,12 +152,24 @@ The existing API test suite provides broad coverage, but I have not independentl
 Recommendation: Request Changes until the concurrency-token guarantee and validation gaps are addressed.
 
 - **How I responded:**
-  > Thanks for the thorough review! I have resolved all feedback:
+
+  > Thanks for the detailed review! I’ve updated the concurrency token handling to ensure updatedAt advances on successful updates, added validation for followUpNote when it is provided, tightened future timestamp validation, and reconciled the test counts in the evidence document.
+
+  I’ll verify the regression tests and the latest CI results before requesting another review. Thanks for helping me catch these issues!
+
+- **Reviewer comment I received:**
+
+  > Reviewed the implementation against the Lab 4 API specification.
+
+  > - **`actionType` validation:** The implementation uses a `String` field with a maximum length of 50 characters, consistent with the API specification. An enum whitelist is not explicitly required.
+  > - **`performedAt` updates:** The PUT endpoint supports updating `performedAt`, as documented in the API specification. Future timestamps must be rejected.
+  > - **IT Staff ticket access:** Access to tickets in the queue is consistent with the documented authorization scope; access is not limited to tickets personally assigned to the IT Staff member.
   >
-  > - **Concurrency token:** Guaranteed strict token advancement (`nextUpdatedAt > expectedUpdatedAt`) and added a deterministic same-timestamp test using fake timers.
-  > - **Follow-up note validation:** Validated `followUpNote <= 1000` chars on PUT whenever supplied, even if `followUpRequired` is false.
-  > - **Future timestamp:** Enforced strict `performedAt <= now()` validation, eliminating the 60s tolerance window.
-  > - **Evidence consistency:** Reconciled test counts in `evidence.md` to match verified results (31/31 API, 289/289 full suite).
+  > I found no blocking issues in these three areas. **Recommend approval**, provided the latest CI checks pass and the remaining acceptance criteria are satisfied.
+
+- **How I responded:**
+
+  > Thanks for approving the PR! I have already updated docs/lab-04/reviewer.md with the latest comment. You can merge this PR.
 
 ---
 
@@ -237,3 +249,12 @@ Recommendation: Request Changes until the concurrency-token guarantee and valida
 
 - **Partner's response:**
   > Thank you for the review and approval! I have updated the documentation in specification.md §9 to replace the phrase '1:1' with 'complete traceability' to accurately reflect our multi-tier test coverage across the acceptance criteria. With all feedback addressed and specifications finalized, PR #59 is ready to merge into lab4-staging.
+
+### PR - Issue 21 : Database Migration, Seed Data & Actions Taken Backend Foundation
+
+- **My comment:**
+
+  > The Prisma migration, seed data, and Actions Taken APIs look good to me. The required role restrictions and follow-up validation are implemented, and the backend tests and CI checks pass. I approved.
+
+- **Partner's response:**
+  > Thank you for the review and approval! All review comments, type safety enhancements, and negative test suites covering boolean types, note boundaries, and ISO-8601 UTC date formats are in place. All 35 Actions Taken API tests, 43 total Lab 4 tests, and 152 regression tests pass cleanly. PR #60 is ready to merge into lab4-staging.
