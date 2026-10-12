@@ -54,11 +54,11 @@ To fulfill the Spec-Driven Development (Spec DD) grading criterion proving speci
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/migration-verification.test.ts`
 - **Verification Status:** **Verified (8/8 passing)**
 - **Prisma Migration Status:** `npx prisma migrate status` reports 6 migrations applied (`20261011000000_add_action_taken`), database schema up to date.
-- **Model & Schema Constraints:** `ActionTaken` table verified via `information_schema` with mandatory fields `id`, `ticketId`, `performedById`, `actionDateTime`, `description` (VarChar 2000), `result` (VarChar 2000), `followUpRequired` (Boolean), nullable `followUpNote` / `attachmentNotes`, `timeSpentMinutes`, `actionType`, `performedAt`, `createdAt`, `updatedAt`.
+- **Model & Schema Constraints:** `ActionTaken` table verified via `information_schema` with mandatory fields `id`, `ticketId`, `performedById`, `actionDateTime`, `description` (VarChar 2000), `result` (VarChar 2000), `followUpRequired` (Boolean), nullable `followUpNote` (VarChar 1000) / `attachmentNotes` (VarChar 1000), `timeSpentMinutes`, `actionType` (VarChar 50), `performedAt`, `createdAt`, `updatedAt`.
 - **Referential Integrity & User Protection:** `performedById` enforces `ON DELETE RESTRICT` (preserving user deactivation rule BR-15); `ticketId` enforces `ON DELETE CASCADE`.
-- **Seed Script Idempotency & Error Handling:** Verified by running `npm --prefix server run db:seed` twice consecutively with exit code 0 and zero record duplication. If migrations have not been applied, the seed script explicitly raises an error and terminates with exit code 1 instead of silently succeeding.
+- **Seed Script Idempotency & Error Handling:** Verified by running `npm --prefix server run db:seed` twice consecutively with exit code 0 and zero record duplication. If migrations have not been applied, the seed script explicitly raises an error and terminates with exit code 1 instead of silently succeeding. Required IT Staff performers are strictly validated.
 - **Seed Coverage:** Realistic ticket actions seeded covering 0 actions (unassigned & new tickets), 1 action, and multiple actions across assigned and unassigned tickets.
-- **Data Preservation Assertion:** Dedicated non-destructive verification proves pre-existing comments, attachments, users, categories, systems, and tickets are 100% unaltered and intact before and after ActionTaken operations.
+- **Data Preservation Assertion:** Dedicated non-destructive verification executes the migration SQL directly on an isolated, populated Lab 3 baseline schema (with User, Category, Ticket, Comment, and Attachment) and asserts 100% data preservation and equality before and after migration.
 
 #### Terminal Execution Logs
 
@@ -109,10 +109,10 @@ $ npm --prefix server run test -- tests/lab-04/migration-verification.test.ts
    ✓ Issue 19 — Database Schema Evolution & Seed Verification (8)
      ✓ Part 1: Non-Destructive Migration & Pre-existing Data Integrity (5)
        ✓ verifies the physical migration SQL file exists, only extends schema, and contains zero destructive commands
-       ✓ verifies the ActionTaken model schema and column constraints via information_schema
+       ✓ verifies ActionTaken column types, nullability, and VarChar character_maximum_length via information_schema
        ✓ verifies foreign key constraints enforce onDelete rules (RESTRICT on user, CASCADE on ticket)
        ✓ verifies all pre-existing tables and columns from Labs 1–3 remain completely intact
-       ✓ verifies pre-existing baseline records (Users, Categories, Systems, Tickets) from Labs 1–3 remain completely intact without modification or loss
+       ✓ executes migration on a populated Lab 3 baseline schema and proves pre-existing data remains 100% unaltered
      ✓ Part 2: Seed Script Execution, Data Coverage & Error Handling (3)
        ✓ verifies seed data contains realistic tickets covering 0 actions, 1 action, and multiple actions across assigned and unassigned tickets
        ✓ verifies seed script idempotency across multiple consecutive executions
@@ -120,8 +120,8 @@ $ npm --prefix server run test -- tests/lab-04/migration-verification.test.ts
 
  Test Files  1 passed (1)
       Tests  8 passed (8)
-   Start at  13:52:18
-   Duration  660ms
+   Start at  14:50:33
+   Duration  707ms
 ```
 
 ### 3.2 Actions Taken & Concurrency Control API Tests (Issue 20)

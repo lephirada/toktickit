@@ -42,18 +42,23 @@ describe("Issue 19 — Database Schema Evolution & Seed Verification", () => {
       const upperSql = sql.toUpperCase();
       expect(upperSql).not.toContain("DROP TABLE");
       expect(upperSql).not.toContain("TRUNCATE");
-      expect(upperSql).not.toContain('DROP COLUMN');
+      expect(upperSql).not.toContain("DROP COLUMN");
       expect(upperSql).not.toContain('ALTER TABLE "USER" DROP');
       expect(upperSql).not.toContain('ALTER TABLE "TICKET" DROP');
       expect(upperSql).not.toContain('ALTER TABLE "COMMENT" DROP');
       expect(upperSql).not.toContain('ALTER TABLE "ATTACHMENT" DROP');
     });
 
-    it("verifies the ActionTaken model schema and column constraints via information_schema", async () => {
+    it("verifies ActionTaken column types, nullability, and VarChar character_maximum_length via information_schema", async () => {
       const columns = await prisma.$queryRawUnsafe<
-        Array<{ column_name: string; data_type: string; is_nullable: string }>
+        Array<{
+          column_name: string;
+          data_type: string;
+          is_nullable: string;
+          character_maximum_length: number | null;
+        }>
       >(`
-        SELECT column_name, data_type, is_nullable
+        SELECT column_name, data_type, is_nullable, character_maximum_length
         FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'ActionTaken';
       `);
@@ -74,11 +79,20 @@ describe("Issue 19 — Database Schema Evolution & Seed Verification", () => {
       expect(colNames).toContain("createdAt");
       expect(colNames).toContain("updatedAt");
 
+      // Verify nullability constraints
       const nullableMap = new Map(columns.map((c) => [c.column_name, c.is_nullable]));
       expect(nullableMap.get("followUpNote")).toBe("YES");
       expect(nullableMap.get("attachmentNotes")).toBe("YES");
       expect(nullableMap.get("description")).toBe("NO");
       expect(nullableMap.get("result")).toBe("NO");
+
+      // Verify explicit VarChar character_maximum_length constraints in database
+      const lengthMap = new Map(columns.map((c) => [c.column_name, c.character_maximum_length]));
+      expect(lengthMap.get("description")).toBe(2000);
+      expect(lengthMap.get("result")).toBe(2000);
+      expect(lengthMap.get("followUpNote")).toBe(1000);
+      expect(lengthMap.get("attachmentNotes")).toBe(1000);
+      expect(lengthMap.get("actionType")).toBe(50);
     });
 
     it("verifies foreign key constraints enforce onDelete rules (RESTRICT on user, CASCADE on ticket)", async () => {
@@ -142,97 +156,153 @@ describe("Issue 19 — Database Schema Evolution & Seed Verification", () => {
       expect(attachmentColNames).toContain("sizeBytes");
     });
 
-    it("verifies pre-existing baseline records (Users, Categories, Systems, Tickets) from Labs 1–3 remain completely intact without modification or loss", async () => {
-      // Ensure baseline from Labs 1-3 is active and consistent
-      await seedDatabase();
+    it("executes migration on a populated Lab 3 baseline schema and proves pre-existing data remains 100% unaltered", async () => {
+      const testSchema = "lab4_migration_baseline_test";
 
-      // 1. Verify pre-existing Users baseline from Labs 1–3
-      const users = await prisma.user.findMany({ orderBy: { id: "asc" } });
-      expect(users.length).toBeGreaterThanOrEqual(10);
+      // 1. Setup isolated test schema mimicking Lab 3 pre-migration baseline
+      await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${testSchema}" CASCADE;`);
+      await prisma.$executeRawUnsafe(`CREATE SCHEMA "${testSchema}";`);
 
-      const expectedStaffEmails = [
-        "sarah.connor@toktickit.com",
-        "john.doe@toktickit.com",
-        "jennifer.anderson@toktickit.com",
-        "michael.brown@toktickit.com",
-        "kyle.reese@toktickit.com",
-        "david.lee@toktickit.com",
-        "alex.morgan@toktickit.com",
-        "chris.taylor@toktickit.com",
-        "kevin.patel@toktickit.com",
-        "admin@toktickit.com",
-      ];
-      for (const email of expectedStaffEmails) {
-        const user = users.find((u) => u.email === email);
-        expect(user, `User ${email} must remain intact`).toBeDefined();
-        expect(user!.isActive).toBeDefined();
-        expect(user!.passwordHash.length).toBeGreaterThan(20);
+      const executeSqlStatements = async (sql: string) => {
+        const statements = sql
+          .split(";")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        for (const stmt of statements) {
+          await prisma.$executeRawUnsafe(stmt);
+        }
+      };
+
+      try {
+        await executeSqlStatements(`
+          CREATE TABLE "${testSchema}"."User" (
+            "id" SERIAL PRIMARY KEY,
+            "email" TEXT UNIQUE NOT NULL,
+            "fullName" TEXT NOT NULL,
+            "role" TEXT NOT NULL DEFAULT 'REQUESTER',
+            "passwordHash" TEXT NOT NULL,
+            "isActive" BOOLEAN NOT NULL DEFAULT true
+          );
+
+          CREATE TABLE "${testSchema}"."Category" (
+            "id" SERIAL PRIMARY KEY,
+            "name" TEXT UNIQUE NOT NULL
+          );
+
+          CREATE TABLE "${testSchema}"."Ticket" (
+            "id" SERIAL PRIMARY KEY,
+            "ticketNo" TEXT UNIQUE NOT NULL,
+            "summary" VARCHAR(100) NOT NULL,
+            "description" VARCHAR(2000) NOT NULL,
+            "requestedPriority" TEXT NOT NULL,
+            "status" TEXT NOT NULL,
+            "categoryId" INTEGER REFERENCES "${testSchema}"."Category"("id"),
+            "requesterId" INTEGER REFERENCES "${testSchema}"."User"("id")
+          );
+
+          CREATE TABLE "${testSchema}"."Comment" (
+            "id" SERIAL PRIMARY KEY,
+            "ticketId" INTEGER REFERENCES "${testSchema}"."Ticket"("id"),
+            "authorId" INTEGER REFERENCES "${testSchema}"."User"("id"),
+            "body" VARCHAR(2000) NOT NULL,
+            "isInternal" BOOLEAN DEFAULT false
+          );
+
+          CREATE TABLE "${testSchema}"."Attachment" (
+            "id" SERIAL PRIMARY KEY,
+            "ticketId" INTEGER REFERENCES "${testSchema}"."Ticket"("id"),
+            "uploadedById" INTEGER REFERENCES "${testSchema}"."User"("id"),
+            "originalName" TEXT NOT NULL,
+            "storageKey" TEXT UNIQUE NOT NULL,
+            "mimeType" TEXT NOT NULL,
+            "sizeBytes" INTEGER NOT NULL
+          );
+        `);
+
+        // Populate baseline records representing Labs 1–3
+        await executeSqlStatements(`
+          INSERT INTO "${testSchema}"."User" ("id", "email", "fullName", "role", "passwordHash", "isActive")
+          VALUES (1, 'jennifer.anderson@toktickit.com', 'Jennifer Anderson', 'REQUESTER', '$2b$10$hash1', true),
+                 (2, 'david.lee@toktickit.com', 'David Lee', 'IT_STAFF', '$2b$10$hash2', true);
+
+          INSERT INTO "${testSchema}"."Category" ("id", "name")
+          VALUES (1, 'Hardware');
+
+          INSERT INTO "${testSchema}"."Ticket" ("id", "ticketNo", "summary", "description", "requestedPriority", "status", "categoryId", "requesterId")
+          VALUES (101, 'TKT-2026-00001', 'MacBook keyboard sticking', 'Spacebar double press', 'P2_MEDIUM', 'IN_PROGRESS', 1, 1);
+
+          INSERT INTO "${testSchema}"."Comment" ("id", "ticketId", "authorId", "body", "isInternal")
+          VALUES (201, 101, 2, 'Inspected keyboard switch', true);
+
+          INSERT INTO "${testSchema}"."Attachment" ("id", "ticketId", "uploadedById", "originalName", "storageKey", "mimeType", "sizeBytes")
+          VALUES (301, 101, 2, 'diagnostic-report.pdf', 'diag-key-101', 'application/pdf', 12345);
+        `);
+
+        // Capture snapshot before migration
+        const preUsers = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `SELECT * FROM "${testSchema}"."User" ORDER BY id;`
+        );
+        const preTickets = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `SELECT * FROM "${testSchema}"."Ticket" ORDER BY id;`
+        );
+        const preComments = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `SELECT * FROM "${testSchema}"."Comment" ORDER BY id;`
+        );
+        const preAttachments = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `SELECT * FROM "${testSchema}"."Attachment" ORDER BY id;`
+        );
+
+        expect(preUsers.length).toBe(2);
+        expect(preTickets.length).toBe(1);
+        expect(preComments.length).toBe(1);
+        expect(preAttachments.length).toBe(1);
+
+        // 2. Execute migration SQL in the test schema
+        const migrationSql = fs.readFileSync(migrationFilePath, "utf-8");
+        await prisma.$executeRawUnsafe(`SET search_path TO "${testSchema}", public;`);
+        await executeSqlStatements(migrationSql);
+
+        // 3. Verify post-migration state: prove pre-existing data is 100% unaltered
+        const postUsers = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `SELECT * FROM "${testSchema}"."User" ORDER BY id;`
+        );
+        const postTickets = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `SELECT * FROM "${testSchema}"."Ticket" ORDER BY id;`
+        );
+        const postComments = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `SELECT * FROM "${testSchema}"."Comment" ORDER BY id;`
+        );
+        const postAttachments = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `SELECT * FROM "${testSchema}"."Attachment" ORDER BY id;`
+        );
+
+        expect(postUsers).toEqual(preUsers);
+        expect(postTickets).toEqual(preTickets);
+        expect(postComments).toEqual(preComments);
+        expect(postAttachments).toEqual(preAttachments);
+
+        // Verify that ActionTaken table was successfully created in the schema
+        const actionTableCheck = await prisma.$queryRawUnsafe<Array<{ table_name: string }>>(`
+          SELECT table_name FROM information_schema.tables
+          WHERE table_schema = '${testSchema}' AND table_name = 'ActionTaken';
+        `);
+        expect(actionTableCheck.length).toBe(1);
+
+        // Verify foreign key relations work on pre-existing records without error
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO "${testSchema}"."ActionTaken" ("ticketId", "performedById", "description", "result", "timeSpentMinutes", "updatedAt")
+          VALUES (101, 2, 'Replaced keyboard mechanism', 'All keys functioning', 30, CURRENT_TIMESTAMP);
+        `);
+        const actionsInSchema = await prisma.$queryRawUnsafe<Array<{ ticketId: number; performedById: number }>>(`
+          SELECT "ticketId", "performedById" FROM "${testSchema}"."ActionTaken";
+        `);
+        expect(actionsInSchema.length).toBe(1);
+        expect(actionsInSchema[0].ticketId).toBe(101);
+        expect(actionsInSchema[0].performedById).toBe(2);
+      } finally {
+        await prisma.$executeRawUnsafe(`SET search_path TO public;`);
+        await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${testSchema}" CASCADE;`);
       }
-
-      // Verify specific user attributes preserved
-      const kevin = users.find((u) => u.email === "kevin.patel@toktickit.com");
-      expect(kevin?.role).toBe("IT_STAFF");
-      expect(kevin?.isActive).toBe(false);
-
-      const admin = users.find((u) => u.email === "admin@toktickit.com");
-      expect(admin?.role).toBe("ADMINISTRATOR");
-
-      // 2. Verify pre-existing Categories baseline
-      const categories = await prisma.category.findMany({ orderBy: { id: "asc" } });
-      expect(categories.length).toBe(4);
-      const categoryNames = categories.map((c) => c.name);
-      expect(categoryNames).toContain("Account and Access");
-      expect(categoryNames).toContain("Hardware");
-      expect(categoryNames).toContain("Software");
-      expect(categoryNames).toContain("Network");
-
-      // 3. Verify pre-existing RelatedSystems baseline
-      const systems = await prisma.relatedSystem.findMany({ orderBy: { id: "asc" } });
-      expect(systems.length).toBe(6);
-      const systemNames = systems.map((s) => s.name);
-      expect(systemNames).toContain("Corporate Laptop");
-      expect(systemNames).toContain("Campus Wi-Fi");
-      expect(systemNames).toContain("VPN");
-      expect(systemNames).toContain("Email");
-      expect(systemNames).toContain("LEB2 App");
-      expect(systemNames).toContain("Grade Submission App");
-
-      // 4. Verify pre-existing Tickets baseline (TKT-2026-00001 through TKT-2026-00016)
-      const expectedTicketNos = [
-        "TKT-2026-00001",
-        "TKT-2026-00002",
-        "TKT-2026-00003",
-        "TKT-2026-00004",
-        "TKT-2026-00005",
-        "TKT-2026-00006",
-        "TKT-2026-00007",
-        "TKT-2026-00008",
-        "TKT-2026-00009",
-        "TKT-2026-00010",
-        "TKT-2026-00011",
-        "TKT-2026-00012",
-        "TKT-2026-00013",
-        "TKT-2026-00014",
-        "TKT-2026-00015",
-        "TKT-2026-00016",
-      ];
-      const tickets = await prisma.ticket.findMany({
-        where: { ticketNo: { in: expectedTicketNos } },
-        include: { requester: true, category: true },
-      });
-      expect(tickets.length).toBe(16);
-
-      const jennifer = users.find((u) => u.email === "jennifer.anderson@toktickit.com");
-      for (const t of tickets) {
-        expect(t.requesterId).toBe(jennifer!.id);
-        expect(t.category).toBeDefined();
-        expect(t.summary.length).toBeGreaterThan(10);
-      }
-
-      // 5. Verify referential integrity with ActionTaken parent relationship
-      const sampleResolvedTicket = tickets.find((t) => t.ticketNo === "TKT-2026-00001");
-      expect(sampleResolvedTicket).toBeDefined();
-      expect(sampleResolvedTicket!.status).toBe("RESOLVED");
     });
   });
 
