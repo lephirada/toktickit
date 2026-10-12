@@ -7,17 +7,17 @@
 
 ## Pull Requests I authored (reviewed by my partner)
 
-| PR                      | Branch                                  | Reviewer verdict               |
-| :---------------------- | :-------------------------------------- | :----------------------------- |
-| `[PR #50]`              | `feature/18-lab4-spec-docs`             | `[Request Changes -> Approved` |
-| `[PR #51]`              | `feature/19-database-migration-actions` | `[Approved]`                   |
-| `[PR #... Placeholder]` | `feature/20-actions-taken-backend`      | `[Planned]`                    |
-| `[PR #... Placeholder]` | `feature/21-ticket-resolution-gate`     | `[Planned]`                    |
-| `[PR #... Placeholder]` | `feature/22-dashboard-backend-apis`     | `[Planned]`                    |
-| `[PR #... Placeholder]` | `feature/23-actions-taken-ui`           | `[Planned]`                    |
-| `[PR #... Placeholder]` | `feature/24-role-dashboards-ui`         | `[Planned]`                    |
-| `[PR #... Placeholder]` | `feature/25-e2e-regression-hardening`   | `[Planned]`                    |
-| `[PR #... Placeholder]` | `feature/26-final-submission-artifacts` | `[Planned]`                    |
+| PR                      | Branch                                  | Reviewer verdict                |
+| :---------------------- | :-------------------------------------- | :------------------------------ |
+| `[PR #50]`              | `feature/18-lab4-spec-docs`             | `[Request Changes -> Approved]` |
+| `[PR #51]`              | `feature/19-database-migration-actions` | `[Approved]`                    |
+| `[PR #52]`              | `feature/20-actions-taken-backend`      | `[Request Changes]`             |
+| `[PR #... Placeholder]` | `feature/21-ticket-resolution-gate`     | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/22-dashboard-backend-apis`     | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/23-actions-taken-ui`           | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/24-role-dashboards-ui`         | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/25-e2e-regression-hardening`   | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/26-final-submission-artifacts` | `[Planned]`                     |
 
 ---
 
@@ -152,7 +152,12 @@ The existing API test suite provides broad coverage, but I have not independentl
 Recommendation: Request Changes until the concurrency-token guarantee and validation gaps are addressed.
 
 - **How I responded:**
-  > <!-- Placeholder for author response -->
+  > Thanks for the thorough review! I have resolved all feedback:
+  >
+  > - **Concurrency token:** Guaranteed strict token advancement (`nextUpdatedAt > expectedUpdatedAt`) and added a deterministic same-timestamp test using fake timers.
+  > - **Follow-up note validation:** Validated `followUpNote <= 1000` chars on PUT whenever supplied, even if `followUpRequired` is false.
+  > - **Future timestamp:** Enforced strict `performedAt <= now()` validation, eliminating the 60s tolerance window.
+  > - **Evidence consistency:** Reconciled test counts in `evidence.md` to match verified results (31/31 API, 289/289 full suite).
 
 ---
 

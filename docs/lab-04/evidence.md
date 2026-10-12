@@ -11,17 +11,17 @@
 
 ## 1. GitHub Issues & Pull Requests Registry
 
-| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status      | Merge Commit |
-| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :----------------- | :----------- |
-| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`       | `[Merged]`   |
-| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`       | `[Merged]`   |
-| **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[PR Placeholder]`                                 | `[Pending Review]` | `[Planned]`  |
-| **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[PR Placeholder]`                                 | `[Planned]`        | `[Planned]`  |
-| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[PR Placeholder]`                                 | `[Planned]`        | `[Planned]`  |
-| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`        | `[Planned]`  |
-| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`        | `[Planned]`  |
-| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`        | `[Planned]`  |
-| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`        | `[Planned]`  |
+| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status    | Merge Commit |
+| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :--------------- | :----------- |
+| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`     | `[Merged]`   |
+| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`     | `[Merged]`   |
+| **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Under Review]` | `[Planned]`  |
+| **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
 
 ---
 
@@ -207,6 +207,7 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
 #### JSON Response Payloads for Error Envelopes
 
 **1. 403 Forbidden Response Envelope (`FORBIDDEN_ROLE`):**
+
 ```json
 {
   "error": {
@@ -219,6 +220,7 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
 ```
 
 **2. 403 Forbidden Response Envelope (`FORBIDDEN_TICKET_ACCESS`):**
+
 ```json
 {
   "error": {
@@ -231,6 +233,7 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
 ```
 
 **3. 422 Validation Error Response Envelope (`VALIDATION_ERROR`):**
+
 ```json
 {
   "error": {
@@ -243,6 +246,7 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
 ```
 
 **4. 422 Terminal Status Guard Envelope (`TICKET_NOT_IN_WORKABLE_STATE`):**
+
 ```json
 {
   "error": {
@@ -255,6 +259,7 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
 ```
 
 **5. 400 Bad Request Missing Concurrency Token (`MISSING_CONCURRENCY_TOKEN`):**
+
 ```json
 {
   "error": {
@@ -270,6 +275,7 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
 ```
 
 **6. 409 Conflict Stale Action Conflict (`STALE_ACTION_CONFLICT`):**
+
 ```json
 {
   "error": {
