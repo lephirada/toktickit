@@ -52,13 +52,13 @@ To fulfill the Spec-Driven Development (Spec DD) grading criterion proving speci
 ### 3.1 Database Migration & Seed Verification (Issue 19)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/migration-verification.test.ts`
-- **Verification Status:** **Verified (6/6 passing)**
+- **Verification Status:** **Verified (8/8 passing)**
 - **Prisma Migration Status:** `npx prisma migrate status` reports 6 migrations applied (`20261011000000_add_action_taken`), database schema up to date.
 - **Model & Schema Constraints:** `ActionTaken` table verified via `information_schema` with mandatory fields `id`, `ticketId`, `performedById`, `actionDateTime`, `description` (VarChar 2000), `result` (VarChar 2000), `followUpRequired` (Boolean), nullable `followUpNote` / `attachmentNotes`, `timeSpentMinutes`, `actionType`, `performedAt`, `createdAt`, `updatedAt`.
 - **Referential Integrity & User Protection:** `performedById` enforces `ON DELETE RESTRICT` (preserving user deactivation rule BR-15); `ticketId` enforces `ON DELETE CASCADE`.
-- **Seed Script Idempotency:** Verified by running `npm --prefix server run db:seed` twice consecutively with exit code 0 and zero record duplication.
+- **Seed Script Idempotency & Error Handling:** Verified by running `npm --prefix server run db:seed` twice consecutively with exit code 0 and zero record duplication. If migrations have not been applied, the seed script explicitly raises an error and terminates with exit code 1 instead of silently succeeding.
 - **Seed Coverage:** Realistic ticket actions seeded covering 0 actions (unassigned & new tickets), 1 action, and multiple actions across assigned and unassigned tickets.
-- **Data Preservation Assertion:** Comments, attachments, users, categories, systems, and tickets verified intact before and after migration with referential relations confirmed.
+- **Data Preservation Assertion:** Dedicated non-destructive verification proves pre-existing comments, attachments, users, categories, systems, and tickets are 100% unaltered and intact before and after ActionTaken operations.
 
 #### Terminal Execution Logs
 
@@ -105,18 +105,23 @@ $ npm --prefix server run test -- tests/lab-04/migration-verification.test.ts
 > toktickit-server@1.0.0 test
 > vitest run tests/lab-04/migration-verification.test.ts
 
- ✓ tests/lab-04/migration-verification.test.ts (6)
-   ✓ Issue 19 — Database Schema Evolution, ActionTaken Model & Seed Verification (6)
-     ✓ verifies the physical migration SQL file exists and contains table definition and foreign key constraints
-     ✓ verifies the ActionTaken model schema and column constraints via information_schema
-     ✓ verifies the performedById foreign key enforces onDelete: RESTRICT to preserve user deactivation rule BR-15
-     ✓ verifies the ticketId foreign key enforces onDelete: CASCADE
-     ✓ verifies seed data contains realistic tickets covering 0 actions, 1 action, and multiple actions across assigned and unassigned tickets
-     ✓ verifies pre-existing users, tickets, comments, and attachments from Labs 1–3 remain completely intact
+ ✓ tests/lab-04/migration-verification.test.ts (8)
+   ✓ Issue 19 — Database Schema Evolution & Seed Verification (8)
+     ✓ Part 1: Non-Destructive Migration & Pre-existing Data Integrity (5)
+       ✓ verifies the physical migration SQL file exists, only extends schema, and contains zero destructive commands
+       ✓ verifies the ActionTaken model schema and column constraints via information_schema
+       ✓ verifies foreign key constraints enforce onDelete rules (RESTRICT on user, CASCADE on ticket)
+       ✓ verifies all pre-existing tables and columns from Labs 1–3 remain completely intact
+       ✓ proves pre-existing records (Users, Tickets, Comments, Attachments) remain completely intact and unaltered before and after ActionTaken operations
+     ✓ Part 2: Seed Script Execution, Data Coverage & Error Handling (3)
+       ✓ verifies seed data contains realistic tickets covering 0 actions, 1 action, and multiple actions across assigned and unassigned tickets
+       ✓ verifies seed script idempotency across multiple consecutive executions
+       ✓ verifies seed script checks ActionTaken table existence and does not swallow schema absence
 
  Test Files  1 passed (1)
-      Tests  6 passed (6)
-   Duration  752ms
+      Tests  8 passed (8)
+   Start at  13:52:18
+   Duration  660ms
 ```
 
 ### 3.2 Actions Taken & Concurrency Control API Tests (Issue 20)
