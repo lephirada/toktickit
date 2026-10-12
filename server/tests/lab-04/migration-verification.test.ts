@@ -257,10 +257,18 @@ describe("Issue 19 — Database Schema Evolution & Seed Verification", () => {
         expect(preComments.length).toBe(1);
         expect(preAttachments.length).toBe(1);
 
-        // 2. Execute migration SQL in the test schema
+        // 2. Execute migration SQL in the test schema using a dedicated connection transaction
         const migrationSql = fs.readFileSync(migrationFilePath, "utf-8");
-        await prisma.$executeRawUnsafe(`SET search_path TO "${testSchema}", public;`);
-        await executeSqlStatements(migrationSql);
+        await prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL search_path TO "${testSchema}", public;`);
+          const migrationStatements = migrationSql
+            .split(";")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+          for (const stmt of migrationStatements) {
+            await tx.$executeRawUnsafe(stmt);
+          }
+        });
 
         // 3. Verify post-migration state: prove pre-existing data is 100% unaltered
         const postUsers = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
@@ -300,7 +308,6 @@ describe("Issue 19 — Database Schema Evolution & Seed Verification", () => {
         expect(actionsInSchema[0].ticketId).toBe(101);
         expect(actionsInSchema[0].performedById).toBe(2);
       } finally {
-        await prisma.$executeRawUnsafe(`SET search_path TO public;`);
         await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${testSchema}" CASCADE;`);
       }
     });
