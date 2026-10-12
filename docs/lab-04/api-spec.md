@@ -129,9 +129,8 @@ To prevent dirty writes and silent overwrite collisions when multiple IT Staff m
 * Under zero-trust security principles, client applications cannot supply or dictate the identity of the person who performed the work.
 * `performedById` is **strictly derived on the server** from `req.user.id` through the verified session cookie (`toktickit_session`).
 * If a client request includes `performedById`, `performerId`, or `userId` in the body payload:
-  - The API layer ignores the client-supplied value completely, or
-  - If explicitly validated, rejects with `400 Bad Request` (`IMMUTABLE_IDENTITY_OVERRIDE`).
-  - The database insert always uses `req.user.id`.
+  - The API layer ignores any client-supplied identity value completely.
+  - The database insert always uses `req.user.id` (BR-03 authority).
 
 ---
 
@@ -200,12 +199,12 @@ When `status === "RESOLVED"`:
 
 ### 4.1 List Actions Taken (`GET /api/tickets/:id/actions`)
 
-Retrieves chronological actions taken recorded for a parent ticket.
+Retrieves chronological actions taken recorded for a parent ticket, ordered chronologically by `actionDateTime ASC` (with secondary sort by `id ASC`).
 
 * **URL:** `GET /api/tickets/:id/actions`
 * **Access Control:**
-  - `IT_STAFF` / `ADMINISTRATOR`: Can view actions for any ticket.
-  - `REQUESTER`: Can view actions **only** for tickets where `ticket.requesterId === req.user.id`. Attempting to access an unowned ticket returns `404 Not Found` (anti-enumeration).
+  - `IT_STAFF` / `ADMINISTRATOR`: Can view actions across any ticket in the queue.
+  - `REQUESTER`: Can view actions **only** for tickets where `ticket.requesterId === req.user.id`. Attempting to access an unowned ticket returns `403 Forbidden` (`FORBIDDEN_TICKET_ACCESS`).
 * **Response (200 OK):**
   ```json
   {
@@ -214,9 +213,14 @@ Retrieves chronological actions taken recorded for a parent ticket.
         "id": 1,
         "ticketId": 14,
         "description": "Ran diagnostic ping and traceroute tests to gateway; confirmed high latency on switch port.",
+        "result": "Identified physical layer packet loss on port 3.",
         "actionType": "INVESTIGATION",
         "timeSpentMinutes": 30,
+        "followUpRequired": true,
+        "followUpNote": "Schedule port transceiver replacement during maintenance window.",
+        "attachmentNotes": null,
         "performedAt": "2026-10-08T09:15:00.000Z",
+        "actionDateTime": "2026-10-08T09:15:00.000Z",
         "createdAt": "2026-10-08T09:20:00.000Z",
         "updatedAt": "2026-10-08T09:20:00.000Z",
         "performedBy": {
@@ -230,9 +234,14 @@ Retrieves chronological actions taken recorded for a parent ticket.
         "id": 2,
         "ticketId": 14,
         "description": "Re-crimped RJ45 connector and tested cable continuity with fluke tester.",
+        "result": "Cable passed 1Gbps continuity and certified green.",
         "actionType": "REPAIR",
         "timeSpentMinutes": 25,
+        "followUpRequired": false,
+        "followUpNote": null,
+        "attachmentNotes": null,
         "performedAt": "2026-10-08T10:00:00.000Z",
+        "actionDateTime": "2026-10-08T10:00:00.000Z",
         "createdAt": "2026-10-08T10:05:00.000Z",
         "updatedAt": "2026-10-08T10:05:00.000Z",
         "performedBy": {
@@ -246,8 +255,9 @@ Retrieves chronological actions taken recorded for a parent ticket.
   }
   ```
 * **Error Responses:**
-  - `401 Unauthorized`: Session cookie missing or expired.
-  - `404 Not Found`: Ticket does not exist or belongs to another Requester.
+  - `401 Unauthorized`: Session cookie missing, expired, or user deactivated (`ACCOUNT_DEACTIVATED`).
+  - `403 Forbidden`: Authenticated Requester attempting to view actions on a foreign ticket (`FORBIDDEN_TICKET_ACCESS`) or IT Staff with `mustChangePassword: true` (`PASSWORD_CHANGE_REQUIRED`).
+  - `404 Not Found`: Ticket does not exist (`TICKET_NOT_FOUND`).
 
 ---
 
@@ -256,26 +266,33 @@ Retrieves chronological actions taken recorded for a parent ticket.
 Records a new technical action taken on an active ticket.
 
 * **URL:** `POST /api/tickets/:id/actions`
-* **Access Control:** `IT_STAFF`, `ADMINISTRATOR` (`403 Forbidden` for `REQUESTER`)
+* **Access Control:** `IT_STAFF`, `ADMINISTRATOR` (`403 Forbidden` for `REQUESTER` with `FORBIDDEN_ROLE`)
 * **Request Headers:** `Content-Type: application/json`
 * **Request Body:**
   ```json
   {
     "description": "Swapped out defective display cable and verified 4K 60Hz video output on workstation.",
+    "result": "Display signal stable; user tested second monitor with zero flickering.",
     "actionType": "REPAIR",
     "timeSpentMinutes": 20,
+    "followUpRequired": false,
+    "followUpNote": null,
+    "attachmentNotes": null,
     "performedAt": "2026-10-08T11:00:00.000Z"
   }
   ```
 * **Field Constraints:**
-  - `description`: String, required, 10–2,000 characters (trimmed).
-  - `actionType`: String, optional (default `"INVESTIGATION"`), max 50 characters. Allowed values: `"INVESTIGATION"`, `"CONFIGURATION"`, `"REPAIR"`, `"COMMUNICATION"`, `"OTHER"`.
-  - `timeSpentMinutes`: Integer, required, positive integer between 1 and 1,440.
-  - `performedAt`: ISO-8601 string, optional (default: `now()`). **Cannot be in the future** (`performedAt <= now()`). Any timestamp where `performedAt > now()` (future server time) is strictly rejected with `422 Unprocessable Entity` (`VALIDATION_ERROR`).
-  - `performedById`: Disallowed in payload; derived from `req.user.id`.
-* **Business Rule Validation:**
-  - Parent ticket must be in a workable status (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`).
-  - If ticket is in `NEW`, `RESOLVED`, `CLOSED`, or `CANCELLED`, returns `422 Unprocessable Entity` (`TICKET_NOT_IN_WORKABLE_STATE`).
+  - `description`: String, required, 1–2,000 characters (trimmed). Empty or missing description rejected with `422 VALIDATION_ERROR`.
+  - `result`: String, required, 1–2,000 characters (trimmed). Requests omitting `result` or supplying empty/whitespace strings are strictly rejected with `422 VALIDATION_ERROR`.
+  - `followUpRequired`: Boolean, optional (default: `false`). If provided, it **must be a strict boolean** (`true` or `false`). Supplying non-boolean types (e.g. strings like `"invalid"`, numbers, or `null`) is strictly rejected with `422 VALIDATION_ERROR`.
+  - `followUpNote`: String, optional; mandatory (1–1,000 characters trimmed) when `followUpRequired === true`. If `followUpRequired === false`, optional with maximum length 1,000 characters. Exceeding 1,000 characters is rejected with `422 VALIDATION_ERROR`.
+  - `attachmentNotes`: String, optional, max 1,000 characters.
+  - `actionType`: String, optional (default `"INVESTIGATION"`), max 50 characters.
+  - `timeSpentMinutes`: Integer, required, positive integer between 1 and 1,440. Requests omitting `timeSpentMinutes` or supplying `null`, non-integers, or values outside 1–1,440 are strictly rejected with `422 VALIDATION_ERROR`.
+  - `performedAt`: ISO-8601 string, optional (default: `now()`). **Cannot be in the future** (`performedAt <= now()`). Any future timestamp (even slightly by 5 seconds) is strictly rejected with `422 VALIDATION_ERROR`. The server stores both `performedAt` and internal sorting timestamp `actionDateTime`.
+  - `performedById`: Disallowed in client payload; strictly derived from authenticated session (`req.user.id`).
+* **Business Rule Validation (BR-02, ACT-API-06):**
+  - Parent ticket must not be in a terminal status. Attempting to record or modify actions on tickets in terminal status (`CLOSED`, `CANCELLED`) returns `422 Unprocessable Entity` (`TICKET_NOT_IN_WORKABLE_STATE`).
 * **Response (201 Created):**
   ```json
   {
@@ -283,9 +300,14 @@ Records a new technical action taken on an active ticket.
       "id": 3,
       "ticketId": 14,
       "description": "Swapped out defective display cable and verified 4K 60Hz video output on workstation.",
+      "result": "Display signal stable; user tested second monitor with zero flickering.",
       "actionType": "REPAIR",
       "timeSpentMinutes": 20,
+      "followUpRequired": false,
+      "followUpNote": null,
+      "attachmentNotes": null,
       "performedAt": "2026-10-08T11:00:00.000Z",
+      "actionDateTime": "2026-10-08T11:00:00.000Z",
       "createdAt": "2026-10-08T11:02:15.000Z",
       "updatedAt": "2026-10-08T11:02:15.000Z",
       "performedBy": {
@@ -297,35 +319,45 @@ Records a new technical action taken on an active ticket.
     }
   }
   ```
+* **Audit Logging:** Automatically writes a `TicketActivity` entry of type `ACTION_TAKEN_ADDED`.
 * **Error Responses:**
-  - `400 Bad Request`: Invalid JSON payload or client attempts to supply `performedById`.
-  - `401 Unauthorized`: Session missing or expired.
-  - `403 Forbidden`: Authenticated user is a `REQUESTER`.
-  - `404 Not Found`: Ticket not found.
+  - `400 Bad Request`: Invalid JSON payload.
+  - `401 Unauthorized`: Session missing, expired, or user deactivated (`ACCOUNT_DEACTIVATED`).
+  - `403 Forbidden`: Authenticated user is a `REQUESTER` (`FORBIDDEN_ROLE`) or requires password change (`PASSWORD_CHANGE_REQUIRED`).
+  - `404 Not Found`: Ticket not found (`TICKET_NOT_FOUND`).
   - `422 Unprocessable Entity`: Field validation failed (`VALIDATION_ERROR`) or ticket not workable (`TICKET_NOT_IN_WORKABLE_STATE`).
 
 ---
 
 ### 4.3 Update Action Taken (`PUT /api/tickets/:id/actions/:actionId`)
 
-Modifies an existing Action Taken record with optimistic concurrency validation.
+Modifies an existing Action Taken record with atomic optimistic concurrency validation.
 
 * **URL:** `PUT /api/tickets/:id/actions/:actionId`
-* **Access Control:** `IT_STAFF`, `ADMINISTRATOR` (`403 Forbidden` for `REQUESTER`)
+* **Access Control:** `IT_STAFF`, `ADMINISTRATOR` (`403 Forbidden` for `REQUESTER` with `FORBIDDEN_ROLE`)
 * **Request Headers:** `Content-Type: application/json`
 * **Request Body:**
   ```json
   {
     "expectedUpdatedAt": "2026-10-08T11:02:15.000Z",
     "description": "Swapped out defective display cable, verified 4K 60Hz video output, and recalibrated color profile.",
+    "result": "Display output recalibrated and verified.",
     "actionType": "REPAIR",
     "timeSpentMinutes": 35,
+    "followUpRequired": false,
+    "followUpNote": null,
     "performedAt": "2026-10-08T11:00:00.000Z"
   }
   ```
-* **Concurrency Evaluation:**
-  - If `expectedUpdatedAt` is missing $\to$ `400 MISSING_CONCURRENCY_TOKEN`.
-  - If `expectedUpdatedAt` does not match record's `updatedAt` $\to$ `409 STALE_ACTION_CONFLICT`.
+* **Field & Concurrency Constraints:**
+  - `expectedUpdatedAt`: Required ISO-8601 string concurrency token. Missing token returns `400 Bad Request` (`MISSING_CONCURRENCY_TOKEN`).
+  - `followUpRequired`: Boolean, optional. If provided, must be a strict boolean; non-boolean values rejected with `422 VALIDATION_ERROR`.
+  - `followUpNote`: String, optional; validated to $\le 1,000$ characters whenever supplied, regardless of `followUpRequired`. If target `followUpRequired` is `true`, a non-empty `followUpNote` is mandatory.
+  - `timeSpentMinutes`: Integer, optional for updates. If provided, must be a positive integer between 1 and 1,440. Supplying `null`, non-integers, or values outside 1–1,440 is strictly rejected with `422 VALIDATION_ERROR`.
+  - `performedAt`: Optional ISO-8601 string. Strictly past-or-present (`performedAt <= now()`), rejecting future timestamps with `422 VALIDATION_ERROR`.
+  - **Atomic Conditional Update:** Single PostgreSQL conditional query matching `id`, `ticketId`, and `updatedAt: expectedDate`.
+  - **Token Advancement Guarantee:** Server enforces `nextUpdatedAt = new Date(Math.max(Date.now(), expectedDate.getTime() + 1))`, ensuring that `updatedAt` strictly advances beyond `expectedUpdatedAt` even if updates occur within the same millisecond.
+  - If token does not match server `updatedAt` (stale token or concurrent update) $\to$ `409 Conflict` (`STALE_ACTION_CONFLICT`).
 * **Response (200 OK):**
   ```json
   {
@@ -333,9 +365,14 @@ Modifies an existing Action Taken record with optimistic concurrency validation.
       "id": 3,
       "ticketId": 14,
       "description": "Swapped out defective display cable, verified 4K 60Hz video output, and recalibrated color profile.",
+      "result": "Display output recalibrated and verified.",
       "actionType": "REPAIR",
       "timeSpentMinutes": 35,
+      "followUpRequired": false,
+      "followUpNote": null,
+      "attachmentNotes": null,
       "performedAt": "2026-10-08T11:00:00.000Z",
+      "actionDateTime": "2026-10-08T11:00:00.000Z",
       "createdAt": "2026-10-08T11:02:15.000Z",
       "updatedAt": "2026-10-08T11:15:42.000Z",
       "performedBy": {
@@ -347,13 +384,14 @@ Modifies an existing Action Taken record with optimistic concurrency validation.
     }
   }
   ```
+* **Audit Logging:** Automatically writes a `TicketActivity` entry of type `ACTION_TAKEN_UPDATED`.
 * **Error Responses:**
   - `400 Bad Request`: Missing `expectedUpdatedAt` (`MISSING_CONCURRENCY_TOKEN`).
-  - `401 Unauthorized`: Session missing or expired.
-  - `403 Forbidden`: Authenticated user is a `REQUESTER`.
-  - `404 Not Found`: Ticket or Action Taken record does not exist.
+  - `401 Unauthorized`: Session missing, expired, or user deactivated (`ACCOUNT_DEACTIVATED`).
+  - `403 Forbidden`: Authenticated user is a `REQUESTER` (`FORBIDDEN_ROLE`) or requires password change (`PASSWORD_CHANGE_REQUIRED`).
+  - `404 Not Found`: Ticket or Action Taken record does not exist (`TICKET_NOT_FOUND` / `ACTION_NOT_FOUND`).
   - `409 Conflict`: Stale record timestamp mismatch (`STALE_ACTION_CONFLICT`).
-  - `422 Unprocessable Entity`: Validation failure or parent ticket is in closed/terminal status.
+  - `422 Unprocessable Entity`: Validation failure (`VALIDATION_ERROR`) or parent ticket is in closed/terminal status (`TICKET_NOT_IN_WORKABLE_STATE`).
 
 ---
 
@@ -521,13 +559,12 @@ Allows a Requester to indicate that a problem appears solved on their own ticket
 | HTTP Status | Error Code | Description / Trigger Condition | User / Client Remediation |
 | :---: | :--- | :--- | :--- |
 | **400** | `MISSING_CONCURRENCY_TOKEN` | `PUT /api/tickets/:id/actions/:actionId` called without `expectedUpdatedAt`. | Provide `expectedUpdatedAt` from the loaded action record. |
-| **400** | `IMMUTABLE_IDENTITY_OVERRIDE` | Client explicitly sent `performedById` in action creation/update. | Remove client-supplied ID; server populates it automatically. |
 | **401** | `UNAUTHORIZED` | Session cookie is absent, expired, or invalid. | Log in to obtain a valid session cookie. |
-| **403** | `FORBIDDEN` | Caller lacks role permission (e.g. Requester accessing dashboard or creating actions). | Access denied; route restricted to IT Staff/Admin. |
-| **404** | `NOT_FOUND` | Ticket or Action Taken ID does not exist, or unowned Requester ticket. | Verify ID; avoid unauthorized resource access. |
+| **403** | `FORBIDDEN_ROLE` / `FORBIDDEN_TICKET_ACCESS` | Caller lacks role permission (e.g. Requester creating actions) or Requester accessing unowned ticket. | Access denied; route restricted to IT Staff/Admin or ticket owner. |
+| **404** | `TICKET_NOT_FOUND` / `ACTION_NOT_FOUND` | Ticket or Action Taken ID does not exist in the database. | Verify target ID. |
 | **409** | `STALE_ACTION_CONFLICT` | `expectedUpdatedAt` does not match database `updatedAt`. | Reload latest action record and review conflicting changes. |
 | **422** | `RESOLUTION_ACTION_REQUIRED` | Attempting to transition `IN_PROGRESS -> RESOLVED` with `actionsCount === 0`. | Log at least one technical Action Taken before resolving. |
-| **422** | `TICKET_NOT_IN_WORKABLE_STATE` | Attempting to log/edit action on `NEW`, `RESOLVED`, `CLOSED`, or `CANCELLED` ticket. | Claim or reopen ticket before recording work. |
+| **422** | `TICKET_NOT_IN_WORKABLE_STATE` | Attempting to log/edit action on terminal ticket (`CLOSED` or `CANCELLED`). | Reopen ticket before recording work. |
 | **422** | `INVALID_STATUS_TRANSITION` | Transition violates structural state machine in `shared/ticketStateMachine.ts`. | Follow allowed lifecycle transition sequence. |
-| **422** | `VALIDATION_ERROR` | Description $< 10$ or $> 2000$ chars; time spent $< 1$ or $> 1440$; future timestamp. | Correct highlighted form fields according to constraints. |
+| **422** | `VALIDATION_ERROR` | Field validation failed (missing/empty result, missing or invalid timeSpentMinutes, non-boolean followUpRequired, invalid note length, future timestamp). | Correct highlighted form fields according to constraints. |
 | **500** | `INTERNAL_SERVER_ERROR` | Unexpected server or database exception. | Review server logs and retry request. |

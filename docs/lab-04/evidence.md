@@ -1,26 +1,27 @@
-# TokTickIT — Sprint 4 Verification & Evidence Artifacts (Issues 18–25)
+# TokTickIT — Sprint 4 Verification & Evidence Artifacts (Issues 18–26)
 
 **Course:** CPE 334 Software Engineering Laboratory  
 **Sprint:** 4 — Parent-Child Work Structures, Resolution Gates, Operational Dashboards, and Regression Traceability  
 **Status:** In Progress — Baseline Specifications Established (Issue 18)
 
 > [!NOTE]
-> Per project guidelines, all test results, screenshots, and verification artifacts documented herein are authentic and un-fabricated. This living document maintains the verified evidence inventory for Sprint 4 across Issues 18 through 25.
+> Per project guidelines, all test results, screenshots, and verification artifacts documented herein are authentic and un-fabricated. This living document maintains the verified evidence inventory for Sprint 4 across Issues 18 through 26.
 
 ---
 
 ## 1. GitHub Issues & Pull Requests Registry
 
-| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status | Merge Commit |
-| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :------------ | :----------- |
-| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`  | `[Merged]`   |
-| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`  | `[Merged]`   |
-| **Issue 20** | `feature/20-actions-taken-api`          | Actions Taken REST APIs & Concurrency Control   | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
-| **Issue 21** | `feature/21-resolution-gate`            | Server-Enforced Resolution Gate & State Machine | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
-| **Issue 22** | `feature/22-dashboard-api`              | Operational Dashboard & Analytics API           | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
-| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
-| **Issue 24** | `feature/24-dashboard-ui`               | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
-| **Issue 25** | `feature/25-integration-e2e`            | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status    | Merge Commit |
+| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :--------------- | :----------- |
+| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`     | `[Merged]`   |
+| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`     | `[Merged]`   |
+| **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Under Review]` | `[Planned]`  |
+| **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
 
 ---
 
@@ -52,7 +53,7 @@ To fulfill the Spec-Driven Development (Spec DD) grading criterion proving speci
 ### 3.1 Database Migration & Seed Verification (Issue 19)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/migration-verification.test.ts`
-- **Verification Status:** **Verified (8/8 passing, 258/258 full suite passing)**
+- **Verification Status:** **Verified (8/8 passing, 295/295 full suite passing)**
 - **Prisma Migration Status:** `npx --prefix server prisma migrate status` reports 6 migrations applied (`20261011000000_add_action_taken`), database schema up to date.
 - **Model & Schema Constraints:** `ActionTaken` table verified via `information_schema` with mandatory fields `id`, `ticketId`, `performedById`, `actionDateTime`, `description` (VarChar 2000), `result` (VarChar 2000), `followUpRequired` (Boolean), nullable `followUpNote` (VarChar 1000) / `attachmentNotes` (VarChar 1000), `timeSpentMinutes`, `actionType` (VarChar 50), `performedAt`, `createdAt`, `updatedAt`.
 - **Referential Integrity & User Protection:** `performedById` enforces `ON DELETE RESTRICT` (preserving user deactivation rule BR-15); `ticketId` enforces `ON DELETE CASCADE`.
@@ -134,16 +135,214 @@ $ npm --prefix server run test
 > toktickit-server@1.0.0 test
 > vitest run
 
- Test Files  17 passed (17)
-      Tests  258 passed (258)
-   Start at  15:07:07
-   Duration  17.84s
+ Test Files  18 passed (18)
+      Tests  295 passed (295)
+   Start at  00:45:11
+   Duration  12.82s
 ```
 
 ### 3.2 Actions Taken & Concurrency Control API Tests (Issue 20)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts`
-- **Status:** Pending implementation in Issue 20.
+- **Verification Status:** **Verified (37/37 passing, 295/295 full server suite passing)**
+- **Endpoints Implemented & Hardened:**
+  - `GET /api/tickets/:ticketId/actions`: Chronological listing (`actionDateTime ASC`), requester ownership scoping, anti-leakage 403 on foreign ticket, IT Staff queue access across tickets.
+  - `POST /api/tickets/:ticketId/actions`: IT Staff / Admin action recording, server-derived `performedById = req.user.id`, terminal ticket guard (`CLOSED`, `CANCELLED` $\to$ 422), mandatory `result` field validation (1–2,000 characters, rejecting missing or empty submissions with 422 `VALIDATION_ERROR`), strict `followUpRequired` boolean validation (rejecting non-booleans with 422), strict `followUpNote` string/null validation (rejecting non-string types with 422), mandatory `followUpNote` when `followUpRequired=true`, mandatory `timeSpentMinutes` integer validation (1–1440 min, rejecting omitted, null, or invalid values with 422 `VALIDATION_ERROR`), strict future timestamp rejection (`performedAt <= now()` without any 60-second tolerance $\to$ 422 `VALIDATION_ERROR`), `ACTION_TAKEN_ADDED` audit activity logging.
+  - `PUT /api/tickets/:ticketId/actions/:actionId`: True atomic conditional database update (`tx.actionTaken.updateMany({ where: { id: actionId, ticketId, updatedAt: expectedDate } })`) checking `id` and `expectedUpdatedAt` in a single database query to prevent TOCTOU race conditions. Concurrency token strictly advances on every successful update (`nextUpdatedAt = new Date(Math.max(Date.now(), expectedDate.getTime() + 1))`), guaranteeing token change even if executed within the same millisecond and preventing token replay. Strict field validation on updates (validating `followUpRequired` as boolean, `followUpNote <= 1000 chars`, validating `timeSpentMinutes` 1–1440 min while rejecting null, allowing omission for partial update, and strictly rejecting future timestamps $\to$ 422). If no row matches, returns 409 `STALE_ACTION_CONFLICT` with current record state and fresh `currentUpdatedAt`.
+  - **IT Staff Access Scope (Aligned with Lab 3):** IT Staff can collaborate and record actions on any workable ticket in the queue (unassigned or assigned to peer staff). Inactive staff accounts (`isActive: false`) reject with 401 `ACCOUNT_DEACTIVATED`, and accounts requiring password reset (`mustChangePassword: true`) reject with 403 `PASSWORD_CHANGE_REQUIRED`.
+
+#### Terminal Execution Logs (Executed from Project Root)
+
+```text
+$ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
+> toktickit-server@1.0.0 test
+> vitest run tests/lab-04/actions-taken.api.test.ts
+
+ ✓ tests/lab-04/actions-taken.api.test.ts (37)
+   ✓ Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts) (37)
+     ✓ ACT-API-01: Valid Action Creation & Server-Derived Performer Identity (2)
+       ✓ creates an action successfully when called by IT Staff and derives performedById from session
+       ✓ allows Administrator to create an action taken with session-derived identity
+     ✓ ACT-API-02: Rejection of Requester Creation Attempts (2)
+       ✓ rejects action creation by Requester with 403 Forbidden even on their own ticket
+       ✓ rejects unauthenticated caller with 401 Unauthorized
+     ✓ ACT-API-03: Field Validations & Follow-up Requirement (15)
+       ✓ rejects with 422 VALIDATION_ERROR when result is omitted or empty
+       ✓ rejects with 422 VALIDATION_ERROR when followUpRequired=true and followUpNote is missing
+       ✓ rejects with 422 VALIDATION_ERROR when followUpRequired=true and followUpNote is empty whitespace
+       ✓ accepts valid followUpNote when followUpRequired=true
+       ✓ rejects with 422 when description is empty or missing
+       ✓ rejects with 422 when timeSpentMinutes is non-positive or exceeds 1440
+       ✓ rejects with 422 when performedAt is set in the future (even slightly by a few seconds)
+       ✓ rejects PUT with 422 when followUpNote exceeds 1000 characters even if followUpRequired is false
+       ✓ rejects PUT with 422 when performedAt is set in the near future
+       ✓ rejects POST with 422 VALIDATION_ERROR when followUpRequired is non-boolean ('invalid', 123, null) and creates no record
+       ✓ rejects PUT with 422 VALIDATION_ERROR when followUpRequired is non-boolean ('invalid', 123, null) and does not modify record or updatedAt
+       ✓ rejects POST with 422 VALIDATION_ERROR when followUpNote is non-string (number, object) even if followUpRequired is false and creates no record
+       ✓ rejects POST with 422 VALIDATION_ERROR when timeSpentMinutes is missing or null and creates no record
+       ✓ rejects PUT with 422 VALIDATION_ERROR when timeSpentMinutes is null or invalid and preserves database state
+       ✓ allows PUT to omit timeSpentMinutes and preserves original timeSpentMinutes
+     ✓ ACT-API-04: Requester Query Boundaries & Role Access Scoping (8)
+       ✓ allows Requester to view actions for their owned ticket (200 OK)
+       ✓ rejects Requester with 403 Forbidden when attempting to view actions for another user's ticket
+       ✓ returns 404 Not Found for non-existent ticket ID
+       ✓ allows IT Staff to view actions for any ticket in the queue
+       ✓ returns actions sorted chronologically by actionDateTime ASC
+       ✓ rejects inactive IT Staff with 401 Unauthorized across actions endpoints (Lab 3 boundary)
+       ✓ rejects IT Staff with mustChangePassword=true with 403 PASSWORD_CHANGE_REQUIRED (Lab 3 boundary)
+       ✓ allows IT Staff to collaborate across ticket boundaries (unassigned or assigned to peer staff)
+     ✓ ACT-API-05: Optimistic Concurrency Control (expectedUpdatedAt) (7)
+       ✓ returns 400 Bad Request when expectedUpdatedAt is missing from PUT payload
+       ✓ returns 409 Conflict with STALE_ACTION_CONFLICT when expectedUpdatedAt does not match server updatedAt
+       ✓ successfully updates action and refreshes updatedAt when expectedUpdatedAt matches server timestamp
+       ✓ proves ATOMIC concurrency: concurrent edits with same expectedUpdatedAt allow exactly one to succeed with 200 and one to fail with 409 STALE_ACTION_CONFLICT
+       ✓ guarantees concurrency token advances strictly on every update, preventing replay of identical expectedUpdatedAt token
+       ✓ deterministically guarantees token advancement and replay rejection when system clock equals expectedUpdatedAt
+       ✓ rejects PUT by Requester with 403 Forbidden
+     ✓ ACT-API-06: Terminal Status Check (CLOSED / CANCELLED Protection) (3)
+       ✓ rejects action creation on CLOSED ticket with 422 TICKET_NOT_IN_WORKABLE_STATE
+       ✓ rejects action creation on CANCELLED ticket with 422 TICKET_NOT_IN_WORKABLE_STATE
+       ✓ rejects action update on CLOSED ticket with 422 TICKET_NOT_IN_WORKABLE_STATE
+
+ Test Files  1 passed (1)
+      Tests  37 passed (37)
+   Start at  01:00:31
+   Duration  901ms
+```
+
+#### JSON Response Payloads for Error Envelopes
+
+**1. 403 Forbidden Response Envelope (`FORBIDDEN_ROLE`):**
+
+```json
+{
+  "error": {
+    "code": "FORBIDDEN_ROLE",
+    "message": "Forbidden: Requesters cannot record actions taken.",
+    "correlationId": "req_8a3f910b2c1d",
+    "details": {}
+  }
+}
+```
+
+**2. 403 Forbidden Response Envelope (`FORBIDDEN_TICKET_ACCESS`):**
+
+```json
+{
+  "error": {
+    "code": "FORBIDDEN_TICKET_ACCESS",
+    "message": "Forbidden: You do not have permission to access actions for this ticket.",
+    "correlationId": "req_7c8d9e0f1a2b",
+    "details": {}
+  }
+}
+```
+
+**3. 422 Validation Error Response Envelope (`VALIDATION_ERROR`):**
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Follow-up note is required when follow-up is requested.",
+    "correlationId": "req_1d2e3f4a5b6c",
+    "details": {}
+  }
+}
+```
+
+**4. 422 Terminal Status Guard Envelope (`TICKET_NOT_IN_WORKABLE_STATE`):**
+
+```json
+{
+  "error": {
+    "code": "TICKET_NOT_IN_WORKABLE_STATE",
+    "message": "Cannot record actions taken on tickets in terminal status (CLOSED).",
+    "correlationId": "req_5e6f7a8b9c0d",
+    "details": {}
+  }
+}
+```
+
+**5. 400 Bad Request Missing Concurrency Token (`MISSING_CONCURRENCY_TOKEN`):**
+
+```json
+{
+  "error": {
+    "code": "MISSING_CONCURRENCY_TOKEN",
+    "message": "The 'expectedUpdatedAt' concurrency token is required to update an action record.",
+    "correlationId": "req_9f8e7d6c5b4a",
+    "details": {
+      "actionId": 12,
+      "requiredField": "expectedUpdatedAt"
+    }
+  }
+}
+```
+
+**6. 409 Conflict Stale Action Conflict (`STALE_ACTION_CONFLICT`):**
+
+```json
+{
+  "error": {
+    "code": "STALE_ACTION_CONFLICT",
+    "message": "The action record has been modified by another user since you loaded it. Please reload the latest version before applying changes.",
+    "correlationId": "req_4b5c6d7e8f9a",
+    "details": {
+      "actionId": 12,
+      "providedUpdatedAt": "2020-01-01T00:00:00.000Z",
+      "currentUpdatedAt": "2026-10-12T13:41:12.890Z",
+      "currentRecord": {
+        "id": 12,
+        "description": "Initial action entry for concurrency verification.",
+        "actionType": "INVESTIGATION",
+        "result": "Initial diagnostic complete.",
+        "timeSpentMinutes": 30,
+        "performedAt": "2026-10-12T13:41:12.890Z",
+        "updatedAt": "2026-10-12T13:41:12.890Z",
+        "performedBy": {
+          "id": 4,
+          "fullName": "IT Staff Morgan",
+          "email": "actions_staff_1760276472000@toktickit.com",
+          "role": "IT_STAFF"
+        }
+      }
+    }
+  }
+}
+```
+
+**Log 2: Full Server Test Suite Execution (295/295 Passing — Zero Regressions)**
+
+```text
+$ npm --prefix server run test
+> toktickit-server@1.0.0 test
+> vitest run
+
+ ✓ tests/lab-01/categories.test.ts (1)
+ ✓ tests/lab-01/health.test.ts (1)
+ ✓ tests/lab-02/attachments.api.test.ts (7)
+ ✓ tests/lab-02/create-ticket.api.test.ts (13)
+ ✓ tests/lab-02/my-tickets.api.test.ts (17)
+ ✓ tests/lab-02/requesters.test.ts (5)
+ ✓ tests/lab-02/ticket-detail.api.test.ts (20)
+ ✓ tests/lab-04/actions-taken.api.test.ts (37)
+ ✓ tests/lab-04/migration-verification.test.ts (8)
+ ✓ tests/lab-03/auth.api.test.ts (20) 578ms
+ ✓ tests/lab-03/authorization.api.test.ts (28)
+ ✓ tests/lab-03/comments-notes.api.test.ts (16)
+ ✓ tests/lab-03/jwt-password.test.ts (9)
+ ✓ tests/lab-03/migration-verification.test.ts (3) 1848ms
+ ✓ tests/lab-03/migration.test.ts (3) 1815ms
+ ✓ tests/lab-03/staff-queue.api.test.ts (23)
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (54) 455ms
+ ✓ tests/lab-03/users-admin.api.test.ts (30) 1383ms
+
+ Test Files  18 passed (18)
+      Tests  295 passed (295)
+   Start at  00:45:11
+   Duration  12.82s
+```
 
 ### 3.3 Resolution Gate Boundary Suite (Issue 21)
 
