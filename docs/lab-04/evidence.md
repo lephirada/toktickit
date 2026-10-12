@@ -53,7 +53,7 @@ To fulfill the Spec-Driven Development (Spec DD) grading criterion proving speci
 ### 3.1 Database Migration & Seed Verification (Issue 19)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/migration-verification.test.ts`
-- **Verification Status:** **Verified (8/8 passing, 280/280 full suite passing at Issue 19 completion; 295/295 in current full suite)**
+- **Verification Status:** **Verified (8/8 passing, 295/295 full suite passing)**
 - **Prisma Migration Status:** `npx --prefix server prisma migrate status` reports 6 migrations applied (`20261011000000_add_action_taken`), database schema up to date.
 - **Model & Schema Constraints:** `ActionTaken` table verified via `information_schema` with mandatory fields `id`, `ticketId`, `performedById`, `actionDateTime`, `description` (VarChar 2000), `result` (VarChar 2000), `followUpRequired` (Boolean), nullable `followUpNote` (VarChar 1000) / `attachmentNotes` (VarChar 1000), `timeSpentMinutes`, `actionType` (VarChar 50), `performedAt`, `createdAt`, `updatedAt`.
 - **Referential Integrity & User Protection:** `performedById` enforces `ON DELETE RESTRICT` (preserving user deactivation rule BR-15); `ticketId` enforces `ON DELETE CASCADE`.
@@ -136,9 +136,9 @@ $ npm --prefix server run test
 > vitest run
 
  Test Files  18 passed (18)
-      Tests  280 passed (280)
-   Start at  20:41:31
-   Duration  19.37s
+      Tests  295 passed (295)
+   Start at  00:45:11
+   Duration  12.82s
 ```
 
 ### 3.2 Actions Taken & Concurrency Control API Tests (Issue 20)
@@ -158,15 +158,15 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
 > toktickit-server@1.0.0 test
 > vitest run tests/lab-04/actions-taken.api.test.ts
 
- ✓ tests/lab-04/actions-taken.api.test.ts (34)
-   ✓ Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts) (34)
+ ✓ tests/lab-04/actions-taken.api.test.ts (37)
+   ✓ Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts) (37)
      ✓ ACT-API-01: Valid Action Creation & Server-Derived Performer Identity (2)
        ✓ creates an action successfully when called by IT Staff and derives performedById from session
        ✓ allows Administrator to create an action taken with session-derived identity
      ✓ ACT-API-02: Rejection of Requester Creation Attempts (2)
        ✓ rejects action creation by Requester with 403 Forbidden even on their own ticket
        ✓ rejects unauthenticated caller with 401 Unauthorized
-     ✓ ACT-API-03: Field Validations & Follow-up Requirement (12)
+     ✓ ACT-API-03: Field Validations & Follow-up Requirement (15)
        ✓ rejects with 422 VALIDATION_ERROR when result is omitted or empty
        ✓ rejects with 422 VALIDATION_ERROR when followUpRequired=true and followUpNote is missing
        ✓ rejects with 422 VALIDATION_ERROR when followUpRequired=true and followUpNote is empty whitespace
@@ -205,9 +205,9 @@ $ npm --prefix server run test -- tests/lab-04/actions-taken.api.test.ts
        ✓ rejects action update on CLOSED ticket with 422 TICKET_NOT_IN_WORKABLE_STATE
 
  Test Files  1 passed (1)
-      Tests  34 passed (34)
-   Start at  00:10:30
-   Duration  885ms
+      Tests  37 passed (37)
+   Start at  01:00:31
+   Duration  901ms
 ```
 
 #### JSON Response Payloads for Error Envelopes
