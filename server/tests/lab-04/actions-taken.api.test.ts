@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
@@ -874,6 +874,66 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
       expect(new Date(res2.body.data.updatedAt).getTime()).toBeGreaterThan(
         new Date(updatedToken).getTime()
       );
+    });
+
+    it("deterministically guarantees token advancement and replay rejection when system clock equals expectedUpdatedAt", async () => {
+      // 1. Create a dedicated action record
+      const action = await prisma.actionTaken.create({
+        data: {
+          ticketId: activeTicketOwner.id,
+          performedById: staffUser.id,
+          description: "Action for same-clock timestamp collision test.",
+          result: "Baseline result.",
+          timeSpentMinutes: 20,
+        },
+      });
+
+      const originalToken = action.updatedAt.toISOString();
+      const originalTimeMs = action.updatedAt.getTime();
+
+      // Mock system clock to be EXACTLY equal to the existing action's expectedUpdatedAt timestamp
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(originalTimeMs));
+
+      try {
+        // 2. Submit valid PUT update using the original expectedUpdatedAt while Date.now() === originalTimeMs
+        const res1 = await request(app)
+          .put(`/api/tickets/${activeTicketOwner.id}/actions/${action.id}`)
+          .set("Cookie", cookieStaff)
+          .send({
+            expectedUpdatedAt: originalToken,
+            description: "Updated while system clock matches expectedUpdatedAt exactly.",
+          });
+
+        expect(res1.status).toBe(200);
+        expect(res1.body.data).toBeDefined();
+
+        const returnedUpdatedAt = res1.body.data.updatedAt;
+        const returnedTimeMs = new Date(returnedUpdatedAt).getTime();
+
+        // 3. Assert returned updatedAt is strictly later than the original timestamp
+        expect(returnedTimeMs).toBeGreaterThan(originalTimeMs);
+        expect(returnedTimeMs).toBe(originalTimeMs + 1);
+
+        // 4. Replay the same PUT request using the original expectedUpdatedAt
+        const resReplay = await request(app)
+          .put(`/api/tickets/${activeTicketOwner.id}/actions/${action.id}`)
+          .set("Cookie", cookieStaff)
+          .send({
+            expectedUpdatedAt: originalToken,
+            description: "Replayed update attempt with stale original expectedUpdatedAt.",
+          });
+
+        // 5. Assert replay fails with 409 and error code STALE_ACTION_CONFLICT
+        expect(resReplay.status).toBe(409);
+        expect(resReplay.body.error).toBeDefined();
+        expect(resReplay.body.error.code).toBe("STALE_ACTION_CONFLICT");
+        expect(resReplay.body.error.details.providedUpdatedAt).toBe(originalToken);
+        expect(resReplay.body.error.details.currentUpdatedAt).toBe(returnedUpdatedAt);
+      } finally {
+        // Always restore real timers so other tests are not affected
+        vi.useRealTimers();
+      }
     });
 
     it("rejects PUT by Requester with 403 Forbidden", async () => {
