@@ -3158,9 +3158,23 @@ app.post(
         return;
       }
 
-      // 3. Follow-up validation: followUpNote required if followUpRequired is true
-      const isFollowUp =
-        followUpRequired === true || followUpRequired === "true";
+      // 3. Follow-up validation: followUpRequired must be boolean if provided; followUpNote required if followUpRequired is true
+      if (
+        followUpRequired !== undefined &&
+        typeof followUpRequired !== "boolean"
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "followUpRequired must be a boolean."
+            )
+          );
+        return;
+      }
+
+      const isFollowUp = followUpRequired === true;
       if (isFollowUp) {
         if (
           !followUpNote ||
@@ -3492,6 +3506,21 @@ app.put(
       }
 
       if (
+        followUpRequired !== undefined &&
+        typeof followUpRequired !== "boolean"
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "followUpRequired must be a boolean."
+            )
+          );
+        return;
+      }
+
+      if (
         followUpNote !== undefined &&
         followUpNote !== null &&
         (typeof followUpNote !== "string" ||
@@ -3636,7 +3665,7 @@ app.put(
 
         const targetFollowUp =
           followUpRequired !== undefined
-            ? followUpRequired === true || followUpRequired === "true"
+            ? followUpRequired === true
             : existingAction.followUpRequired;
 
         const targetNote =

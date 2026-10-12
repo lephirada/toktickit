@@ -524,6 +524,127 @@ describe("Issue 20 — Actions Taken REST API Suite (actions-taken.api.test.ts)"
       expect(res.body.error.code).toBe("VALIDATION_ERROR");
       expect(res.body.error.message).toContain("cannot be in the future");
     });
+
+    it("rejects POST with 422 VALIDATION_ERROR when followUpRequired is non-boolean ('invalid', 123, null) and creates no record", async () => {
+      const initialCount = await prisma.actionTaken.count({
+        where: { ticketId: activeTicketOwner.id },
+      });
+
+      // 1. String "invalid"
+      const resString = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action with invalid string followUpRequired.",
+          result: "Diagnostic test.",
+          followUpRequired: "invalid",
+        });
+
+      expect(resString.status).toBe(422);
+      expect(resString.body.error).toBeDefined();
+      expect(resString.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resString.body.error.message).toContain("followUpRequired must be a boolean");
+
+      // 2. Number 123
+      const resNumber = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action with numeric followUpRequired.",
+          result: "Diagnostic test.",
+          followUpRequired: 123,
+        });
+
+      expect(resNumber.status).toBe(422);
+      expect(resNumber.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resNumber.body.error.message).toContain("followUpRequired must be a boolean");
+
+      // 3. Null value
+      const resNull = await request(app)
+        .post(`/api/tickets/${activeTicketOwner.id}/actions`)
+        .set("Cookie", cookieStaff)
+        .send({
+          description: "Action with null followUpRequired.",
+          result: "Diagnostic test.",
+          followUpRequired: null,
+        });
+
+      expect(resNull.status).toBe(422);
+      expect(resNull.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resNull.body.error.message).toContain("followUpRequired must be a boolean");
+
+      // Assert zero new action records created in the database
+      const finalCount = await prisma.actionTaken.count({
+        where: { ticketId: activeTicketOwner.id },
+      });
+      expect(finalCount).toBe(initialCount);
+    });
+
+    it("rejects PUT with 422 VALIDATION_ERROR when followUpRequired is non-boolean ('invalid', 123, null) and does not modify record or updatedAt", async () => {
+      const testAction = await prisma.actionTaken.create({
+        data: {
+          ticketId: activeTicketOwner.id,
+          performedById: staffUser.id,
+          description: "Action for PUT followUpRequired type boundary test.",
+          result: "Initial result.",
+          followUpRequired: false,
+          timeSpentMinutes: 20,
+        },
+      });
+
+      const originalToken = testAction.updatedAt.toISOString();
+
+      // 1. String "invalid"
+      const resString = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${testAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: originalToken,
+          followUpRequired: "invalid",
+          description: "Attempted illegal modification.",
+        });
+
+      expect(resString.status).toBe(422);
+      expect(resString.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resString.body.error.message).toContain("followUpRequired must be a boolean");
+
+      // 2. Number 123
+      const resNumber = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${testAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: originalToken,
+          followUpRequired: 123,
+          description: "Attempted illegal modification.",
+        });
+
+      expect(resNumber.status).toBe(422);
+      expect(resNumber.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resNumber.body.error.message).toContain("followUpRequired must be a boolean");
+
+      // 3. Null value
+      const resNull = await request(app)
+        .put(`/api/tickets/${activeTicketOwner.id}/actions/${testAction.id}`)
+        .set("Cookie", cookieStaff)
+        .send({
+          expectedUpdatedAt: originalToken,
+          followUpRequired: null,
+          description: "Attempted illegal modification.",
+        });
+
+      expect(resNull.status).toBe(422);
+      expect(resNull.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resNull.body.error.message).toContain("followUpRequired must be a boolean");
+
+      // Verify the record in DB was untouched: followUpRequired is still false and updatedAt is unchanged
+      const persisted = await prisma.actionTaken.findUnique({
+        where: { id: testAction.id },
+      });
+      expect(persisted).toBeDefined();
+      expect(persisted!.followUpRequired).toBe(false);
+      expect(persisted!.description).toBe("Action for PUT followUpRequired type boundary test.");
+      expect(persisted!.updatedAt.toISOString()).toBe(originalToken);
+    });
   });
 
   // =========================================================================
