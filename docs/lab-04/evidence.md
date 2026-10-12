@@ -112,7 +112,7 @@ $ npm --prefix server run test -- tests/lab-04/migration-verification.test.ts
        ✓ verifies the ActionTaken model schema and column constraints via information_schema
        ✓ verifies foreign key constraints enforce onDelete rules (RESTRICT on user, CASCADE on ticket)
        ✓ verifies all pre-existing tables and columns from Labs 1–3 remain completely intact
-       ✓ proves pre-existing records (Users, Tickets, Comments, Attachments) remain completely intact and unaltered before and after ActionTaken operations
+       ✓ verifies pre-existing baseline records (Users, Categories, Systems, Tickets) from Labs 1–3 remain completely intact without modification or loss
      ✓ Part 2: Seed Script Execution, Data Coverage & Error Handling (3)
        ✓ verifies seed data contains realistic tickets covering 0 actions, 1 action, and multiple actions across assigned and unassigned tickets
        ✓ verifies seed script idempotency across multiple consecutive executions

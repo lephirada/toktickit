@@ -444,8 +444,18 @@ export async function seedDatabase() {
     console.log(`Successfully seeded ${seedTickets.length} realistic tickets for Jennifer Anderson.`);
 
     // 5. Seed Actions Taken idempotently (Issue 19)
-    if (david && alex && chris) {
-      // Ensure ActionTaken table exists in the database schema before attempting to seed actions.
+    if (!david || !alex || !chris) {
+      const missingStaff: string[] = [];
+      if (!david) missingStaff.push("David Lee (david.lee@toktickit.com)");
+      if (!alex) missingStaff.push("Alex Morgan (alex.morgan@toktickit.com)");
+      if (!chris) missingStaff.push("Chris Taylor (chris.taylor@toktickit.com)");
+
+      throw new Error(
+        `Cannot seed ActionTaken records: Required IT Staff users are missing from database: ${missingStaff.join(", ")}. Ensure user seeds run first.`
+      );
+    }
+
+    // Ensure ActionTaken table exists in the database schema before attempting to seed actions.
       // If migrations have not been run, fail explicitly to prevent false positive seed success.
       const tableCheck = await prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(`
         SELECT EXISTS (
@@ -766,7 +776,6 @@ export async function seedDatabase() {
         }
       }
       console.log(`Successfully seeded ${seedActions.length} realistic actions taken across assigned and unassigned tickets.`);
-    }
   }
 }
 
