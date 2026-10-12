@@ -211,6 +211,11 @@ export async function seedDatabase() {
     const leb2 = await prisma.relatedSystem.findFirst({ where: { name: "LEB2 App" } });
     const grade = await prisma.relatedSystem.findFirst({ where: { name: "Grade Submission App" } });
 
+    // Fetch IT Staff performers
+    const david = await prisma.user.findUnique({ where: { email: "david.lee@toktickit.com" } });
+    const alex = await prisma.user.findUnique({ where: { email: "alex.morgan@toktickit.com" } });
+    const chris = await prisma.user.findUnique({ where: { email: "chris.taylor@toktickit.com" } });
+
     const seedTickets = [
       {
         ticketNo: "TKT-2026-00001",
@@ -220,6 +225,8 @@ export async function seedDatabase() {
         status: TicketStatus.RESOLVED,
         categoryId: hwCat!,
         relatedSystemId: laptop?.id,
+        ownerId: david?.id,
+        resolutionSummary: "Replaced membrane switch under spacebar and verified key actuation.",
         createdAt: new Date("2026-02-01T09:15:00Z"),
       },
       {
@@ -230,6 +237,8 @@ export async function seedDatabase() {
         status: TicketStatus.IN_PROGRESS,
         categoryId: netCat!,
         relatedSystemId: wifi?.id,
+        ownerId: chris?.id,
+        resolutionSummary: null,
         createdAt: new Date("2026-02-03T10:30:00Z"),
       },
       {
@@ -240,6 +249,8 @@ export async function seedDatabase() {
         status: TicketStatus.NEW,
         categoryId: netCat!,
         relatedSystemId: vpn?.id,
+        ownerId: null,
+        resolutionSummary: null,
         createdAt: new Date("2026-02-05T08:00:00Z"),
       },
       {
@@ -250,6 +261,8 @@ export async function seedDatabase() {
         status: TicketStatus.CLOSED,
         categoryId: accCat!,
         relatedSystemId: email?.id,
+        ownerId: alex?.id,
+        resolutionSummary: "Archived older email items to cloud archive; mailbox utilization normalized.",
         createdAt: new Date("2026-02-07T14:20:00Z"),
       },
       {
@@ -260,6 +273,8 @@ export async function seedDatabase() {
         status: TicketStatus.IN_PROGRESS,
         categoryId: hwCat!,
         relatedSystemId: laptop?.id,
+        ownerId: david?.id,
+        resolutionSummary: null,
         createdAt: new Date("2026-02-10T11:00:00Z"),
       },
       {
@@ -270,6 +285,8 @@ export async function seedDatabase() {
         status: TicketStatus.OPEN,
         categoryId: swCat!,
         relatedSystemId: leb2?.id,
+        ownerId: null,
+        resolutionSummary: null,
         createdAt: new Date("2026-02-12T16:45:00Z"),
       },
       {
@@ -280,6 +297,8 @@ export async function seedDatabase() {
         status: TicketStatus.WAITING_FOR_REQUESTER,
         categoryId: swCat!,
         relatedSystemId: grade?.id,
+        ownerId: chris?.id,
+        resolutionSummary: null,
         createdAt: new Date("2026-02-14T09:00:00Z"),
       },
       {
@@ -290,6 +309,8 @@ export async function seedDatabase() {
         status: TicketStatus.RESOLVED,
         categoryId: netCat!,
         relatedSystemId: wifi?.id,
+        ownerId: chris?.id,
+        resolutionSummary: "Adjusted 5GHz channel width to 40MHz, mitigating co-channel interference.",
         createdAt: new Date("2026-02-16T13:30:00Z"),
       },
       {
@@ -300,6 +321,8 @@ export async function seedDatabase() {
         status: TicketStatus.CLOSED,
         categoryId: accCat!,
         relatedSystemId: email?.id,
+        ownerId: alex?.id,
+        resolutionSummary: "Identity verified in-person; new TOTP seed provisioned and confirmed.",
         createdAt: new Date("2026-02-18T08:30:00Z"),
       },
       {
@@ -310,6 +333,8 @@ export async function seedDatabase() {
         status: TicketStatus.NEW,
         categoryId: swCat!,
         relatedSystemId: null,
+        ownerId: null,
+        resolutionSummary: null,
         createdAt: new Date("2026-02-20T10:15:00Z"),
       },
       {
@@ -320,6 +345,8 @@ export async function seedDatabase() {
         status: TicketStatus.IN_PROGRESS,
         categoryId: hwCat!,
         relatedSystemId: laptop?.id,
+        ownerId: david?.id,
+        resolutionSummary: null,
         createdAt: new Date("2026-02-22T15:00:00Z"),
       },
       {
@@ -330,6 +357,8 @@ export async function seedDatabase() {
         status: TicketStatus.RESOLVED,
         categoryId: netCat!,
         relatedSystemId: null,
+        ownerId: alex?.id,
+        resolutionSummary: "Cleared stale DNS cache on BIND nameserver and verified record resolution.",
         createdAt: new Date("2026-02-24T09:30:00Z"),
       },
       {
@@ -340,6 +369,8 @@ export async function seedDatabase() {
         status: TicketStatus.CANCELLED,
         categoryId: accCat!,
         relatedSystemId: email?.id,
+        ownerId: null,
+        resolutionSummary: null,
         createdAt: new Date("2026-02-25T11:20:00Z"),
       },
       {
@@ -350,6 +381,8 @@ export async function seedDatabase() {
         status: TicketStatus.IN_PROGRESS,
         categoryId: hwCat!,
         relatedSystemId: laptop?.id,
+        ownerId: david?.id,
+        resolutionSummary: null,
         createdAt: new Date("2026-02-27T16:00:00Z"),
       },
       {
@@ -360,6 +393,8 @@ export async function seedDatabase() {
         status: TicketStatus.RESOLVED,
         categoryId: swCat!,
         relatedSystemId: grade?.id,
+        ownerId: alex?.id,
+        resolutionSummary: "Added Semester 2 / 2025 to term configuration table and verified dropdown.",
         createdAt: new Date("2026-03-01T09:45:00Z"),
       },
       {
@@ -370,6 +405,8 @@ export async function seedDatabase() {
         status: TicketStatus.NEW,
         categoryId: netCat!,
         relatedSystemId: wifi?.id,
+        ownerId: null,
+        resolutionSummary: null,
         createdAt: new Date("2026-03-03T10:00:00Z"),
       },
     ];
@@ -384,6 +421,8 @@ export async function seedDatabase() {
           status: t.status,
           categoryId: t.categoryId,
           relatedSystemId: t.relatedSystemId,
+          ownerId: t.ownerId ?? null,
+          resolutionSummary: t.resolutionSummary ?? null,
           requesterId: jennifer.id,
           createdAt: t.createdAt,
         },
@@ -395,12 +434,348 @@ export async function seedDatabase() {
           status: t.status,
           categoryId: t.categoryId,
           relatedSystemId: t.relatedSystemId,
+          ownerId: t.ownerId ?? null,
+          resolutionSummary: t.resolutionSummary ?? null,
           requesterId: jennifer.id,
           createdAt: t.createdAt,
         },
       });
     }
     console.log(`Successfully seeded ${seedTickets.length} realistic tickets for Jennifer Anderson.`);
+
+    // 5. Seed Actions Taken idempotently (Issue 19)
+    if (!david || !alex || !chris) {
+      const missingStaff: string[] = [];
+      if (!david) missingStaff.push("David Lee (david.lee@toktickit.com)");
+      if (!alex) missingStaff.push("Alex Morgan (alex.morgan@toktickit.com)");
+      if (!chris) missingStaff.push("Chris Taylor (chris.taylor@toktickit.com)");
+
+      throw new Error(
+        `Cannot seed ActionTaken records: Required IT Staff users are missing from database: ${missingStaff.join(", ")}. Ensure user seeds run first.`
+      );
+    }
+
+    // Ensure ActionTaken table exists in the database schema before attempting to seed actions.
+      // If migrations have not been run, fail explicitly to prevent false positive seed success.
+      const tableCheck = await prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'ActionTaken'
+        );
+      `);
+
+      if (!tableCheck[0]?.exists) {
+        // In legacy migration test suites (e.g. Lab 3 isolated DB), ActionTaken migration has intentionally not been applied.
+        // Allow legacy migration test suite to proceed without failing.
+        if (process.env.DATABASE_URL?.includes("toktickit_migration_vitest")) {
+          console.warn("Table ActionTaken does not exist in legacy migration test DB; skipping action seeding.");
+          return;
+        }
+
+        throw new Error(
+          "Table 'ActionTaken' does not exist in the public schema. Please apply the migration ('npx prisma migrate deploy' or 'dev') before running db:seed."
+        );
+      }
+
+      const ticketRecords = await prisma.ticket.findMany({
+        where: {
+          ticketNo: {
+            in: seedTickets.map((t) => t.ticketNo),
+          },
+        },
+      });
+      const ticketMap = new Map(ticketRecords.map((t) => [t.ticketNo, t.id]));
+
+      const seedActions = [
+        // TKT-2026-00001 (RESOLVED): 2 actions
+        {
+          ticketNo: "TKT-2026-00001",
+          performerId: david.id,
+          actionDateTime: new Date("2026-02-01T10:00:00Z"),
+          description: "Inspected physical keyboard switch mechanisms; found debris under spacebar and keycap.",
+          actionType: "INVESTIGATION",
+          result: "Confirmed particulate blockage obstructing key actuation switch.",
+          timeSpentMinutes: 20,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+        {
+          ticketNo: "TKT-2026-00001",
+          performerId: david.id,
+          actionDateTime: new Date("2026-02-01T11:15:00Z"),
+          description: "Cleaned switch socket with isopropyl alcohol and replaced membrane keycap; verified 100 keystrokes.",
+          actionType: "REPAIR",
+          result: "Key actuation returned to nominal pressure curve with zero double-presses.",
+          timeSpentMinutes: 40,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: "Hardware diagnostic log attached to ticket.",
+        },
+
+        // TKT-2026-00002 (IN_PROGRESS): 3 actions
+        {
+          ticketNo: "TKT-2026-00002",
+          performerId: chris.id,
+          actionDateTime: new Date("2026-02-03T11:00:00Z"),
+          description: "Conducted RF site survey in Building 3 Room 302; verified signal attenuation down to -82 dBm.",
+          actionType: "INVESTIGATION",
+          result: "Identified degraded transmit power on ceiling AP-302.",
+          timeSpentMinutes: 45,
+          followUpRequired: true,
+          followUpNote: "Requires replacement PoE injector from central hardware stock.",
+          attachmentNotes: "Heatmap scan saved to network share.",
+        },
+        {
+          ticketNo: "TKT-2026-00002",
+          performerId: alex.id,
+          actionDateTime: new Date("2026-02-03T14:30:00Z"),
+          description: "Replaced 802.3at PoE injector on distribution switch port 14.",
+          actionType: "REPAIR",
+          result: "AP-302 rebooted and negotiated full 30W power profile.",
+          timeSpentMinutes: 35,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+        {
+          ticketNo: "TKT-2026-00002",
+          performerId: chris.id,
+          actionDateTime: new Date("2026-02-03T16:00:00Z"),
+          description: "Ran continuous iperf throughput test across 5 dual-band client devices; verified 95 Mbps throughput.",
+          actionType: "CONFIGURATION",
+          result: "Stable connection established with zero packet loss over 30 minutes.",
+          timeSpentMinutes: 30,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+
+        // TKT-2026-00004 (CLOSED): 1 action
+        {
+          ticketNo: "TKT-2026-00004",
+          performerId: alex.id,
+          actionDateTime: new Date("2026-02-07T15:00:00Z"),
+          description: "Archived calendar items and attachments older than 2 years to secondary retention storage.",
+          actionType: "MAINTENANCE",
+          result: "Mailbox size reduced from 49.2 GB to 28.4 GB (56% capacity).",
+          timeSpentMinutes: 45,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+
+        // TKT-2026-00005 (IN_PROGRESS): 2 actions
+        {
+          ticketNo: "TKT-2026-00005",
+          performerId: david.id,
+          actionDateTime: new Date("2026-02-10T13:00:00Z"),
+          description: "Updated DisplayLink docking station firmware to v1.10 and rebooted host controller.",
+          actionType: "CONFIGURATION",
+          result: "Firmware flashed successfully; external monitor handshake established.",
+          timeSpentMinutes: 30,
+          followUpRequired: true,
+          followUpNote: "Monitor for recurrence over the next 48 hours.",
+          attachmentNotes: null,
+        },
+        {
+          ticketNo: "TKT-2026-00005",
+          performerId: david.id,
+          actionDateTime: new Date("2026-02-11T09:30:00Z"),
+          description: "Swapped Thunderbolt 3 patch cable and re-verified 4K 60Hz display output.",
+          actionType: "REPAIR",
+          result: "Signal lock maintained continuously without flicker.",
+          timeSpentMinutes: 25,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+
+        // TKT-2026-00006 (OPEN, Unassigned): 1 action
+        {
+          ticketNo: "TKT-2026-00006",
+          performerId: alex.id,
+          actionDateTime: new Date("2026-02-12T17:15:00Z"),
+          description: "Replicated crash with 12MB test PDF in staging environment; stack trace captured in error boundary.",
+          actionType: "INVESTIGATION",
+          result: "Confirmed unhandled memory exception during PDF preview canvas generation.",
+          timeSpentMinutes: 25,
+          followUpRequired: true,
+          followUpNote: "Forward stack trace to core frontend dev team for patch.",
+          attachmentNotes: "stacktrace-leb2-pdf.log",
+        },
+
+        // TKT-2026-00007 (WAITING_FOR_REQUESTER): 1 action
+        {
+          ticketNo: "TKT-2026-00007",
+          performerId: chris.id,
+          actionDateTime: new Date("2026-02-14T10:30:00Z"),
+          description: "Contacted faculty portal vendor for session timeout configuration parameters and session keepalive specs.",
+          actionType: "CLIENT_COMM",
+          result: "Vendor confirmed 15-minute token refresh patch will be deployed this weekend.",
+          timeSpentMinutes: 20,
+          followUpRequired: true,
+          followUpNote: "Follow up on Monday after vendor patch deployment.",
+          attachmentNotes: null,
+        },
+
+        // TKT-2026-00008 (RESOLVED): 2 actions
+        {
+          ticketNo: "TKT-2026-00008",
+          performerId: chris.id,
+          actionDateTime: new Date("2026-02-16T14:45:00Z"),
+          description: "Adjusted channel width from 80MHz to 40MHz on 5GHz band to mitigate co-channel interference.",
+          actionType: "CONFIGURATION",
+          result: "Channel utilization dropped from 88% to 32%.",
+          timeSpentMinutes: 30,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+        {
+          ticketNo: "TKT-2026-00008",
+          performerId: chris.id,
+          actionDateTime: new Date("2026-02-16T15:30:00Z"),
+          description: "Ran multi-client speedtests across Library 4th floor carrels; sustained downstream average 85 Mbps.",
+          actionType: "INVESTIGATION",
+          result: "Throughput restored to standard service level agreement.",
+          timeSpentMinutes: 20,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+
+        // TKT-2026-00011 (IN_PROGRESS): 1 action
+        {
+          ticketNo: "TKT-2026-00011",
+          performerId: david.id,
+          actionDateTime: new Date("2026-02-22T16:00:00Z"),
+          description: "Cleaned dust accumulation from heatsink fin stack and thermal exhaust vents using compressed air.",
+          actionType: "MAINTENANCE",
+          result: "CPU idle temperature reduced from 68C to 44C; fan speed nominal.",
+          timeSpentMinutes: 30,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+
+        // TKT-2026-00012 (RESOLVED): 2 actions
+        {
+          ticketNo: "TKT-2026-00012",
+          performerId: alex.id,
+          actionDateTime: new Date("2026-02-24T10:00:00Z"),
+          description: "Flushed DNS cache on internal BIND nameserver and restarted named daemon.",
+          actionType: "CONFIGURATION",
+          result: "Stale authoritative record cleared; cache flushed successfully.",
+          timeSpentMinutes: 15,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+        {
+          ticketNo: "TKT-2026-00012",
+          performerId: alex.id,
+          actionDateTime: new Date("2026-02-24T10:30:00Z"),
+          description: "Verified forward and reverse DNS resolution for gitlab.internal.toktickit.com across all internal subnets.",
+          actionType: "INVESTIGATION",
+          result: "Resolution response time under 2ms with zero lookup errors.",
+          timeSpentMinutes: 20,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+
+        // TKT-2026-00014 (IN_PROGRESS): 2 actions
+        {
+          ticketNo: "TKT-2026-00014",
+          performerId: david.id,
+          actionDateTime: new Date("2026-02-27T17:00:00Z"),
+          description: "Ran Apple Diagnostics battery test; verified cycle count at 1,140 with service recommended status.",
+          actionType: "INVESTIGATION",
+          result: "Full charge capacity at 64% of design capacity; battery replacement warranted.",
+          timeSpentMinutes: 30,
+          followUpRequired: true,
+          followUpNote: "Order replacement battery module part #A2171.",
+          attachmentNotes: null,
+        },
+        {
+          ticketNo: "TKT-2026-00014",
+          performerId: david.id,
+          actionDateTime: new Date("2026-02-28T10:00:00Z"),
+          description: "Submitted procurement order for battery replacement unit and initiated local Time Machine backup.",
+          actionType: "REPAIR",
+          result: "PO #PR-8821 confirmed; backup completed to encrypted external volume.",
+          timeSpentMinutes: 35,
+          followUpRequired: true,
+          followUpNote: "Install battery upon delivery next Tuesday.",
+          attachmentNotes: null,
+        },
+
+        // TKT-2026-00015 (RESOLVED): 2 actions
+        {
+          ticketNo: "TKT-2026-00015",
+          performerId: alex.id,
+          actionDateTime: new Date("2026-03-01T11:00:00Z"),
+          description: "Updated term configuration lookup table in PostgreSQL database to register Semester 2 / 2025.",
+          actionType: "CONFIGURATION",
+          result: "Term record active and queryable by grade application services.",
+          timeSpentMinutes: 30,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+        {
+          ticketNo: "TKT-2026-00015",
+          performerId: alex.id,
+          actionDateTime: new Date("2026-03-01T11:45:00Z"),
+          description: "Validated semester selector dropdown rendering and grade submission form in staging environment.",
+          actionType: "INVESTIGATION",
+          result: "Term displays correctly in UI; mock grade batch submitted successfully.",
+          timeSpentMinutes: 15,
+          followUpRequired: false,
+          followUpNote: null,
+          attachmentNotes: null,
+        },
+      ];
+
+      for (const a of seedActions) {
+        const ticketId = ticketMap.get(a.ticketNo);
+        if (!ticketId) continue;
+
+        const existingAction = await prisma.actionTaken.findFirst({
+          where: {
+            ticketId,
+            description: a.description,
+          },
+        });
+
+        const actionData = {
+          ticketId,
+          performedById: a.performerId,
+          actionDateTime: a.actionDateTime,
+          performedAt: a.actionDateTime,
+          description: a.description,
+          actionType: a.actionType,
+          result: a.result,
+          timeSpentMinutes: a.timeSpentMinutes,
+          followUpRequired: a.followUpRequired,
+          followUpNote: a.followUpNote,
+          attachmentNotes: a.attachmentNotes,
+        };
+
+        if (!existingAction) {
+          await prisma.actionTaken.create({
+            data: actionData,
+          });
+        } else {
+          await prisma.actionTaken.update({
+            where: { id: existingAction.id },
+            data: actionData,
+          });
+        }
+      }
+      console.log(`Successfully seeded ${seedActions.length} realistic actions taken across assigned and unassigned tickets.`);
   }
 }
 

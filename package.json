@@ -8,6 +8,9 @@
     "test:client": "npm --prefix client test",
     "test:server": "npm --prefix server test"
   },
+  "prisma": {
+    "schema": "server/prisma/schema.prisma"
+  },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.4.1",

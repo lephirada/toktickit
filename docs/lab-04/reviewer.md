@@ -7,24 +7,16 @@
 
 ## Pull Requests I authored (reviewed by my partner)
 
-| PR                      | Branch                         | Reviewer verdict    |
-| :---------------------- | :----------------------------- | :------------------ |
-| `[PR #41]`              | `feature/18-lab4-spec-docs`    | `[Request Changes]` |
-| `[PR #... Placeholder]` | `feature/19-actions-taken-db`  | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/20-actions-taken-api` | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/21-resolution-gate`   | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/22-dashboard-api`     | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/23-actions-taken-ui`  | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/24-dashboard-ui`      | `[Planned]`         |
-| `[PR #... Placeholder]` | `feature/25-integration-e2e`   | `[Planned]`         |
-
----
-
-## Pull Requests I reviewed for my partner
-
-| PR                      | Branch | Reviewer verdict |
-| :---------------------- | :----- | :--------------- |
-| `[PR #... Placeholder]` | `...`  | `[...]`          |
+| PR                      | Branch                         | Reviewer verdict                |
+| :---------------------- | :----------------------------- | :------------------------------ |
+| `[PR #50]`              | `feature/18-lab4-spec-docs`    | `[Request Changes -> Approved]` |
+| `[PR #51]`              | `feature/19-actions-taken-db`  | `[Approved]`                    |
+| `[PR #... Placeholder]` | `feature/20-actions-taken-api` | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/21-resolution-gate`   | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/22-dashboard-api`     | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/23-actions-taken-ui`  | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/24-dashboard-ui`      | `[Planned]`                     |
+| `[PR #... Placeholder]` | `feature/25-integration-e2e`   | `[Planned]`                     |
 
 ---
 
@@ -121,10 +113,19 @@
 - **Branch:** `feature/19-actions-taken-db`
 - **Reviewer comment I received:**
 
-  > <!-- Placeholder for partner review comments -->
+  > The PR satisfies the core acceptance criteria for Issue 19:
+
+  The ActionTaken model includes the required fields and string-length constraints.
+  The migration adds the new table, indexes, and foreign keys without introducing destructive changes to existing tables.
+  The foreign-key deletion rules preserve the intended behavior: ON DELETE CASCADE for tickets and ON DELETE RESTRICT for users, consistent with BR-15.
+  The seed implementation uses existing-record checks and upserts to support repeatable execution and covers tickets with zero, one, and multiple actions.
+  The added verification tests cover schema constraints, referential integrity, migration data preservation, and seed behavior.
+  I found no blocking issues in the reviewed diff. The reported test results are documented in the PR, although I have not independently rerun the migration or test suite during this review.
+
+Recommendation: Approve.
 
 - **How I responded:**
-  > <!-- Placeholder for author response -->
+  > Thanks for the review! The file has been updated based on your comments. Ready to merge.
 
 ---
 
@@ -197,3 +198,22 @@
 
 - **How I responded:**
   > <!-- Placeholder for author response -->
+
+## Pull Requests I reviewed for my partner
+
+### PR - Issue 20 : Sprint 4 Engineering Contracts, Specification & Test Plan (Spec DD)
+
+- **My comment:**
+
+> The documentation is well structured and covers the main Lab 4 requirements, including Actions Taken, the resolution gate, concurrency handling, role-based dashboards, and responsive UI specifications. Before approval, I think a few points need clarification to ensure the specifications are consistent and safe to use for implementation. Authentication contract: api-spec.md specifies JWT Bearer authentication. Please reconcile this with the existing Lab 3 authentication mechanism and explicitly document the approved approach so the new APIs remain compatible with the existing application. Acceptance criteria and test traceability: Please review the AC-to-test mappings in tests.md, especially the shared AC-15 and AC-19 entries. Separate criteria where they represent distinct behaviors, and ensure each criterion has clear, testable coverage. Follow-up validation consistency: BR-04 requires at least three non-whitespace characters in the follow-up note, but the UI validation description does not explicitly reflect the same minimum length. Please align the API, UI, and planned tests. Concurrency scope: Please clarify whether optimistic concurrency protection applies only to ticket status transitions or also to edits of other records, including Actions Taken. Migration recovery and seed coverage: Please document the migration rollback or recovery strategy and its planned verification. Also, explicitly map the required seed scenarios ticket statuses, priorities, assigned and unassigned ownership, zero/one/multiple Actions Taken, and zero/non-zero dashboard metrics to the planned tests. These changes would make the engineering contract more consistent and reduce ambiguity for the subsequent implementation issues. I recommend revising these points before approval.
+
+---
+
+> Thanks for addressing the previous review feedback. The authentication contract, separated dashboard acceptance criteria, UI follow-up validation, concurrency scope, and seed scenario mapping are much clearer now. I still recommend a few final clarifications before approval: Follow-up validation consistency: BR-04 requires at least 3 non-whitespace characters, but FR-04, AC-02, and the planned tests still primarily describe blank or whitespace-only values. Please align the FR, AC, API error messages, and Unit/API/UI test cases to cover notes shorter than 3 characters as well. Migration rollback and recovery: In specification.md 7.3, prisma migrate resolve --rolled-back changes Prisma's migration history state; it does not itself reverse the schema changes. Please document a valid rollback/recovery sequence and ensure MIG-01 verifies both schema recovery and preservation of legacy data. Seed test assertions: Please make SEED-01 explicitly verify the required scenarios and idempotency after repeated seed runs, including all statuses and priorities, assigned/unassigned tickets, 0/1/multiple Actions Taken, and zero/non-zero dashboard metrics. Once these details are aligned across the specifications and planned tests, I think the documentation will be in a much stronger position for approval.
+
+---
+
+> Thanks for addressing the previous review feedback. The updated specifications are much more consistent now, especially the follow-up note validation, migration recovery plan, seed scenario coverage, authentication contract, and AC-to-test traceability. I reviewed the documentation against the acceptance criteria. The required specification files are present, the planned tests cover the defined acceptance criteria, and the PR remains within the documentation-only scope. I approved. One minor documentation improvement would be to replace the phrase 1:1 for AC-to-test mapping with complete traceability, since some acceptance criteria are covered by multiple test suites. Overall, the documentation is ready to serve as the engineering contract for the subsequent implementation issues.
+
+- **Partner's response:**
+  > Thank you for the review and approval! I have updated the documentation in specification.md §9 to replace the phrase '1:1' with 'complete traceability' to accurately reflect our multi-tier test coverage across the acceptance criteria. With all feedback addressed and specifications finalized, PR #59 is ready to merge into lab4-staging.
