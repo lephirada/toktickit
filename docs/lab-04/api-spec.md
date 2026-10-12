@@ -129,9 +129,8 @@ To prevent dirty writes and silent overwrite collisions when multiple IT Staff m
 * Under zero-trust security principles, client applications cannot supply or dictate the identity of the person who performed the work.
 * `performedById` is **strictly derived on the server** from `req.user.id` through the verified session cookie (`toktickit_session`).
 * If a client request includes `performedById`, `performerId`, or `userId` in the body payload:
-  - The API layer ignores the client-supplied value completely, or
-  - If explicitly validated, rejects with `400 Bad Request` (`IMMUTABLE_IDENTITY_OVERRIDE`).
-  - The database insert always uses `req.user.id`.
+  - The API layer ignores any client-supplied identity value completely.
+  - The database insert always uses `req.user.id` (BR-03 authority).
 
 ---
 
@@ -559,7 +558,6 @@ Allows a Requester to indicate that a problem appears solved on their own ticket
 | HTTP Status | Error Code | Description / Trigger Condition | User / Client Remediation |
 | :---: | :--- | :--- | :--- |
 | **400** | `MISSING_CONCURRENCY_TOKEN` | `PUT /api/tickets/:id/actions/:actionId` called without `expectedUpdatedAt`. | Provide `expectedUpdatedAt` from the loaded action record. |
-| **400** | `IMMUTABLE_IDENTITY_OVERRIDE` | Client explicitly sent `performedById` in action creation/update. | Remove client-supplied ID; server populates it automatically. |
 | **401** | `UNAUTHORIZED` | Session cookie is absent, expired, or invalid. | Log in to obtain a valid session cookie. |
 | **403** | `FORBIDDEN_ROLE` / `FORBIDDEN_TICKET_ACCESS` | Caller lacks role permission (e.g. Requester creating actions) or Requester accessing unowned ticket. | Access denied; route restricted to IT Staff/Admin or ticket owner. |
 | **404** | `TICKET_NOT_FOUND` / `ACTION_NOT_FOUND` | Ticket or Action Taken ID does not exist in the database. | Verify target ID. |
