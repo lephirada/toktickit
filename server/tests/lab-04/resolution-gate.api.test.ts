@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
@@ -581,28 +581,49 @@ describe("Issue 21 — Ticket Resolution Gate and Lab 3 Preservation (resolution
   // Section 6: Concurrency and Race Condition Handling
   // =========================================================================
   describe("Concurrency & Conflict Handling (TICKET_MODIFIED_CONCURRENTLY)", () => {
-    it("proves deterministic conflict rejection (409 TICKET_MODIFIED_CONCURRENTLY) when ticket status changed before CAS update", async () => {
+    it("proves deterministic CAS conflict rejection: returns 409 TICKET_MODIFIED_CONCURRENTLY when ticket status is modified concurrently during the transaction (updateMany count === 0)", async () => {
       const ticket = await createTicket({ status: TicketStatus.IN_PROGRESS });
       await createAction(ticket.id);
 
-      // Pre-transition the ticket directly in DB to simulate another transaction having committed a status change
-      await prisma.ticket.update({
-        where: { id: ticket.id },
-        data: { status: TicketStatus.WAITING_FOR_REQUESTER },
-      });
+      // Controlled test strategy: Intercept $transaction using vi.spyOn to simulate an interleaved concurrent commit
+      // The handler passes findUnique and passes validateStatusTransition (from IN_PROGRESS).
+      // Right before updateMany executes, a concurrent update shifts the ticket status in PostgreSQL.
+      // updateMany({ where: { id: ticket.id, status: 'IN_PROGRESS' } }) matches 0 rows, triggering the CAS failure.
+      const realTransaction = prisma.$transaction.bind(prisma);
+      const txSpy = vi
+        .spyOn(prisma, "$transaction")
+        .mockImplementationOnce(async (fn: any, ...args: any[]) => {
+          return realTransaction(async (tx: any) => {
+            // Concurrently change the ticket status directly in the database from a separate connection
+            await prisma.ticket.update({
+              where: { id: ticket.id },
+              data: { status: TicketStatus.WAITING_FOR_REQUESTER },
+            });
+            return fn(tx);
+          }, ...args);
+        });
 
-      // Now attempting to resolve a ticket whose in-flight expectation was IN_PROGRESS but in DB is now WAITING_FOR_REQUESTER
-      // validateStatusTransition will evaluate WAITING_FOR_REQUESTER -> RESOLVED, which is invalid (422)
       const res = await request(app)
         .patch(`/api/tickets/${ticket.id}/status`)
         .set("Cookie", cookieStaff)
         .send({
           status: "RESOLVED",
-          resolutionSummary: "Resolution attempt against stale status.",
+          resolutionSummary: "Valid resolution summary attempting to resolve.",
         });
 
-      expect(res.status).toBe(422);
-      expect(res.body.error.code).toBe("INVALID_STATUS_TRANSITION");
+      txSpy.mockRestore();
+
+      // Assert that the CAS failure path was exercised and returned 409 with exact error code
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe("TICKET_MODIFIED_CONCURRENTLY");
+      expect(res.body.error.message).toBe(
+        "Ticket status was modified concurrently by another request. Please reload the latest ticket state."
+      );
+
+      // Verify the ticket status in DB remains the concurrent modification (WAITING_FOR_REQUESTER), not overwritten
+      const freshTicket = await prisma.ticket.findUnique({ where: { id: ticket.id } });
+      expect(freshTicket!.status).toBe("WAITING_FOR_REQUESTER");
     });
 
     it("proves concurrent request integration: mutual exclusion allows exactly one winner and safely rejects competing attempt", async () => {

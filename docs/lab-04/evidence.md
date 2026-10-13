@@ -394,15 +394,15 @@ $ npm --prefix server run test -- tests/lab-04/resolution-gate.api.test.ts
        ✓ leaves ticket.status unaltered when called on WAITING_FOR_REQUESTER ticket
        ✓ proves requester advisory indication cannot bypass resolution gate (actionsCount === 0 still rejected)
      ✓ Concurrency & Conflict Handling (TICKET_MODIFIED_CONCURRENTLY) (2)
-       ✓ proves deterministic conflict rejection (409 TICKET_MODIFIED_CONCURRENTLY) when ticket status changed before CAS update
+       ✓ proves deterministic CAS conflict rejection: returns 409 TICKET_MODIFIED_CONCURRENTLY when ticket status is modified concurrently during the transaction (updateMany count === 0)
        ✓ proves concurrent request integration: mutual exclusion allows exactly one winner and safely rejects competing attempt
      ✓ Lab 3 Endpoint Preservation (PATCH /api/staff/tickets/:id/status) (1)
        ✓ preserves Lab 3 behavior: allows resolving without ActionTaken on the legacy endpoint
 
  Test Files  1 passed (1)
       Tests  24 passed (24)
-   Start at  17:10:08
-   Duration  1.15s (transform 165ms, setup 0ms, collect 427ms, tests 422ms, environment 0ms, prepare 64ms)
+   Start at  17:33:39
+   Duration  1.89s (transform 333ms, setup 0ms, collect 863ms, tests 715ms, environment 0ms, prepare 64ms)
 ```
 
 **Log 2: Full Server Test Suite Execution (Regression Verification)**
