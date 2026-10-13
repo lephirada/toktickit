@@ -2376,10 +2376,8 @@ app.post(
         return;
       }
 
-      // If WAITING_FOR_REQUESTER, transition to IN_PROGRESS. Otherwise remain IN_PROGRESS.
-      // NOTE: NEVER set status to RESOLVED! (BR-05)
-      const nextStatus = "IN_PROGRESS";
-
+      // BR-05 / FR-06 / AC-21-09: Requester indication is strictly advisory.
+      // Ticket status strictly unaltered (remains unchanged, whether IN_PROGRESS or WAITING_FOR_REQUESTER).
       const feedbackCommentText = req.body?.feedbackComment
         ? `[Resolution Feedback] The requester indicated that the reported issue appears resolved. Feedback: ${String(req.body.feedbackComment).trim()}`
         : "[Resolution Feedback] The requester indicated that the reported issue appears resolved.";
@@ -2389,7 +2387,7 @@ app.post(
           where: { id: ticket.id },
           data: {
             resolutionIndicated: true,
-            status: nextStatus,
+            status: ticket.status,
           },
         });
 
@@ -2435,6 +2433,180 @@ app.post(
             "INTERNAL_SERVER_ERROR",
             "Failed to confirm ticket resolution."
           )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Issue 21 / Section 3.1 — Status Transition & Resolution Gate
+// PATCH /api/tickets/:id/status (also handles :ticketId)
+// ---------------------------------------------------------------------------
+app.patch(
+  ["/api/tickets/:id/status", "/api/tickets/:ticketId/status"],
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    let targetTicketId: number | undefined;
+    try {
+      const rawId = req.params.id || req.params.ticketId;
+      const ticketId = parseInt(rawId, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+      targetTicketId = ticketId;
+
+      const ticket = await getPrisma().ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const requestedStatus = req.body?.status as TicketStatus;
+      if (!requestedStatus) {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "Status is required."));
+        return;
+      }
+
+      // State machine validation
+      const validation = validateStatusTransition(
+        ticket.status,
+        requestedStatus,
+        ticket.ownerId,
+        req.body
+      );
+
+      if (!validation.isValid) {
+        res.status(validation.statusCode).json(validation.errorEnvelope);
+        return;
+      }
+
+      const cleaned = validation.cleanedPayload;
+
+      const result = await getPrisma().$transaction(async (tx) => {
+        // Enforce Resolution Gate when transitioning to RESOLVED
+        if (cleaned.status === "RESOLVED") {
+          const actionsCount = await tx.actionTaken.count({
+            where: { ticketId: ticket.id },
+          });
+
+          if (actionsCount < 1) {
+            const gateError: any = new Error("RESOLUTION_ACTION_REQUIRED");
+            gateError.code = "RESOLUTION_ACTION_REQUIRED";
+            gateError.details = {
+              ticketId: ticket.id,
+              currentStatus: ticket.status,
+              requestedStatus: cleaned.status,
+              actionsCount: 0,
+            };
+            throw gateError;
+          }
+        }
+
+        const updateData: Prisma.TicketUpdateInput = {
+          status: cleaned.status,
+        };
+
+        if (cleaned.status === "RESOLVED") {
+          updateData.resolutionSummary = cleaned.resolutionSummary;
+        } else if (cleaned.status === "CANCELLED") {
+          updateData.cancellationReason = cleaned.cancellationReason;
+        } else if (cleaned.status === "REOPENED") {
+          updateData.reopenReason = cleaned.reopenReason;
+        }
+
+        // Conditional atomic CAS update ensuring status hasn't concurrently changed
+        const updateResult = await tx.ticket.updateMany({
+          where: {
+            id: ticket.id,
+            status: ticket.status,
+          },
+          data: updateData,
+        });
+
+        if (updateResult.count === 0) {
+          throw new Error("STATUS_RACE_LOST");
+        }
+
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: ticket.id,
+            type: "STATUS_CHANGED",
+            action: "Status updated",
+            message: `Status changed from ${ticket.status} to ${cleaned.status} by ${req.user!.fullName}.`,
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
+            metadata: {
+              fromStatus: ticket.status,
+              toStatus: cleaned.status,
+              resolutionSummary: cleaned.resolutionSummary || null,
+              cancellationReason: cleaned.cancellationReason || null,
+              reopenReason: cleaned.reopenReason || null,
+            },
+          },
+        });
+
+        return await tx.ticket.findUnique({
+          where: { id: ticket.id },
+        });
+      });
+
+      res.status(200).json({ data: result });
+    } catch (error: any) {
+      if (
+        error?.message === "RESOLUTION_ACTION_REQUIRED" ||
+        error?.code === "RESOLUTION_ACTION_REQUIRED"
+      ) {
+        res.status(422).json({
+          error: {
+            code: "RESOLUTION_ACTION_REQUIRED",
+            message:
+              "At least one action taken must be recorded before resolving this ticket.",
+            details: error.details || {
+              ticketId: targetTicketId,
+              currentStatus: "IN_PROGRESS",
+              requestedStatus: "RESOLVED",
+              actionsCount: 0,
+            },
+          },
+        });
+        return;
+      }
+
+      if (error?.message === "STATUS_RACE_LOST") {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "TICKET_MODIFIED_CONCURRENTLY",
+              "Ticket status was modified concurrently by another request. Please reload the latest ticket state."
+            )
+          );
+        return;
+      }
+
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to update ticket status.")
         );
     }
   }
