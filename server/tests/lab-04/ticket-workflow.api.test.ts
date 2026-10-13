@@ -6,7 +6,7 @@ import { createTestSessionCookie } from "../helpers/auth.js";
 import { hashPassword } from "../../src/utils/password.js";
 import { Priority, TicketStatus, UserRole } from "@prisma/client";
 
-describe("Issue 21 — Ticket Resolution Gate and Lab 3 Preservation (resolution-gate.api.test.ts)", () => {
+describe("Issue 21 — Ticket Workflow & Resolution Gate API Suite (ticket-workflow.api.test.ts)", () => {
   const prisma = getPrisma();
 
   let staffUser: any;
@@ -385,7 +385,7 @@ describe("Issue 21 — Ticket Resolution Gate and Lab 3 Preservation (resolution
       expect(res.body.error.code).toBe("VALIDATION_ERROR");
     });
 
-    it("Boundary 6 (AC-21-06): returns 422 RESOLUTION_ACTION_REQUIRED when actionsCount === 0", async () => {
+    it("Boundary 6 (AC-21-06): returns 422 ACTION_TAKEN_REQUIRED_FOR_RESOLUTION when actionsCount === 0", async () => {
       // IN_PROGRESS ticket with ZERO actions taken
       const ticket = await createTicket({ status: TicketStatus.IN_PROGRESS });
 
@@ -398,7 +398,7 @@ describe("Issue 21 — Ticket Resolution Gate and Lab 3 Preservation (resolution
         });
 
       expect(res.status).toBe(422);
-      expect(res.body.error.code).toBe("RESOLUTION_ACTION_REQUIRED");
+      expect(res.body.error.code).toBe("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
       expect(res.body.error.message).toBe(
         "At least one action taken must be recorded before resolving this ticket."
       );
@@ -573,7 +573,7 @@ describe("Issue 21 — Ticket Resolution Gate and Lab 3 Preservation (resolution
 
       // Must STILL reject because actionsCount is 0!
       expect(res.status).toBe(422);
-      expect(res.body.error.code).toBe("RESOLUTION_ACTION_REQUIRED");
+      expect(res.body.error.code).toBe("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
     });
   });
 

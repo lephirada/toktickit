@@ -11,8 +11,8 @@
 | :---------------------- | :-------------------------------------- | :------------------------------ |
 | `[PR #50]`              | `feature/18-lab4-spec-docs`             | `[Request Changes -> Approved]` |
 | `[PR #51]`              | `feature/19-database-migration-actions` | `[Approved]`                    |
-| `[PR #52]`              | `feature/20-actions-taken-backend`      | `[Request Changes]`             |
-| `[PR #... Placeholder]` | `feature/21-ticket-resolution-gate`     | `[Planned]`                     |
+| `[PR #52]`              | `feature/20-actions-taken-backend`      | `[Request Changes -> Approved]` |
+| `[PR #53]`              | `feature/21-ticket-resolution-gate`     | `[Request Changes]`             |
 | `[PR #... Placeholder]` | `feature/22-dashboard-backend-apis`     | `[Planned]`                     |
 | `[PR #... Placeholder]` | `feature/23-actions-taken-ui`           | `[Planned]`                     |
 | `[PR #... Placeholder]` | `feature/24-role-dashboards-ui`         | `[Planned]`                     |
@@ -178,10 +178,21 @@ Recommendation: Request Changes until the concurrency-token guarantee and valida
 - **Branch:** `feature/21-ticket-resolution-gate`
 - **Reviewer comment I received:**
 
-  > <!-- Placeholder for partner review comments -->
+  > Request Changes — Resolution Gate error contract
+
+The Resolution Gate correctly checks the ActionTaken count and returns HTTP 422 when no action has been recorded. However, the error code does not match the Acceptance Criteria in Issue #44.
+
+Expected: ACTION_TAKEN_REQUIRED_FOR_RESOLUTION
+Current: RESOLUTION_ACTION_REQUIRED
+Please align the error code across the server response, automated tests, and docs/lab-04/evidence.md, including the example JSON response. This is an API contract mismatch that should be fixed before approval.
+
+Also, Issue #44 specifies server/tests/lab-04/ticket-workflow.api.test.ts, while this PR adds server/tests/lab-04/resolution-gate.api.test.ts. Please align the filename with the specified deliverable, or update the issue if the alternative filename is intentional.
+
+The core resolution-gate logic and requester advisory behavior otherwise appear consistent with the stated requirements based on the reviewed PR details. Please rerun the relevant tests after making these changes.
 
 - **How I responded:**
-  > <!-- Placeholder for author response -->
+
+  > Thanks for the feedback! I have aligned the Resolution Gate error code to `ACTION_TAKEN_REQUIRED_FOR_RESOLUTION` across `server/src/app.ts`, `docs/lab-04/evidence.md`, and the automated tests. I also renamed the test file to `server/tests/lab-04/ticket-workflow.api.test.ts` as specified in Issue #44, and verified all 24/24 targeted tests and 319/319 full server regression tests pass. Ready for re-review!
 
 ---
 

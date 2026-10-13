@@ -2509,8 +2509,8 @@ app.patch(
           });
 
           if (actionsCount < 1) {
-            const gateError: any = new Error("RESOLUTION_ACTION_REQUIRED");
-            gateError.code = "RESOLUTION_ACTION_REQUIRED";
+            const gateError: any = new Error("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
+            gateError.code = "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION";
             gateError.details = {
               ticketId: ticket.id,
               currentStatus: ticket.status,
@@ -2572,12 +2572,12 @@ app.patch(
       res.status(200).json({ data: result });
     } catch (error: any) {
       if (
-        error?.message === "RESOLUTION_ACTION_REQUIRED" ||
-        error?.code === "RESOLUTION_ACTION_REQUIRED"
+        error?.message === "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION" ||
+        error?.code === "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION"
       ) {
         res.status(422).json({
           error: {
-            code: "RESOLUTION_ACTION_REQUIRED",
+            code: "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION",
             message:
               "At least one action taken must be recorded before resolving this ticket.",
             details: error.details || {

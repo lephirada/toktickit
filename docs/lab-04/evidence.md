@@ -346,11 +346,11 @@ $ npm --prefix server run test
 
 ### 3.3 Resolution Gate Boundary Suite (Issue 21)
 
-- **Target Command:** `npm --prefix server run test -- tests/lab-04/resolution-gate.api.test.ts`
+- **Target Command:** `npm --prefix server run test -- tests/lab-04/ticket-workflow.api.test.ts`
 - **Verification Status:** **Verified (24/24 passing, 319/319 full server suite passing)**
 - **Endpoints Implemented & Hardened:**
   - `PATCH /api/tickets/:id/status` (and `:ticketId`): Role-authorized endpoint (`IT_STAFF`, `ADMINISTRATOR`) requiring active account (`isActive: true`) and changed password (`mustChangePassword: false`). Validates state machine via pure TypeScript helper (`shared/ticketStateMachine.ts`).
-  - **Resolution Gate:** Transitioning to `RESOLVED` enforces `actionsCount >= 1` in database. If zero actions exist, rejects with HTTP 422 `RESOLUTION_ACTION_REQUIRED`. Validates `resolutionSummary` length (10–1,000 chars).
+  - **Resolution Gate:** Transitioning to `RESOLVED` enforces `actionsCount >= 1` in database. If zero actions exist, rejects with HTTP 422 `ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`. Validates `resolutionSummary` length (10–1,000 chars).
   - **Atomic Compare-And-Swap (CAS):** Conditional update (`where: { id: ticket.id, status: ticket.status }`) within Prisma transaction. Rejects concurrent status shifts with HTTP 409 `TICKET_MODIFIED_CONCURRENTLY`.
   - **Activity Auditing:** Creates `TicketActivity` record (`STATUS_CHANGED`) atomically with ticket update.
   - **BR-05 Requester Advisory Preservation:** `POST /api/tickets/:id/confirm-resolved` strictly preserves `ticket.status` unaltered, setting only `resolutionIndicated: true`.
@@ -358,15 +358,15 @@ $ npm --prefix server run test
 
 #### Terminal Execution Logs (Executed from Project Root)
 
-**Log 1: Resolution Gate Test Suite**
+**Log 1: Resolution Gate & Ticket Workflow Test Suite**
 
 ```text
-$ npm --prefix server run test -- tests/lab-04/resolution-gate.api.test.ts
+$ npm --prefix server run test -- tests/lab-04/ticket-workflow.api.test.ts
 > toktickit-server@1.0.0 test
-> vitest run tests/lab-04/resolution-gate.api.test.ts
+> vitest run tests/lab-04/ticket-workflow.api.test.ts
 
- ✓ tests/lab-04/resolution-gate.api.test.ts (24) 422ms
-   ✓ Issue 21 — Ticket Resolution Gate and Lab 3 Preservation (resolution-gate.api.test.ts) (24) 422ms
+ ✓ tests/lab-04/ticket-workflow.api.test.ts (24) 491ms
+   ✓ Issue 21 — Ticket Workflow & Resolution Gate API Suite (ticket-workflow.api.test.ts) (24) 491ms
      ✓ Authentication and Authorization (PATCH /api/tickets/:id/status) (5)
        ✓ returns 401 UNAUTHORIZED when no session cookie is provided
        ✓ returns 401 UNAUTHORIZED when session cookie is tampered or invalid
@@ -384,7 +384,7 @@ $ npm --prefix server run test -- tests/lab-04/resolution-gate.api.test.ts
        ✓ Boundary 3 (AC-21-03): succeeds with 200 OK when resolutionSummary is exactly 10 characters and actionsCount >= 1
        ✓ Boundary 4 (AC-21-04): succeeds with 200 OK when resolutionSummary is exactly 1,000 characters and actionsCount >= 1
        ✓ Boundary 5 (AC-21-05): returns 422 VALIDATION_ERROR when resolutionSummary exceeds 1,000 characters (1,001 chars)
-       ✓ Boundary 6 (AC-21-06): returns 422 RESOLUTION_ACTION_REQUIRED when actionsCount === 0
+       ✓ Boundary 6 (AC-21-06): returns 422 ACTION_TAKEN_REQUIRED_FOR_RESOLUTION when actionsCount === 0
        ✓ Boundary 7 (AC-21-07): succeeds with 200 OK when actionsCount >= 1, updating status to RESOLVED and creating TicketActivity audit
      ✓ Other Status Transitions Reason Validation (2)
        ✓ requires cancellationReason (10-500 chars) when transitioning to CANCELLED
@@ -401,8 +401,8 @@ $ npm --prefix server run test -- tests/lab-04/resolution-gate.api.test.ts
 
  Test Files  1 passed (1)
       Tests  24 passed (24)
-   Start at  17:33:39
-   Duration  1.89s (transform 333ms, setup 0ms, collect 863ms, tests 715ms, environment 0ms, prepare 64ms)
+   Start at  19:35:17
+   Duration  1.25s (transform 165ms, setup 0ms, collect 424ms, tests 491ms, environment 0ms, prepare 69ms)
 ```
 
 **Log 2: Full Server Test Suite Execution (Regression Verification)**
@@ -421,7 +421,7 @@ $ npm --prefix server test
  ✓ tests/lab-02/ticket-detail.api.test.ts (20)
  ✓ tests/lab-04/actions-taken.api.test.ts (37)
  ✓ tests/lab-04/migration-verification.test.ts (8)
- ✓ tests/lab-04/resolution-gate.api.test.ts (24)
+ ✓ tests/lab-04/ticket-workflow.api.test.ts (24)
  ✓ tests/lab-03/auth.api.test.ts (20)
  ✓ tests/lab-03/authorization.api.test.ts (28)
  ✓ tests/lab-03/comments-notes.api.test.ts (16)
@@ -434,18 +434,18 @@ $ npm --prefix server test
 
  Test Files  19 passed (19)
       Tests  319 passed (319)
-   Start at  17:10:27
-   Duration  27.41s
+   Start at  19:35:27
+   Duration  20.75s
 ```
 
 #### JSON Response Payloads for Resolution Gate & Concurrency Envelopes
 
-**1. 422 Unprocessable Entity (`RESOLUTION_ACTION_REQUIRED`):**
+**1. 422 Unprocessable Entity (`ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`):**
 
 ```json
 {
   "error": {
-    "code": "RESOLUTION_ACTION_REQUIRED",
+    "code": "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION",
     "message": "At least one action taken must be recorded before resolving this ticket.",
     "details": {
       "ticketId": 14,
@@ -454,8 +454,8 @@ $ npm --prefix server test
       "actionsCount": 0
     }
   }
-}
 ```
+
 
 **2. 409 Conflict (`TICKET_MODIFIED_CONCURRENTLY`):**
 
