@@ -11,17 +11,17 @@
 
 ## 1. GitHub Issues & Pull Requests Registry
 
-| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status    | Merge Commit |
-| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :--------------- | :----------- |
-| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`     | `[Merged]`   |
-| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`     | `[Merged]`   |
-| **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Under Review]` | `[Planned]`  |
-| **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
-| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
-| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
-| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
-| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
-| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`      | `[Planned]`  |
+| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status | Merge Commit |
+| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :------------ | :----------- |
+| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`  | `[Merged]`   |
+| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`  | `[Merged]`   |
+| **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Approved]`  | `[Merged]`   |
+| **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[https://github.com/lephirada/toktickit/pull/53]` | `[Approved]`  | `[Merged]`   |
+| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 
 ---
 
@@ -346,8 +346,126 @@ $ npm --prefix server run test
 
 ### 3.3 Resolution Gate Boundary Suite (Issue 21)
 
-- **Target Command:** `npm --prefix server run test -- tests/lab-04/resolution-gate.api.test.ts`
-- **Status:** Pending implementation in Issue 21.
+- **Target Command:** `npm --prefix server run test -- tests/lab-04/ticket-workflow.api.test.ts`
+- **Verification Status:** **Verified (24/24 passing, 319/319 full server suite passing)**
+- **Endpoints Implemented & Hardened:**
+  - `PATCH /api/tickets/:id/status` (and `:ticketId`): Role-authorized endpoint (`IT_STAFF`, `ADMINISTRATOR`) requiring active account (`isActive: true`) and changed password (`mustChangePassword: false`). Validates state machine via pure TypeScript helper (`shared/ticketStateMachine.ts`).
+  - **Resolution Gate:** Transitioning to `RESOLVED` enforces `actionsCount >= 1` in database. If zero actions exist, rejects with HTTP 422 `ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`. Validates `resolutionSummary` length (10–1,000 chars).
+  - **Atomic Compare-And-Swap (CAS):** Conditional update (`where: { id: ticket.id, status: ticket.status }`) within Prisma transaction. Rejects concurrent status shifts with HTTP 409 `TICKET_MODIFIED_CONCURRENTLY`.
+  - **Activity Auditing:** Creates `TicketActivity` record (`STATUS_CHANGED`) atomically with ticket update.
+  - **BR-05 Requester Advisory Preservation:** `POST /api/tickets/:id/confirm-resolved` strictly preserves `ticket.status` unaltered, setting only `resolutionIndicated: true`.
+  - **Lab 3 Endpoint Preservation:** Legacy `PATCH /api/staff/tickets/:id/status` preserved unchanged, allowing resolutions without actions taken (preserving ST-06 test contract).
+
+#### Terminal Execution Logs (Executed from Project Root)
+
+**Log 1: Resolution Gate & Ticket Workflow Test Suite**
+
+```text
+$ npm --prefix server run test -- tests/lab-04/ticket-workflow.api.test.ts
+> toktickit-server@1.0.0 test
+> vitest run tests/lab-04/ticket-workflow.api.test.ts
+
+ ✓ tests/lab-04/ticket-workflow.api.test.ts (24) 491ms
+   ✓ Issue 21 — Ticket Workflow & Resolution Gate API Suite (ticket-workflow.api.test.ts) (24) 491ms
+     ✓ Authentication and Authorization (PATCH /api/tickets/:id/status) (5)
+       ✓ returns 401 UNAUTHORIZED when no session cookie is provided
+       ✓ returns 401 UNAUTHORIZED when session cookie is tampered or invalid
+       ✓ returns 403 PASSWORD_CHANGE_REQUIRED when mustChangePassword is true
+       ✓ returns 403 FORBIDDEN when user has role REQUESTER
+       ✓ allows ADMINISTRATOR to transition status
+     ✓ Validation & State Machine Errors (4)
+       ✓ returns 404 TICKET_NOT_FOUND when ID is invalid or non-numeric
+       ✓ returns 404 TICKET_NOT_FOUND when ticket does not exist
+       ✓ returns 422 VALIDATION_ERROR when status is omitted from body
+       ✓ returns 422 INVALID_STATUS_TRANSITION when transition is illegal in state machine (e.g. NEW -> RESOLVED)
+     ✓ Resolution Gate Boundary Tests (AC-21-01 to AC-21-07) (7)
+       ✓ Boundary 1 (AC-21-01): returns 422 VALIDATION_ERROR when resolutionSummary is missing or null
+       ✓ Boundary 2 (AC-21-02): returns 422 VALIDATION_ERROR when resolutionSummary has fewer than 10 characters
+       ✓ Boundary 3 (AC-21-03): succeeds with 200 OK when resolutionSummary is exactly 10 characters and actionsCount >= 1
+       ✓ Boundary 4 (AC-21-04): succeeds with 200 OK when resolutionSummary is exactly 1,000 characters and actionsCount >= 1
+       ✓ Boundary 5 (AC-21-05): returns 422 VALIDATION_ERROR when resolutionSummary exceeds 1,000 characters (1,001 chars)
+       ✓ Boundary 6 (AC-21-06): returns 422 ACTION_TAKEN_REQUIRED_FOR_RESOLUTION when actionsCount === 0
+       ✓ Boundary 7 (AC-21-07): succeeds with 200 OK when actionsCount >= 1, updating status to RESOLVED and creating TicketActivity audit
+     ✓ Other Status Transitions Reason Validation (2)
+       ✓ requires cancellationReason (10-500 chars) when transitioning to CANCELLED
+       ✓ requires reopenReason (10-500 chars) when transitioning from RESOLVED to REOPENED
+     ✓ BR-05 Requester Advisory Indication (AC-21-09) (3)
+       ✓ sets resolutionIndicated = true and leaves ticket.status unaltered (IN_PROGRESS remains IN_PROGRESS)
+       ✓ leaves ticket.status unaltered when called on WAITING_FOR_REQUESTER ticket
+       ✓ proves requester advisory indication cannot bypass resolution gate (actionsCount === 0 still rejected)
+     ✓ Concurrency & Conflict Handling (TICKET_MODIFIED_CONCURRENTLY) (2)
+       ✓ proves deterministic CAS conflict rejection: returns 409 TICKET_MODIFIED_CONCURRENTLY when ticket status is modified concurrently during the transaction (updateMany count === 0)
+       ✓ proves concurrent request integration: mutual exclusion allows exactly one winner and safely rejects competing attempt
+     ✓ Lab 3 Endpoint Preservation (PATCH /api/staff/tickets/:id/status) (1)
+       ✓ preserves Lab 3 behavior: allows resolving without ActionTaken on the legacy endpoint
+
+ Test Files  1 passed (1)
+      Tests  24 passed (24)
+   Start at  19:35:17
+   Duration  1.25s (transform 165ms, setup 0ms, collect 424ms, tests 491ms, environment 0ms, prepare 69ms)
+```
+
+**Log 2: Full Server Test Suite Execution (Regression Verification)**
+
+```text
+$ npm --prefix server test
+> toktickit-server@1.0.0 test
+> vitest run
+
+ ✓ tests/lab-01/categories.test.ts (1)
+ ✓ tests/lab-01/health.test.ts (1)
+ ✓ tests/lab-02/attachments.api.test.ts (7)
+ ✓ tests/lab-02/create-ticket.api.test.ts (13)
+ ✓ tests/lab-02/my-tickets.api.test.ts (17)
+ ✓ tests/lab-02/requesters.test.ts (5)
+ ✓ tests/lab-02/ticket-detail.api.test.ts (20)
+ ✓ tests/lab-04/actions-taken.api.test.ts (37)
+ ✓ tests/lab-04/migration-verification.test.ts (8)
+ ✓ tests/lab-04/ticket-workflow.api.test.ts (24)
+ ✓ tests/lab-03/auth.api.test.ts (20)
+ ✓ tests/lab-03/authorization.api.test.ts (28)
+ ✓ tests/lab-03/comments-notes.api.test.ts (16)
+ ✓ tests/lab-03/jwt-password.test.ts (9)
+ ✓ tests/lab-03/migration-verification.test.ts (3)
+ ✓ tests/lab-03/migration.test.ts (3)
+ ✓ tests/lab-03/staff-queue.api.test.ts (23)
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (54)
+ ✓ tests/lab-03/users-admin.api.test.ts (30)
+
+ Test Files  19 passed (19)
+      Tests  319 passed (319)
+   Start at  19:35:27
+   Duration  20.75s
+```
+
+#### JSON Response Payloads for Resolution Gate & Concurrency Envelopes
+
+**1. 422 Unprocessable Entity (`ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`):**
+
+```json
+{
+  "error": {
+    "code": "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION",
+    "message": "At least one action taken must be recorded before resolving this ticket.",
+    "details": {
+      "ticketId": 14,
+      "currentStatus": "IN_PROGRESS",
+      "requestedStatus": "RESOLVED",
+      "actionsCount": 0
+    }
+  }
+```
+
+**2. 409 Conflict (`TICKET_MODIFIED_CONCURRENTLY`):**
+
+```json
+{
+  "error": {
+    "code": "TICKET_MODIFIED_CONCURRENTLY",
+    "message": "Ticket status was modified concurrently by another request. Please reload the latest ticket state."
+  }
+}
+```
 
 ### 3.4 Operational Dashboard API Tests (Issue 22)
 

@@ -11,8 +11,8 @@
 | :---------------------- | :-------------------------------------- | :------------------------------ |
 | `[PR #50]`              | `feature/18-lab4-spec-docs`             | `[Request Changes -> Approved]` |
 | `[PR #51]`              | `feature/19-database-migration-actions` | `[Approved]`                    |
-| `[PR #52]`              | `feature/20-actions-taken-backend`      | `[Request Changes]`             |
-| `[PR #... Placeholder]` | `feature/21-ticket-resolution-gate`     | `[Planned]`                     |
+| `[PR #52]`              | `feature/20-actions-taken-backend`      | `[Request Changes -> Approved]` |
+| `[PR #53]`              | `feature/21-ticket-resolution-gate`     | `[Request Changes -> Approved]` |
 | `[PR #... Placeholder]` | `feature/22-dashboard-backend-apis`     | `[Planned]`                     |
 | `[PR #... Placeholder]` | `feature/23-actions-taken-ui`           | `[Planned]`                     |
 | `[PR #... Placeholder]` | `feature/24-role-dashboards-ui`         | `[Planned]`                     |
@@ -123,7 +123,7 @@
   The added verification tests cover schema constraints, referential integrity, migration data preservation, and seed behavior.
   I found no blocking issues in the reviewed diff. The reported test results are documented in the PR, although I have not independently rerun the migration or test suite during this review.
 
-Recommendation: Approve.
+  Recommendation: Approve.
 
 - **How I responded:**
   > Thanks for the review! The file has been updated based on your comments. Ready to merge.
@@ -137,19 +137,19 @@ Recommendation: Approve.
 
   > The PR implements the core Actions Taken API endpoints and covers the main acceptance criteria, including session-derived performedById, Requester ownership restrictions, role authorization, terminal-ticket guards, validation, and atomic conditional updates for optimistic concurrency control.
 
-Before approval, I recommend addressing the following issues:
+  Before approval, I recommend addressing the following issues:
 
-Optimistic concurrency token reliability: The update handler explicitly sets updatedAt to new Date(). If the new timestamp equals the previous value at the database's timestamp precision, a stale expectedUpdatedAt token may still match, undermining the guarantee that concurrent edits result in exactly one success and one 409 STALE_ACTION_CONFLICT. Please guarantee that the concurrency token changes on every successful update and add a test for same-timestamp updates.
+  Optimistic concurrency token reliability: The update handler explicitly sets updatedAt to new Date(). If the new timestamp equals the previous value at the database's timestamp precision, a stale expectedUpdatedAt token may still match, undermining the guarantee that concurrent edits result in exactly one success and one 409 STALE_ACTION_CONFLICT. Please guarantee that the concurrency token changes on every successful update and add a test for same-timestamp updates.
 
-PUT follow-up note validation: The update handler does not consistently validate followUpNote length when followUpRequired is false. An oversized value may reach the database and result in a 500 instead of a validation response. Please validate the field whenever it is supplied and add a corresponding API test.
+  PUT follow-up note validation: The update handler does not consistently validate followUpNote length when followUpRequired is false. An oversized value may reach the database and result in a 500 instead of a validation response. Please validate the field whenever it is supplied and add a corresponding API test.
 
-Future timestamp boundary: The current validation allows timestamps up to 60 seconds in the future, despite the PR description stating that future timestamps are rejected. Please align the implementation and tests with the authoritative specification.
+  Future timestamp boundary: The current validation allows timestamps up to 60 seconds in the future, despite the PR description stating that future timestamps are rejected. Please align the implementation and tests with the authoritative specification.
 
-Verification evidence consistency: docs/lab-04/evidence.md reports different full-suite totals (280/280 and 285/285). Please reconcile these values with the actual test output.
+  Verification evidence consistency: docs/lab-04/evidence.md reports different full-suite totals (280/280 and 285/285). Please reconcile these values with the actual test output.
 
-The existing API test suite provides broad coverage, but I have not independently rerun the tests or build during this review.
+  The existing API test suite provides broad coverage, but I have not independently rerun the tests or build during this review.
 
-Recommendation: Request Changes until the concurrency-token guarantee and validation gaps are addressed.
+  Recommendation: Request Changes until the concurrency-token guarantee and validation gaps are addressed.
 
 - **How I responded:**
 
@@ -178,10 +178,36 @@ Recommendation: Request Changes until the concurrency-token guarantee and valida
 - **Branch:** `feature/21-ticket-resolution-gate`
 - **Reviewer comment I received:**
 
-  > <!-- Placeholder for partner review comments -->
+  > Request Changes — Resolution Gate error contract
+
+  The Resolution Gate correctly checks the ActionTaken count and returns HTTP 422 when no action has been recorded. However, the error code does not match the Acceptance Criteria in Issue #44.
+
+  Expected: ACTION_TAKEN_REQUIRED_FOR_RESOLUTION
+  Current: RESOLUTION_ACTION_REQUIRED
+  Please align the error code across the server response, automated tests, and docs/lab-04/evidence.md, including the example JSON response. This is an API contract mismatch that should be fixed before approval.
+
+  Also, Issue #44 specifies server/tests/lab-04/ticket-workflow.api.test.ts, while this PR adds server/tests/lab-04/resolution-gate.api.test.ts. Please align the filename with the specified deliverable, or update the issue if the alternative filename is intentional.
+
+  The core resolution-gate logic and requester advisory behavior otherwise appear consistent with the stated requirements based on the reviewed PR details. Please rerun the relevant tests after making these changes.
 
 - **How I responded:**
-  > <!-- Placeholder for author response -->
+
+  > Thanks for the feedback! I have aligned the Resolution Gate error code to `ACTION_TAKEN_REQUIRED_FOR_RESOLUTION` across `server/src/app.ts`, `docs/lab-04/evidence.md`, and the automated tests. I also renamed the test file to `server/tests/lab-04/ticket-workflow.api.test.ts` as specified in Issue #44, and verified all 24/24 targeted tests and 319/319 full server regression tests pass. Ready for re-review!
+
+- **Reviewer comment I received:**
+
+  > Review Summary — Resolution Gate
+
+  The updated implementation addresses the issues identified in the previous review.
+
+  The Resolution Gate now uses the required error code, ACTION_TAKEN_REQUIRED_FOR_RESOLUTION, with HTTP 422 when no ActionTaken records exist.
+  The test file now matches the specified deliverable path: server/tests/lab-04/ticket-workflow.api.test.ts.
+  The server-side resolution validation, transition enforcement, and Requester advisory behavior appear consistent with the stated requirements based on the reviewed diff.
+  The reported targeted tests and full server test suite pass, and the latest CI status checked was successful.
+  No additional blocking issues were identified in this review. Approved based on the reviewed changes and available test evidence.
+
+- **How I responded:**
+  > Thanks for the review! The file has been updated based on your comments. Ready to merge.
 
 ---
 
