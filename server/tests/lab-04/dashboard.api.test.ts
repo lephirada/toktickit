@@ -589,6 +589,66 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
       expect(sumCategoryMinutes).toBe(metrics.totalTimeSpentMinutes);
     });
 
+    it("guarantees duration invariant with multiple actions per ticket across multiple categories without Cartesian duplication", async () => {
+      const beforeRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(beforeRes.status).toBe(200);
+
+      const beforeTotalTime = beforeRes.body.data.metrics.totalTimeSpentMinutes;
+      const beforeBreakdown = beforeRes.body.data.categoryBreakdown;
+      const beforeCatATime = beforeBreakdown.find((c: any) => c.categoryId === testCategoryA.id)?.totalTimeSpentMinutes ?? 0;
+      const beforeCatBTime = beforeBreakdown.find((c: any) => c.categoryId === testCategoryB.id)?.totalTimeSpentMinutes ?? 0;
+
+      // 1. Ticket in Category A with 3 distinct actions: 15, 25, 35 min (total 75 min)
+      const ticketA = await createTicket({
+        status: TicketStatus.IN_PROGRESS,
+        categoryId: testCategoryA.id,
+      });
+      await createAction(ticketA.id, 15);
+      await createAction(ticketA.id, 25);
+      await createAction(ticketA.id, 35);
+
+      // 2. Ticket in Category B with 2 distinct actions: 20, 30 min (total 50 min)
+      const ticketB = await createTicket({
+        status: TicketStatus.OPEN,
+        categoryId: testCategoryB.id,
+      });
+      await createAction(ticketB.id, 20);
+      await createAction(ticketB.id, 30);
+
+      // 3. Ticket in Category A with 2 actions but in CLOSED status (strictly excluded from duration)
+      const ticketClosed = await createTicket({
+        status: TicketStatus.CLOSED,
+        categoryId: testCategoryA.id,
+      });
+      await createAction(ticketClosed.id, 45);
+      await createAction(ticketClosed.id, 65);
+
+      const afterRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(afterRes.status).toBe(200);
+
+      const { metrics, categoryBreakdown } = afterRes.body.data;
+      const afterCatATime = categoryBreakdown.find((c: any) => c.categoryId === testCategoryA.id)?.totalTimeSpentMinutes ?? 0;
+      const afterCatBTime = categoryBreakdown.find((c: any) => c.categoryId === testCategoryB.id)?.totalTimeSpentMinutes ?? 0;
+
+      // Check category increments: exactly +75 for Cat A, +50 for Cat B, zero for closed
+      expect(afterCatATime).toBe(beforeCatATime + 75);
+      expect(afterCatBTime).toBe(beforeCatBTime + 50);
+
+      // Check global metric increment: exactly 75 + 50 = 125
+      expect(metrics.totalTimeSpentMinutes).toBe(beforeTotalTime + 125);
+
+      // Assert global invariant: sum of categoryBreakdown[].totalTimeSpentMinutes === metrics.totalTimeSpentMinutes
+      const sumCategoryMinutes = categoryBreakdown.reduce(
+        (acc: number, cat: any) => acc + cat.totalTimeSpentMinutes,
+        0
+      );
+      expect(sumCategoryMinutes).toBe(metrics.totalTimeSpentMinutes);
+    });
+
     it("returns correct metadata structure and rolling 7-day window boundary timestamps", async () => {
       const res = await request(app)
         .get("/api/staff/dashboard")

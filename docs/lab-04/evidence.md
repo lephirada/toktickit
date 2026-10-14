@@ -470,7 +470,7 @@ $ npm --prefix server test
 ### 3.4 Operational Dashboard API Tests (Issue 22)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts`
-- **Verification Status:** **Verified (19/19 passing, 88/88 Lab 4 suite passing)**
+- **Verification Status:** **Verified (20/20 passing, 89/89 Lab 4 suite passing)**
 - **Endpoints Implemented & Hardened:**
   - `GET /api/staff/dashboard`: Role-authorized operational endpoint (`IT_STAFF`, `ADMINISTRATOR`) requiring active account (`isActive: true`) and changed password (`mustChangePassword: false`). Rejects Requesters with 403 `FORBIDDEN_ROLE` and unauthenticated requests with 401 `UNAUTHORIZED`. Verifies session security with official `toktickit_session` cookie name and cryptographic signature tampering rejection.
   - **Metrics Computation (AC-22-01, AC-22-02):** Aggregates `totalOpen` (`NEW`, `OPEN`), `inProgress` (`IN_PROGRESS`), `waitingForRequester` (`WAITING_FOR_REQUESTER`), `recentlyResolved` (rolling 7-day window on `status = 'RESOLVED'`), `unassignedCount` (`ownerId IS NULL` in active workable states), and `totalTimeSpentMinutes`.
@@ -479,7 +479,7 @@ $ npm --prefix server test
   - **Distribution Breakdowns (AC-22-04):**
     - `categoryBreakdown`: Non-terminal tickets (`status NOT IN ('CLOSED', 'CANCELLED')`) and action durations grouped by `categoryId ASC`, ensuring all categories from `Category` table are present with zero counts for empty categories.
     - `priorityBreakdown`: Non-terminal tickets grouped by effective priority (`COALESCE(itPriority, requestedPriority)`).
-  - **Mathematical Invariant & Empty-Data Scenarios (AC-22-05):** Formally asserted and verified $\sum \text{categoryBreakdown}[i].\text{totalTimeSpentMinutes} \equiv \text{metrics.totalTimeSpentMinutes}$. Verified empty-data handling where all metrics evaluate to 0, total time spent evaluates to 0, all 4 priority keys are present with value 0, and the mathematical invariant ($0 \equiv 0$) holds. Returns valid ISO timestamps for `calculationTimestamp` and `recentlyResolvedWindowStart`, with `recentlyResolvedWindowDays: 7`.
+  - **Mathematical Invariant & Empty-Data Scenarios (AC-22-05):** Formally asserted and verified $\sum \text{categoryBreakdown}[i].\text{totalTimeSpentMinutes} \equiv \text{metrics.totalTimeSpentMinutes}$. Verified that tickets with multiple discrete actions across different categories aggregate without Cartesian duplication. Verified empty-data handling where all metrics evaluate to 0, total time spent evaluates to 0, all 4 priority keys are present with value 0, and the mathematical invariant ($0 \equiv 0$) holds. Returns valid ISO timestamps for `calculationTimestamp` and `recentlyResolvedWindowStart`, with `recentlyResolvedWindowDays: 7`.
 
 #### Terminal Execution Logs (Executed from Project Root)
 
@@ -490,8 +490,8 @@ $ npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts
 > toktickit-server@1.0.0 test
 > vitest run tests/lab-04/dashboard.api.test.ts
 
- ✓ tests/lab-04/dashboard.api.test.ts (19) 508ms
-   ✓ Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts) (19) 508ms
+ ✓ tests/lab-04/dashboard.api.test.ts (20) 548ms
+   ✓ Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts) (20) 548ms
      ✓ AC-22-06: Authorization and Authentication (7)
        ✓ returns 401 UNAUTHORIZED when no session cookie is provided
        ✓ returns 401 UNAUTHORIZED when session cookie is invalid or tampered
@@ -513,15 +513,16 @@ $ npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts
      ✓ AC-22-04: Category Breakdown & Priority Breakdown (2)
        ✓ groups non-terminal tickets by category and includes all categories in Category table
        ✓ groups non-terminal tickets by effective priority using COALESCE(itPriority, requestedPriority)
-     ✓ AC-22-05: Mathematical Invariant and Metadata Assertions (3)
+     ✓ AC-22-05: Mathematical Invariant and Metadata Assertions (4)
        ✓ guarantees mathematical invariant: sum of categoryBreakdown[].totalTimeSpentMinutes === metrics.totalTimeSpentMinutes
+       ✓ guarantees duration invariant with multiple actions per ticket across multiple categories without Cartesian duplication
        ✓ returns correct metadata structure and rolling 7-day window boundary timestamps
        ✓ handles empty-data state with zero-valued metrics, zero action duration, and all priority breakdown keys at zero
 
  Test Files  1 passed (1)
-      Tests  19 passed (19)
-   Start at  21:24:04
-   Duration  1.08s
+      Tests  20 passed (20)
+   Start at  21:42:54
+   Duration  1.15s
 ```
 
 #### JSON Response Payload for Dashboard Overview (200 OK)
