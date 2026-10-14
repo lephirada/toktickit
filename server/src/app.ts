@@ -4027,6 +4027,198 @@ app.put(
 );
 
 // ---------------------------------------------------------------------------
+// Issue 22 — Operational Dashboard API (FR-07, FR-08, AC-22-01..06)
+// GET /api/staff/dashboard
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/staff/dashboard",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+      const prisma = getPrisma();
+      const calculationTimestamp = new Date();
+      const recentlyResolvedWindowDays = 7;
+      const recentlyResolvedWindowStart = new Date(
+        calculationTimestamp.getTime() - recentlyResolvedWindowDays * 24 * 60 * 60 * 1000
+      );
+
+      // Concurrent queries for core queue counts (AC-22-01, AC-22-02)
+      const [
+        totalOpen,
+        inProgress,
+        waitingForRequester,
+        recentlyResolved,
+        unassignedCount,
+        categories,
+        nonTerminalTickets,
+        actions,
+      ] = await Promise.all([
+        // totalOpen: NEW, OPEN
+        prisma.ticket.count({
+          where: {
+            status: { in: [TicketStatus.NEW, TicketStatus.OPEN] },
+          },
+        }),
+        // inProgress: IN_PROGRESS
+        prisma.ticket.count({
+          where: {
+            status: TicketStatus.IN_PROGRESS,
+          },
+        }),
+        // waitingForRequester: WAITING_FOR_REQUESTER
+        prisma.ticket.count({
+          where: {
+            status: TicketStatus.WAITING_FOR_REQUESTER,
+          },
+        }),
+        // recentlyResolved: RESOLVED within rolling 7-day window
+        prisma.ticket.count({
+          where: {
+            status: TicketStatus.RESOLVED,
+            updatedAt: { gte: recentlyResolvedWindowStart },
+          },
+        }),
+        // unassignedCount: ownerId IS NULL in active workable states
+        prisma.ticket.count({
+          where: {
+            ownerId: null,
+            status: {
+              in: [
+                TicketStatus.NEW,
+                TicketStatus.OPEN,
+                TicketStatus.IN_PROGRESS,
+                TicketStatus.WAITING_FOR_REQUESTER,
+                TicketStatus.REOPENED,
+              ],
+            },
+          },
+        }),
+        // All categories sorted by id ASC
+        prisma.category.findMany({
+          orderBy: { id: "asc" },
+          select: { id: true, name: true },
+        }),
+        // All non-terminal tickets (status NOT IN ('CLOSED', 'CANCELLED'))
+        prisma.ticket.findMany({
+          where: {
+            status: {
+              notIn: [TicketStatus.CLOSED, TicketStatus.CANCELLED],
+            },
+          },
+          select: {
+            id: true,
+            categoryId: true,
+            requestedPriority: true,
+            itPriority: true,
+          },
+        }),
+        // Actions on active workable or recently resolved tickets (AC-22-03)
+        prisma.actionTaken.findMany({
+          where: {
+            ticket: {
+              OR: [
+                {
+                  status: {
+                    in: [
+                      TicketStatus.OPEN,
+                      TicketStatus.IN_PROGRESS,
+                      TicketStatus.WAITING_FOR_REQUESTER,
+                      TicketStatus.REOPENED,
+                    ],
+                  },
+                },
+                {
+                  status: TicketStatus.RESOLVED,
+                  updatedAt: { gte: recentlyResolvedWindowStart },
+                },
+              ],
+            },
+          },
+          select: {
+            timeSpentMinutes: true,
+            ticket: {
+              select: {
+                categoryId: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      // Category breakdown aggregation & mathematical invariant enforcement (AC-22-03, AC-22-04, AC-22-05)
+      const categoryTimeMap = new Map<number, number>();
+      let totalTimeSpentMinutes = 0;
+      for (const action of actions) {
+        const catId = action.ticket.categoryId;
+        const minutes = action.timeSpentMinutes ?? 0;
+        totalTimeSpentMinutes += minutes;
+        categoryTimeMap.set(catId, (categoryTimeMap.get(catId) || 0) + minutes);
+      }
+
+      const categoryTicketCountMap = new Map<number, number>();
+      for (const ticket of nonTerminalTickets) {
+        categoryTicketCountMap.set(
+          ticket.categoryId,
+          (categoryTicketCountMap.get(ticket.categoryId) || 0) + 1
+        );
+      }
+
+      const categoryBreakdown = categories.map((cat) => ({
+        categoryId: cat.id,
+        categoryName: cat.name,
+        ticketCount: categoryTicketCountMap.get(cat.id) || 0,
+        totalTimeSpentMinutes: categoryTimeMap.get(cat.id) || 0,
+      }));
+
+      // Priority breakdown aggregation (AC-22-04)
+      const priorityBreakdown: Record<Priority, number> = {
+        P0_URGENT: 0,
+        P1_HIGH: 0,
+        P2_MEDIUM: 0,
+        P3_LOW: 0,
+      };
+      for (const ticket of nonTerminalTickets) {
+        const effectivePriority = ticket.itPriority ?? ticket.requestedPriority;
+        if (effectivePriority && priorityBreakdown[effectivePriority] !== undefined) {
+          priorityBreakdown[effectivePriority]++;
+        }
+      }
+
+      res.status(200).json({
+        data: {
+          metrics: {
+            totalOpen,
+            inProgress,
+            waitingForRequester,
+            recentlyResolved,
+            unassignedCount,
+            totalTimeSpentMinutes,
+          },
+          categoryBreakdown,
+          priorityBreakdown,
+          meta: {
+            calculationTimestamp: calculationTimestamp.toISOString(),
+            recentlyResolvedWindowDays,
+            recentlyResolvedWindowStart: recentlyResolvedWindowStart.toISOString(),
+          },
+        },
+      });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to retrieve operational dashboard metrics."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Issue 9 — Active Attachment Streaming Download & 410 Gone Guard (AC 2 & 4)
 // GET /api/attachments/:id/download
 // ---------------------------------------------------------------------------

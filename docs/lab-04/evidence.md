@@ -17,7 +17,7 @@
 | **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`  | `[Merged]`   |
 | **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Approved]`  | `[Merged]`   |
 | **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[https://github.com/lephirada/toktickit/pull/53]` | `[Approved]`  | `[Merged]`   |
-| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[Pending PR]`                                     | `[In Progress]` | `[In Progress]` |
 | **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 | **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 | **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
@@ -470,7 +470,110 @@ $ npm --prefix server test
 ### 3.4 Operational Dashboard API Tests (Issue 22)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts`
-- **Status:** Pending implementation in Issue 22.
+- **Verification Status:** **Verified (17/17 passing, 336/336 full suite passing)**
+- **Endpoints Implemented & Hardened:**
+  - `GET /api/staff/dashboard`: Role-authorized operational endpoint (`IT_STAFF`, `ADMINISTRATOR`) requiring active account (`isActive: true`) and changed password (`mustChangePassword: false`). Rejects Requesters with 403 `FORBIDDEN_ROLE` and unauthenticated requests with 401 `UNAUTHORIZED`.
+  - **Metrics Computation (AC-22-01, AC-22-02):** Aggregates `totalOpen` (`NEW`, `OPEN`), `inProgress` (`IN_PROGRESS`), `waitingForRequester` (`WAITING_FOR_REQUESTER`), `recentlyResolved` (rolling 7-day window on `status = 'RESOLVED'`: $t \le 7$ days included, $t > 7$ days excluded), `unassignedCount` (`ownerId IS NULL` in active workable states), and `totalTimeSpentMinutes`.
+  - **Time Aggregation Rules (AC-22-03):** Strictly aggregates `ActionTaken.timeSpentMinutes` for active workable tickets (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`) and recently resolved tickets ($\le 7$ days). Strictly excludes `CLOSED`, `CANCELLED`, and stale `RESOLVED` ($> 7$ days).
+  - **Distribution Breakdowns (AC-22-04):**
+    - `categoryBreakdown`: Non-terminal tickets (`status NOT IN ('CLOSED', 'CANCELLED')`) and action durations grouped by `categoryId ASC`, ensuring all categories from `Category` table are present with zero counts for empty categories.
+    - `priorityBreakdown`: Non-terminal tickets grouped by effective priority (`COALESCE(itPriority, requestedPriority)`).
+  - **Mathematical Invariant & Metadata (AC-22-05):** Formally asserted and verified $\sum \text{categoryBreakdown}[i].\text{totalTimeSpentMinutes} \equiv \text{metrics.totalTimeSpentMinutes}$. Returns valid ISO timestamps for `calculationTimestamp` and `recentlyResolvedWindowStart`, with `recentlyResolvedWindowDays: 7`.
+
+#### Terminal Execution Logs (Executed from Project Root)
+
+**Log 1: Operational Dashboard Test Suite**
+
+```text
+$ npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts
+> toktickit-server@1.0.0 test
+> vitest run tests/lab-04/dashboard.api.test.ts
+
+ ✓ tests/lab-04/dashboard.api.test.ts (17) 345ms
+   ✓ Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts) (17) 345ms
+     ✓ AC-22-06: Authorization and Authentication (7)
+       ✓ returns 401 UNAUTHORIZED when no session cookie is provided
+       ✓ returns 401 UNAUTHORIZED when session cookie is invalid or tampered
+       ✓ returns 401 UNAUTHORIZED when user is inactive (isActive: false)
+       ✓ returns 403 PASSWORD_CHANGE_REQUIRED when mustChangePassword is true
+       ✓ returns 403 FORBIDDEN when user has role REQUESTER
+       ✓ allows IT_STAFF to access dashboard with 200 OK and expected structure
+       ✓ allows ADMINISTRATOR to access dashboard with 200 OK
+     ✓ AC-22-01: Core Queue State Aggregation (4)
+       ✓ accurately reflects additions to totalOpen (NEW and OPEN)
+       ✓ accurately tracks inProgress ticket count
+       ✓ accurately tracks waitingForRequester ticket count
+       ✓ accurately tracks unassignedCount for workable tickets and excludes assigned or terminal tickets
+     ✓ AC-22-02 & FR-08: Rolling 7-Day Resolution Window (1)
+       ✓ includes tickets resolved within rolling 7 days (t <= 7d) and excludes stale resolutions (t > 7d)
+     ✓ AC-22-03: Total Time Spent Minutes Aggregation Rules (1)
+       ✓ aggregates actions on active workable tickets and recently resolved tickets, excluding closed/cancelled/stale
+     ✓ AC-22-04: Category Breakdown & Priority Breakdown (2)
+       ✓ groups non-terminal tickets by category and includes all categories in Category table
+       ✓ groups non-terminal tickets by effective priority using COALESCE(itPriority, requestedPriority)
+     ✓ AC-22-05: Mathematical Invariant and Metadata Assertions (2)
+       ✓ guarantees mathematical invariant: sum of categoryBreakdown[].totalTimeSpentMinutes === metrics.totalTimeSpentMinutes
+       ✓ returns correct metadata structure and rolling 7-day window boundary timestamps
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  20:56:09
+   Duration  1.09s
+```
+
+#### JSON Response Payload for Dashboard Overview (200 OK)
+
+```json
+{
+  "data": {
+    "metrics": {
+      "totalOpen": 5,
+      "inProgress": 3,
+      "waitingForRequester": 2,
+      "recentlyResolved": 8,
+      "unassignedCount": 2,
+      "totalTimeSpentMinutes": 645
+    },
+    "categoryBreakdown": [
+      {
+        "categoryId": 1,
+        "categoryName": "Account & Access",
+        "ticketCount": 6,
+        "totalTimeSpentMinutes": 180
+      },
+      {
+        "categoryId": 2,
+        "categoryName": "Hardware",
+        "ticketCount": 4,
+        "totalTimeSpentMinutes": 240
+      },
+      {
+        "categoryId": 3,
+        "categoryName": "Software",
+        "ticketCount": 3,
+        "totalTimeSpentMinutes": 150
+      },
+      {
+        "categoryId": 4,
+        "categoryName": "Network",
+        "ticketCount": 2,
+        "totalTimeSpentMinutes": 75
+      }
+    ],
+    "priorityBreakdown": {
+      "P0_URGENT": 1,
+      "P1_HIGH": 3,
+      "P2_MEDIUM": 7,
+      "P3_LOW": 4
+    },
+    "meta": {
+      "calculationTimestamp": "2026-10-14T14:00:00.000Z",
+      "recentlyResolvedWindowDays": 7,
+      "recentlyResolvedWindowStart": "2026-10-07T14:00:00.000Z"
+    }
+  }
+}
+```
 
 ### 3.5 Client Component & Conflict UI Tests (Issue 23 & 24)
 
