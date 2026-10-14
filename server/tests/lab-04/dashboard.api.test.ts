@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
 import { getPrisma } from "../../src/prisma.js";
 import { createTestSessionCookie } from "../helpers/auth.js";
 import { hashPassword } from "../../src/utils/password.js";
+import { COOKIE_NAME } from "../../src/utils/jwt.js";
 import { Priority, TicketStatus, UserRole } from "@prisma/client";
 
 describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)", () => {
@@ -213,12 +214,22 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
     });
 
     it("returns 401 UNAUTHORIZED when session cookie is invalid or tampered", async () => {
-      const res = await request(app)
+      // 1. Malformed token under official toktickit_session cookie name
+      const resInvalid = await request(app)
         .get("/api/staff/dashboard")
-        .set("Cookie", "session=invalid.tampered.token");
-      expect(res.status).toBe(401);
-      expect(res.body.error).toBeDefined();
-      expect(res.body.error.code).toBe("UNAUTHORIZED");
+        .set("Cookie", `${COOKIE_NAME}=invalid.tampered.token`);
+      expect(resInvalid.status).toBe(401);
+      expect(resInvalid.body.error).toBeDefined();
+      expect(resInvalid.body.error.code).toBe("UNAUTHORIZED");
+
+      // 2. Tampered cryptographic signature on otherwise valid session
+      const tamperedCookie = cookieStaff.slice(0, -6) + "xyz123";
+      const resTampered = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", tamperedCookie);
+      expect(resTampered.status).toBe(401);
+      expect(resTampered.body.error).toBeDefined();
+      expect(resTampered.body.error.code).toBe("UNAUTHORIZED");
     });
 
     it("returns 401 UNAUTHORIZED when user is inactive (isActive: false)", async () => {
@@ -368,6 +379,57 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
         .get("/api/staff/dashboard")
         .set("Cookie", cookieStaff);
       expect(afterRes.body.data.metrics.recentlyResolved).toBe(beforeRecentlyResolved + 2);
+    });
+
+    it("deterministically enforces exact boundary at recentlyResolvedWindowStart and excludes tickets just outside the 7-day window", async () => {
+      // Pin system time deterministically to eliminate race conditions and clock drift
+      const fixedNow = new Date("2026-10-14T12:00:00.000Z");
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(fixedNow);
+
+      try {
+        const windowDays = 7;
+        const exactWindowStart = new Date(fixedNow.getTime() - windowDays * 24 * 60 * 60 * 1000); // 2026-10-07T12:00:00.000Z
+        const justOutsideWindow = new Date(exactWindowStart.getTime() - 1000); // 2026-10-07T11:59:59.000Z (1 second outside)
+
+        const beforeRes = await request(app)
+          .get("/api/staff/dashboard")
+          .set("Cookie", cookieStaff);
+        expect(beforeRes.status).toBe(200);
+        const beforeRecentlyResolved = beforeRes.body.data.metrics.recentlyResolved;
+        const beforeTime = beforeRes.body.data.metrics.totalTimeSpentMinutes;
+
+        // Ticket A: Resolved exactly at windowStart -> INCLUDED in recentlyResolved
+        const ticketA = await createTicket({
+          status: TicketStatus.RESOLVED,
+          updatedAt: exactWindowStart,
+        });
+        await createAction(ticketA.id, 40, exactWindowStart); // +40 minutes
+
+        // Ticket B: Resolved 1s before windowStart -> EXCLUDED from recentlyResolved
+        const ticketB = await createTicket({
+          status: TicketStatus.RESOLVED,
+          updatedAt: justOutsideWindow,
+        });
+        await createAction(ticketB.id, 60, justOutsideWindow); // 0 minutes (excluded)
+
+        const afterRes = await request(app)
+          .get("/api/staff/dashboard")
+          .set("Cookie", cookieStaff);
+
+        expect(afterRes.status).toBe(200);
+        // Only ticketA is added to recentlyResolved
+        expect(afterRes.body.data.metrics.recentlyResolved).toBe(beforeRecentlyResolved + 1);
+        // Only action on ticketA is added to totalTimeSpentMinutes
+        expect(afterRes.body.data.metrics.totalTimeSpentMinutes).toBe(beforeTime + 40);
+
+        // Deterministic metadata timestamps
+        expect(afterRes.body.data.meta.calculationTimestamp).toBe("2026-10-14T12:00:00.000Z");
+        expect(afterRes.body.data.meta.recentlyResolvedWindowDays).toBe(7);
+        expect(afterRes.body.data.meta.recentlyResolvedWindowStart).toBe("2026-10-07T12:00:00.000Z");
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -547,6 +609,64 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
       // Verify window start is exactly 7 days (7 * 24 * 3600 * 1000 ms) before calculation timestamp
       const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
       expect(calcTime - windowStartTime).toBe(sevenDaysMs);
+    });
+
+    it("handles empty-data state with zero-valued metrics, zero action duration, and all priority breakdown keys at zero", async () => {
+      // Simulate empty data state across ticket and action queries while preserving user auth query
+      const countSpy = vi.spyOn(prisma.ticket, "count").mockResolvedValue(0);
+      const ticketFindManySpy = vi.spyOn(prisma.ticket, "findMany").mockResolvedValue([]);
+      const actionFindManySpy = vi.spyOn(prisma.actionTaken, "findMany").mockResolvedValue([]);
+      const categoryFindManySpy = vi.spyOn(prisma.category, "findMany").mockResolvedValue([
+        { id: testCategoryA.id, name: testCategoryA.name, createdAt: new Date() },
+        { id: testCategoryB.id, name: testCategoryB.name, createdAt: new Date() },
+      ]);
+
+      try {
+        const res = await request(app)
+          .get("/api/staff/dashboard")
+          .set("Cookie", cookieStaff);
+
+        expect(res.status).toBe(200);
+        const { metrics, categoryBreakdown, priorityBreakdown, meta } = res.body.data;
+
+        // Zero-valued metrics
+        expect(metrics.totalOpen).toBe(0);
+        expect(metrics.inProgress).toBe(0);
+        expect(metrics.waitingForRequester).toBe(0);
+        expect(metrics.recentlyResolved).toBe(0);
+        expect(metrics.unassignedCount).toBe(0);
+        expect(metrics.totalTimeSpentMinutes).toBe(0);
+
+        // All 4 priority keys strictly 0
+        expect(priorityBreakdown).toEqual({
+          P0_URGENT: 0,
+          P1_HIGH: 0,
+          P2_MEDIUM: 0,
+          P3_LOW: 0,
+        });
+
+        // Configured categories present with 0 counts and 0 durations
+        expect(categoryBreakdown).toHaveLength(2);
+        for (const cat of categoryBreakdown) {
+          expect(cat.ticketCount).toBe(0);
+          expect(cat.totalTimeSpentMinutes).toBe(0);
+        }
+
+        // Mathematical invariant holds: 0 === 0
+        const categorySum = categoryBreakdown.reduce((sum: number, c: any) => sum + c.totalTimeSpentMinutes, 0);
+        expect(categorySum).toBe(metrics.totalTimeSpentMinutes);
+        expect(categorySum).toBe(0);
+
+        // Metadata still intact
+        expect(meta.recentlyResolvedWindowDays).toBe(7);
+        expect(meta.calculationTimestamp).toBeDefined();
+        expect(meta.recentlyResolvedWindowStart).toBeDefined();
+      } finally {
+        countSpy.mockRestore();
+        ticketFindManySpy.mockRestore();
+        actionFindManySpy.mockRestore();
+        categoryFindManySpy.mockRestore();
+      }
     });
   });
 });
