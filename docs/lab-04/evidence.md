@@ -454,6 +454,7 @@ $ npm --prefix server test
       "actionsCount": 0
     }
   }
+}
 ```
 
 **2. 409 Conflict (`TICKET_MODIFIED_CONCURRENTLY`):**
@@ -470,12 +471,12 @@ $ npm --prefix server test
 ### 3.4 Operational Dashboard API Tests (Issue 22)
 
 - **Target Command:** `npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts`
-- **Verification Status:** **Verified (20/20 passing, 89/89 Lab 4 suite passing)**
+- **Verification Status:** **Verified (22/22 passing, 91/91 Lab 4 suite passing)**
 - **Endpoints Implemented & Hardened:**
   - `GET /api/staff/dashboard`: Role-authorized operational endpoint (`IT_STAFF`, `ADMINISTRATOR`) requiring active account (`isActive: true`) and changed password (`mustChangePassword: false`). Rejects Requesters with 403 `FORBIDDEN_ROLE` and unauthenticated requests with 401 `UNAUTHORIZED`. Verifies session security with official `toktickit_session` cookie name and cryptographic signature tampering rejection.
   - **Metrics Computation (AC-22-01, AC-22-02):** Aggregates `totalOpen` (`NEW`, `OPEN`), `inProgress` (`IN_PROGRESS`), `waitingForRequester` (`WAITING_FOR_REQUESTER`), `recentlyResolved` (rolling 7-day window on `status = 'RESOLVED'`), `unassignedCount` (`ownerId IS NULL` in active workable states), and `totalTimeSpentMinutes`.
-  - **Deterministic Rolling-Window Boundary Enforcement (AC-22-02, FR-08):** Verified via system clock pinning (`vi.useFakeTimers`) that a ticket resolved exactly at `recentlyResolvedWindowStart` ($t = \text{now} - 7\text{d}$) is strictly **included**, while a ticket resolved just 1 second outside ($t = \text{now} - 7\text{d} - 1\text{s}$) is strictly **excluded**.
-  - **Time Aggregation Rules (AC-22-03):** Strictly aggregates `ActionTaken.timeSpentMinutes` for active workable tickets (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`) and recently resolved tickets ($\le 7$ days). Strictly excludes `CLOSED`, `CANCELLED`, and stale `RESOLVED` ($> 7$ days).
+  - **Deterministic Rolling-Window Boundary Enforcement (AC-22-02, FR-08):** Verified via system clock pinning (`vi.useFakeTimers`) that a ticket resolved exactly at `recentlyResolvedWindowStart` ($t = \text{now} - 7\text{d}$) is strictly **included**, while a ticket resolved just 1 second outside ($t = \text{now} - 7\text{d} - 1\text{s}$) is strictly **excluded**. Verified tickets with future timestamps satisfy contract lower-bound ($t \ge \text{windowStart}$) without calculation crash.
+  - **Time Aggregation Rules & Zero/Null Fallback (AC-22-03):** Strictly aggregates `ActionTaken.timeSpentMinutes` for active workable tickets (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`) and recently resolved tickets ($\le 7$ days). Strictly excludes `CLOSED`, `CANCELLED`, and stale `RESOLVED` ($> 7$ days). Safely handles zero-duration actions and null/undefined values via `action.timeSpentMinutes ?? 0` without producing `NaN`.
   - **Distribution Breakdowns (AC-22-04):**
     - `categoryBreakdown`: Non-terminal tickets (`status NOT IN ('CLOSED', 'CANCELLED')`) and action durations grouped by `categoryId ASC`, ensuring all categories from `Category` table are present with zero counts for empty categories.
     - `priorityBreakdown`: Non-terminal tickets grouped by effective priority (`COALESCE(itPriority, requestedPriority)`).
@@ -490,8 +491,8 @@ $ npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts
 > toktickit-server@1.0.0 test
 > vitest run tests/lab-04/dashboard.api.test.ts
 
- ✓ tests/lab-04/dashboard.api.test.ts (20) 548ms
-   ✓ Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts) (20) 548ms
+ ✓ tests/lab-04/dashboard.api.test.ts (22) 374ms
+   ✓ Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts) (22) 374ms
      ✓ AC-22-06: Authorization and Authentication (7)
        ✓ returns 401 UNAUTHORIZED when no session cookie is provided
        ✓ returns 401 UNAUTHORIZED when session cookie is invalid or tampered
@@ -505,11 +506,13 @@ $ npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts
        ✓ accurately tracks inProgress ticket count
        ✓ accurately tracks waitingForRequester ticket count
        ✓ accurately tracks unassignedCount for workable tickets and excludes assigned or terminal tickets
-     ✓ AC-22-02 & FR-08: Rolling 7-Day Resolution Window (2)
+     ✓ AC-22-02 & FR-08: Rolling 7-Day Resolution Window (3)
        ✓ includes tickets resolved within rolling 7 days (t <= 7d) and excludes stale resolutions (t > 7d)
        ✓ deterministically enforces exact boundary at recentlyResolvedWindowStart and excludes tickets just outside the 7-day window
-     ✓ AC-22-03: Total Time Spent Minutes Aggregation Rules (1)
+       ✓ handles tickets with future timestamps according to the rolling window lower-bound contract without calculation crash
+     ✓ AC-22-03: Total Time Spent Minutes Aggregation Rules (2)
        ✓ aggregates actions on active workable tickets and recently resolved tickets, excluding closed/cancelled/stale
+       ✓ safely handles zero-duration actions and null/undefined values via fallback without crashing or producing NaN
      ✓ AC-22-04: Category Breakdown & Priority Breakdown (2)
        ✓ groups non-terminal tickets by category and includes all categories in Category table
        ✓ groups non-terminal tickets by effective priority using COALESCE(itPriority, requestedPriority)
@@ -520,9 +523,9 @@ $ npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts
        ✓ handles empty-data state with zero-valued metrics, zero action duration, and all priority breakdown keys at zero
 
  Test Files  1 passed (1)
-      Tests  20 passed (20)
-   Start at  21:42:54
-   Duration  1.15s
+      Tests  22 passed (22)
+   Start at  22:00:19
+   Duration  887ms
 ```
 
 #### JSON Response Payload for Dashboard Overview (200 OK)

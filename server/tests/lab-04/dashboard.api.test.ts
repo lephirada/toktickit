@@ -431,6 +431,43 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
         vi.useRealTimers();
       }
     });
+
+    it("handles tickets with future timestamps according to the rolling window lower-bound contract without calculation crash", async () => {
+      const fixedNow = new Date("2026-10-14T12:00:00.000Z");
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(fixedNow);
+
+      try {
+        const futureDate = new Date("2026-10-15T12:00:00.000Z"); // 1 day in the future
+
+        const beforeRes = await request(app)
+          .get("/api/staff/dashboard")
+          .set("Cookie", cookieStaff);
+        expect(beforeRes.status).toBe(200);
+        const beforeRecentlyResolved = beforeRes.body.data.metrics.recentlyResolved;
+        const beforeTime = beforeRes.body.data.metrics.totalTimeSpentMinutes;
+
+        // Future resolved ticket (updatedAt >= windowStart) satisfies contract lower-bound
+        const futureTicket = await createTicket({
+          status: TicketStatus.RESOLVED,
+          updatedAt: futureDate,
+          categoryId: testCategoryA.id,
+        });
+        await createAction(futureTicket.id, 35, futureDate);
+
+        const afterRes = await request(app)
+          .get("/api/staff/dashboard")
+          .set("Cookie", cookieStaff);
+        expect(afterRes.status).toBe(200);
+
+        // Satisfies updatedAt >= recentlyResolvedWindowStart
+        expect(afterRes.body.data.metrics.recentlyResolved).toBe(beforeRecentlyResolved + 1);
+        expect(afterRes.body.data.metrics.totalTimeSpentMinutes).toBe(beforeTime + 35);
+        expect(afterRes.body.data.meta.calculationTimestamp).toBe("2026-10-14T12:00:00.000Z");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -488,6 +525,58 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
 
       // Expected delta: 45 + 60 + 30 + 25 + 50 = 210
       expect(afterRes.body.data.metrics.totalTimeSpentMinutes).toBe(beforeTime + 210);
+    });
+
+    it("safely handles zero-duration actions and null/undefined values via fallback without crashing or producing NaN", async () => {
+      // 1. Database-persisted zero duration action (timeSpentMinutes = 0)
+      const activeTicket = await createTicket({
+        status: TicketStatus.IN_PROGRESS,
+        categoryId: testCategoryA.id,
+      });
+      await createAction(activeTicket.id, 0); // 0 minutes
+
+      const resWithZero = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(resWithZero.status).toBe(200);
+      expect(Number.isFinite(resWithZero.body.data.metrics.totalTimeSpentMinutes)).toBe(true);
+
+      // 2. Simulated null/undefined timeSpentMinutes from legacy/raw datasets
+      const originalFindMany = prisma.actionTaken.findMany;
+      (prisma.actionTaken as any).findMany = async (args?: any) => {
+        const actual = await originalFindMany.call(prisma.actionTaken, args);
+        return [
+          ...actual,
+          {
+            timeSpentMinutes: null as any,
+            ticket: { categoryId: testCategoryA.id },
+          },
+          {
+            timeSpentMinutes: undefined as any,
+            ticket: { categoryId: testCategoryB.id },
+          },
+        ] as any;
+      };
+
+      try {
+        const resWithNull = await request(app)
+          .get("/api/staff/dashboard")
+          .set("Cookie", cookieStaff);
+
+        expect(resWithNull.status).toBe(200);
+        const { metrics, categoryBreakdown } = resWithNull.body.data;
+
+        expect(Number.isNaN(metrics.totalTimeSpentMinutes)).toBe(false);
+        expect(Number.isFinite(metrics.totalTimeSpentMinutes)).toBe(true);
+
+        const sumCategoryMinutes = categoryBreakdown.reduce(
+          (acc: number, cat: any) => acc + cat.totalTimeSpentMinutes,
+          0
+        );
+        expect(sumCategoryMinutes).toBe(metrics.totalTimeSpentMinutes);
+      } finally {
+        prisma.actionTaken.findMany = originalFindMany;
+      }
     });
   });
 
