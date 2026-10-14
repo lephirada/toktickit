@@ -48,7 +48,7 @@ To fulfill the Spec-Driven Development (Spec DD) grading criterion proving speci
 
 ---
 
-## 3. Automated Test Execution Evidence (Planned for Issues 19–25)
+## 3. Automated Test Execution Evidence (Issues 19–22 Verified; Issues 23–25 Planned)
 
 ### 3.1 Database Migration & Seed Verification (Issue 19)
 
@@ -476,7 +476,7 @@ $ npm --prefix server test
   - `GET /api/staff/dashboard`: Role-authorized operational endpoint (`IT_STAFF`, `ADMINISTRATOR`) requiring active account (`isActive: true`) and changed password (`mustChangePassword: false`). Rejects Requesters with 403 `FORBIDDEN_ROLE` and unauthenticated requests with 401 `UNAUTHORIZED`. Verifies session security with official `toktickit_session` cookie name and cryptographic signature tampering rejection.
   - **Metrics Computation (AC-22-01, AC-22-02):** Aggregates `totalOpen` (`NEW`, `OPEN`), `inProgress` (`IN_PROGRESS`), `waitingForRequester` (`WAITING_FOR_REQUESTER`), `recentlyResolved` (rolling 7-day window on `status = 'RESOLVED'`), `unassignedCount` (`ownerId IS NULL` in active workable states), and `totalTimeSpentMinutes`.
   - **Deterministic Rolling-Window Boundary Enforcement (AC-22-02, FR-08):** Verified via system clock pinning (`vi.useFakeTimers`) that a ticket resolved exactly at `recentlyResolvedWindowStart` ($t = \text{now} - 7\text{d}$) is strictly **included**, while a ticket resolved just 1 second outside ($t = \text{now} - 7\text{d} - 1\text{s}$) is strictly **excluded**. Verified tickets with future timestamps satisfy contract lower-bound ($t \ge \text{windowStart}$) without calculation crash.
-  - **Time Aggregation Rules & Zero/Null Fallback (AC-22-03):** Strictly aggregates `ActionTaken.timeSpentMinutes` for active workable tickets (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`) and recently resolved tickets ($\le 7$ days). Strictly excludes `CLOSED`, `CANCELLED`, and stale `RESOLVED` ($> 7$ days). Safely handles zero-duration actions and null/undefined values via `action.timeSpentMinutes ?? 0` without producing `NaN`.
+  - **Time Aggregation Rules & Zero/Null Fallback (AC-22-03):** Strictly aggregates `ActionTaken.timeSpentMinutes` for active workable tickets (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`) and recently resolved tickets ($\le 7$ days). Strictly excludes `CLOSED`, `CANCELLED`, and stale `RESOLVED` ($> 7$ days). Safely handles zero-duration actions (tested against real database records) and mocked null/undefined values via defensive fallback `action.timeSpentMinutes ?? 0` without producing `NaN`.
   - **Distribution Breakdowns (AC-22-04):**
     - `categoryBreakdown`: Non-terminal tickets (`status NOT IN ('CLOSED', 'CANCELLED')`) and action durations grouped by `categoryId ASC`, ensuring all categories from `Category` table are present with zero counts for empty categories.
     - `priorityBreakdown`: Non-terminal tickets grouped by effective priority (`COALESCE(itPriority, requestedPriority)`).
