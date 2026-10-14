@@ -47,7 +47,7 @@ All client and server errors return a consistent envelope containing `error.code
 ```json
 {
   "error": {
-    "code": "RESOLUTION_ACTION_REQUIRED",
+    "code": "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION",
     "message": "At least one action taken must be recorded before resolving this ticket.",
     "details": {
       "ticketId": 14,
@@ -162,7 +162,7 @@ When `status === "RESOLVED"`:
        where: { ticketId }
      });
      ```
-   - If `actionsCount < 1`, the server halts execution and returns HTTP **`422 Unprocessable Entity`** (`RESOLUTION_ACTION_REQUIRED`).
+   - If `actionsCount < 1`, the server halts execution and returns HTTP **`422 Unprocessable Entity`** (`ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`).
 3. **Resolution Gate Boundary Validation Matrix:**
 
 | Test / Evaluation Case | Input Values | Server Evaluation | HTTP Status & Error Code | Expected Result |
@@ -172,14 +172,14 @@ When `status === "RESOLVED"`:
 | **Exact Min Length** | `resolutionSummary: "1234567890"` (10 chars), `actionsCount >= 1` | Lower boundary satisfied | `200 OK` | Ticket status transitions to `RESOLVED` |
 | **Exact Max Length** | `resolutionSummary: "a".repeat(1000)` (1000 chars), `actionsCount >= 1` | Upper boundary satisfied | `200 OK` | Ticket status transitions to `RESOLVED` |
 | **Exceeds Max Length**| `resolutionSummary: "a".repeat(1001)` (1001 chars) | Length $> 1000$ | `422 VALIDATION_ERROR` | Request rejected; status unchanged |
-| **Zero Actions Taken**| Valid summary (e.g. 50 chars), `actionsCount === 0` | Action count $< 1$ | `422 RESOLUTION_ACTION_REQUIRED` | Request rejected; status unchanged |
+| **Zero Actions Taken**| Valid summary (e.g. 50 chars), `actionsCount === 0` | Action count $< 1$ | `422 ACTION_TAKEN_REQUIRED_FOR_RESOLUTION` | Request rejected; status unchanged |
 | **Valid Resolution** | Valid summary (e.g. 50 chars), `actionsCount >= 1` | Both criteria satisfied | `200 OK` | Ticket status transitions to `RESOLVED`, activity logged |
 
 4. **Failure Payload for Zero Actions:**
    ```json
    {
      "error": {
-       "code": "RESOLUTION_ACTION_REQUIRED",
+       "code": "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION",
        "message": "At least one action taken must be recorded before resolving this ticket.",
        "details": {
          "ticketId": 14,
@@ -563,7 +563,7 @@ Allows a Requester to indicate that a problem appears solved on their own ticket
 | **403** | `FORBIDDEN_ROLE` / `FORBIDDEN_TICKET_ACCESS` | Caller lacks role permission (e.g. Requester creating actions) or Requester accessing unowned ticket. | Access denied; route restricted to IT Staff/Admin or ticket owner. |
 | **404** | `TICKET_NOT_FOUND` / `ACTION_NOT_FOUND` | Ticket or Action Taken ID does not exist in the database. | Verify target ID. |
 | **409** | `STALE_ACTION_CONFLICT` | `expectedUpdatedAt` does not match database `updatedAt`. | Reload latest action record and review conflicting changes. |
-| **422** | `RESOLUTION_ACTION_REQUIRED` | Attempting to transition `IN_PROGRESS -> RESOLVED` with `actionsCount === 0`. | Log at least one technical Action Taken before resolving. |
+| **422** | `ACTION_TAKEN_REQUIRED_FOR_RESOLUTION` | Attempting to transition `IN_PROGRESS -> RESOLVED` with `actionsCount === 0`. | Log at least one technical Action Taken before resolving. |
 | **422** | `TICKET_NOT_IN_WORKABLE_STATE` | Attempting to log/edit action on terminal ticket (`CLOSED` or `CANCELLED`). | Reopen ticket before recording work. |
 | **422** | `INVALID_STATUS_TRANSITION` | Transition violates structural state machine in `shared/ticketStateMachine.ts`. | Follow allowed lifecycle transition sequence. |
 | **422** | `VALIDATION_ERROR` | Field validation failed (missing/empty result, missing or invalid timeSpentMinutes, non-boolean followUpRequired, invalid note length, future timestamp). | Correct highlighted form fields according to constraints. |

@@ -4,7 +4,7 @@
 **Semester:** 1/2026  
 **Lab Assignment:** Lab 4 — TokTickIT Parent-Child Work Structures, Resolution Gates, Operational Dashboards, and Regression Traceability  
 **Repository:** `lephirada/toktickit`  
-**Integration Branch:** `feature/25-integration-e2e` → `lab4-staging` → `main`  
+**Integration Branch:** `feature/26-final-submission-artifacts` → `lab4-staging` → `main`  
 **Status:** In Progress (Baseline Specifications Established in Issue 18)  
 
 ---
@@ -20,17 +20,18 @@ main (Release / Stable)
  |-- lab4-staging (Sprint 4 Integration Branch)
  |    ^
  |    |-- feature/18-lab4-spec-docs          (Issue 18: Sprint 4 Specifications & Test Plan)
- |    |-- feature/19-actions-taken-db        (Issue 19: ActionTaken Schema & Seed Migration)
- |    |-- feature/20-actions-taken-api       (Issue 20: Actions Taken REST API & Concurrency)
- |    |-- feature/21-resolution-gate         (Issue 21: Server-Enforced Resolution Gate)
- |    |-- feature/22-dashboard-api           (Issue 22: Operational Dashboard Metrics API)
+ |    |-- feature/19-database-migration-actions (Issue 19: ActionTaken Schema & Seed Migration)
+ |    |-- feature/20-actions-taken-backend   (Issue 20: Actions Taken REST API & Concurrency)
+ |    |-- feature/21-ticket-resolution-gate  (Issue 21: Server-Enforced Resolution Gate)
+ |    |-- feature/22-dashboard-backend-apis  (Issue 22: Operational Dashboard Metrics API)
  |    |-- feature/23-actions-taken-ui        (Issue 23: Actions Taken UI & Concurrency Modal)
- |    |-- feature/24-dashboard-ui            (Issue 24: Operational Dashboard UI & Layouts)
- |    `-- feature/25-integration-e2e         (Issue 25: Full Multi-Persona E2E & Release)
+ |    |-- feature/24-role-dashboards-ui      (Issue 24: Operational Dashboard UI & Layouts)
+ |    |-- feature/25-e2e-regression-hardening (Issue 25: Full Multi-Persona E2E & Release)
+ |    `-- feature/26-final-submission-artifacts (Issue 26: Final Release & Submission Artifacts)
 ```
 
 ### 1.2 GitHub Project / Kanban Board Evidence
-All sprint issues (Issues 18 through 25) are tracked with explicit user stories, functional boundaries, acceptance criteria, and moved through Kanban phases (`Todo` → `In Progress` → `Review` → `Done`).
+All sprint issues (Issues 18 through 26) are tracked with explicit user stories, functional boundaries, acceptance criteria, and moved through Kanban phases (`Todo` → `In Progress` → `Review` → `Done`).
 
 ### 1.3 Peer Review Records
 Peer review logs and PR evaluation verdicts are tracked in [`docs/lab-04/reviewer.md`](reviewer.md) with peer reviewer identity, PR links, reviewer critiques, author responses, and approval verdicts.
@@ -109,7 +110,7 @@ Peer review logs and PR evaluation verdicts are tracked in [`docs/lab-04/reviewe
   - Resolution Gate Warning Modal: `artifacts/lab-04/screenshots/resolution-gate/`
 - **Features Demonstrated:**
   - Transitioning `IN_PROGRESS -> RESOLVED` strictly requires `actionsCount >= 1` and `resolutionSummary` (10–1,000 characters).
-  - Attempted resolution with 0 actions returns HTTP `422 RESOLUTION_ACTION_REQUIRED`.
+  - Attempted resolution with 0 actions returns HTTP `422 ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`.
   - Comprehensive boundary case enforcement ($< 10$, $= 10$, $= 1000$, $> 1000$ characters).
   - Pure structural state machine preserved in `shared/ticketStateMachine.ts`.
   - Requester `resolutionIndicated = true` confirmed as strictly advisory without altering ticket status.

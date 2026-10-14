@@ -55,7 +55,7 @@ Stakeholders mandate that:
    * Optimistic concurrency control via `expectedUpdatedAt`: returning `409 STALE_ACTION_CONFLICT` on timestamp mismatch and `400 MISSING_CONCURRENCY_TOKEN` if omitted.
    * Atomic audit logging in `TicketActivity` for action creation and updates.
 4. **Server-Enforced Resolution Gate & State Machine (Issue 21):**
-   * Server-side resolution gate: `IN_PROGRESS -> RESOLVED` transition rejected with `422 Unprocessable Entity` (`RESOLUTION_ACTION_REQUIRED`) if `actionsCount === 0`.
+   * Server-side resolution gate: `IN_PROGRESS -> RESOLVED` transition rejected with `422 Unprocessable Entity` (`ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`) if `actionsCount === 0`.
    * Preservation of pure structural status transitions in `shared/ticketStateMachine.ts`.
    * Clarification that Requester `POST /api/tickets/:id/confirm-resolved` sets `resolutionIndicated = true` but is strictly advisory and cannot alter status to `RESOLVED` or bypass the gate.
 5. **Operational Dashboard & Metrics API (Issue 22):**
@@ -89,20 +89,21 @@ The following capabilities are **strictly excluded** from Sprint 4:
 
 ---
 
-## 4. Issue Ownership Model (Issues 18 to 25)
+## 4. Issue Ownership Model (Issues 18 to 26)
 
 To maintain strict sequential delivery and prevent boundary drift, each issue has an explicit, singular technical scope:
 
 | Issue | Title | Branch Name | Primary Ownership |
 | :---: | :--- | :--- | :--- |
 | **18** | Sprint 4 Documentation & Contract | `feature/18-lab4-spec-docs` | Authoritative specifications only (`docs/lab-04/*.md`). Zero code or migrations. |
-| **19** | Database Schema, Migration & Seed | `feature/19-actions-taken-db` | `ActionTaken` model, relations, non-destructive migration, and idempotent seed script. |
-| **20** | Actions Taken REST APIs & Concurrency | `feature/20-actions-taken-api` | Actions Taken endpoints (`GET`, `POST`, `PUT`), `expectedUpdatedAt` concurrency control, server auth identity derivation, and audit logging. |
-| **21** | Resolution Gate & State Machine | `feature/21-resolution-gate` | Server-enforced Resolution Gate (`actionsCount >= 1`), decoupling from `shared/ticketStateMachine.ts`, and advisory Requester confirmation. |
-| **22** | Operational Dashboard API | `feature/22-dashboard-api` | `GET /api/staff/dashboard` metrics computation, rolling 7-day resolution window, and role protection. |
+| **19** | Database Schema, Migration & Seed | `feature/19-database-migration-actions` | `ActionTaken` model, relations, non-destructive migration, and idempotent seed script. |
+| **20** | Actions Taken REST APIs & Concurrency | `feature/20-actions-taken-backend` | Actions Taken endpoints (`GET`, `POST`, `PUT`), `expectedUpdatedAt` concurrency control, server auth identity derivation, and audit logging. |
+| **21** | Resolution Gate & State Machine | `feature/21-ticket-resolution-gate` | Server-enforced Resolution Gate (`actionsCount >= 1`), decoupling from `shared/ticketStateMachine.ts`, and advisory Requester confirmation. |
+| **22** | Operational Dashboard API | `feature/22-dashboard-backend-apis` | `GET /api/staff/dashboard` metrics computation, rolling 7-day resolution window, and role protection. |
 | **23** | Actions Taken UI & Concurrency Handling | `feature/23-actions-taken-ui` | Staff detail actions list, modals, 409 conflict handling UI, and Requester read-only view. |
-| **24** | Operational Dashboard UI | `feature/24-dashboard-ui` | Zen Green KPI cards, distribution charts, quick-filter links, and responsive viewports. |
-| **25** | Integration, E2E Testing & Verification | `feature/25-integration-e2e` | Multi-persona Playwright journeys, regression suites, responsive screenshots, and sprint documentation. |
+| **24** | Operational Dashboard UI | `feature/24-role-dashboards-ui` | Zen Green KPI cards, distribution charts, quick-filter links, and responsive viewports. |
+| **25** | Integration, E2E Testing & Verification | `feature/25-e2e-regression-hardening` | Multi-persona Playwright journeys, regression suites, responsive screenshots, and sprint documentation. |
+| **26** | Final Release & Submission Package | `feature/26-final-submission-artifacts` | Final release hardening, submission package documentation, and verification artifacts sign-off. |
 
 ---
 
@@ -112,7 +113,7 @@ To maintain strict sequential delivery and prevent boundary drift, each issue ha
 - **FR-02 (Authenticated Performer Authority):** The system shall populate `performedById` server-side strictly from the authenticated session (`req.user.id`). Any client-supplied `performedById` or `performerId` in the request body shall be discarded or rejected (`400 Bad Request`).
 - **FR-03 (Actions Taken Query & Retrieval):** The system shall provide `GET /api/tickets/:id/actions` returning chronological actions taken for the ticket. IT Staff and Administrators can view all actions; Requesters can view actions taken for their owned tickets in read-only mode (`requesterId === req.user.id`), while foreign ticket access returns `404 Not Found`.
 - **FR-04 (Action Taken Modification & Optimistic Concurrency):** Authorized IT Staff and Administrators shall be able to update an existing Action Taken record (`PUT /api/tickets/:id/actions/:actionId`). The request body must include `expectedUpdatedAt` (ISO-8601 timestamp) matching the current record timestamp. Mismatches return `409 Conflict` (`STALE_ACTION_CONFLICT`), while omissions return `400 Bad Request` (`MISSING_CONCURRENCY_TOKEN`).
-- **FR-05 (Server-Enforced Resolution Gate):** Transitioning a ticket from `IN_PROGRESS` to `RESOLVED` (`PATCH /api/tickets/:id/status`) shall enforce the server-side Resolution Gate: the request must provide a valid `resolutionSummary` (10–1,000 characters) AND the ticket must have at least one recorded Action Taken (`actionsCount >= 1`). If `actionsCount === 0`, the server rejects the transition with `422 Unprocessable Entity` (`RESOLUTION_ACTION_REQUIRED`). Pure structural state machine transitions in `shared/ticketStateMachine.ts` remain decoupled from database queries.
+- **FR-05 (Server-Enforced Resolution Gate):** Transitioning a ticket from `IN_PROGRESS` to `RESOLVED` (`PATCH /api/tickets/:id/status`) shall enforce the server-side Resolution Gate: the request must provide a valid `resolutionSummary` (10–1,000 characters) AND the ticket must have at least one recorded Action Taken (`actionsCount >= 1`). If `actionsCount === 0`, the server rejects the transition with `422 Unprocessable Entity` (`ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`). Pure structural state machine transitions in `shared/ticketStateMachine.ts` remain decoupled from database queries.
 - **FR-06 (Advisory Requester Resolution Indication):** When an authenticated Requester indicates resolution (`POST /api/tickets/:id/confirm-resolved`), the system sets `resolutionIndicated = true`, posts an automated public comment, and logs an activity record. This indication is strictly advisory and shall not alter the ticket status under any circumstances (the existing ticket status remains completely unchanged), nor can it bypass the resolution gate.
 - **FR-07 (Operational Dashboard Metrics):** The system shall expose `GET /api/staff/dashboard` returning aggregated operational metrics for IT Staff and Administrators: Total Open (`NEW`, `OPEN`), In Progress (`IN_PROGRESS`), Waiting for Requester (`WAITING_FOR_REQUESTER`), Recently Resolved (rolling 7-day window on `RESOLVED`), Unassigned Tickets (`ownerId IS NULL` on active workable statuses), Total Time Spent (minutes across active workable states and recently resolved tickets), Category Breakdown (non-terminal ticket counts and action durations), and Priority Distribution (non-terminal tickets by effective IT priority).
 - **FR-08 (Dashboard Calculation Specification Separation & Status Scopes):** The operational metrics API shall compute values according to deterministic, mutually exclusive status scopes and explicit action inclusion criteria:
@@ -156,7 +157,7 @@ To maintain strict sequential delivery and prevent boundary drift, each issue ha
 | **BR-01** | **Parent-Child Relational Integrity** | Every Action Taken record must belong to exactly one existing parent `Ticket` (`ticketId` foreign key). Orphaned actions are prohibited. Physical deletion of tickets is not supported; database cascade ensures referential safety. | Database Foreign Key & API Controller |
 | **BR-02** | **Workable State for Action Logging** | Actions Taken can only be created or modified while the parent ticket is in an active operational state (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`). Attempting to log or edit an action on an unworkable ticket (`NEW`, `RESOLVED`, `CLOSED`, `CANCELLED`) returns `422 Unprocessable Entity` (`TICKET_NOT_IN_WORKABLE_STATE`). | Server Controller (`POST/PUT /api/tickets/:id/actions`) |
 | **BR-03** | **Server Authority for Performer Identity** | The `performedById` foreign key is strictly determined by the authenticated session (`req.user.id`). Any client-supplied identity parameters are ignored or rejected (`400 Bad Request`). Staff cannot attribute work to other users. | Server Auth Middleware & Controller |
-| **BR-04** | **Mandatory Resolution Gate** | Transitioning a ticket from `IN_PROGRESS` to `RESOLVED` strictly requires: (1) `actionsCount >= 1` (at least one Action Taken record for the ticket), and (2) `resolutionSummary` between 10 and 1,000 characters. If `actionsCount === 0`, return `422 Unprocessable Entity` (`RESOLUTION_ACTION_REQUIRED`). If `resolutionSummary` is missing or out of bounds ($< 10$ or $> 1000$ characters), return `422 Unprocessable Entity` (`VALIDATION_ERROR`). | Server Controller (`PATCH /api/tickets/:id/status`) |
+| **BR-04** | **Mandatory Resolution Gate** | Transitioning a ticket from `IN_PROGRESS` to `RESOLVED` strictly requires: (1) `actionsCount >= 1` (at least one Action Taken record for the ticket), and (2) `resolutionSummary` between 10 and 1,000 characters. If `actionsCount === 0`, return `422 Unprocessable Entity` (`ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`). If `resolutionSummary` is missing or out of bounds ($< 10$ or $> 1000$ characters), return `422 Unprocessable Entity` (`VALIDATION_ERROR`). | Server Controller (`PATCH /api/tickets/:id/status`) |
 | **BR-05** | **Advisory Requester Resolution Limitation** | When a Requester indicates problem resolution (`POST /api/tickets/:id/confirm-resolved`), the ticket records `resolutionIndicated = true`, appends a public comment, and logs an activity record. It is strictly advisory and **must not alter the ticket status** (the existing ticket status remains completely unchanged, including for tickets in `WAITING_FOR_REQUESTER` or `IN_PROGRESS`). It cannot set status to `RESOLVED` or `CLOSED` and cannot bypass the Resolution Gate. | Server Controller & State Machine |
 | **BR-06** | **Action Field Validation & Time Constraints** | `description` must be between 10 and 2,000 characters (trimmed). `timeSpentMinutes` must be a positive integer between 1 and 1,440 minutes (24 hours). `performedAt` must be a valid past or present ISO-8601 timestamp and **cannot be in the future** (`performedAt <= now()`). Any timestamp where `performedAt > now()` (future server time) is strictly rejected with `422 Unprocessable Entity` (`VALIDATION_ERROR`). | Server Validation Layer (`422 Unprocessable Entity`) |
 | **BR-07** | **Optimistic Concurrency Control Token** | Updating an Action Taken record requires `expectedUpdatedAt`. The update proceeds only if `ActionTaken.updatedAt` equals `expectedUpdatedAt`. Mismatches return `409 Conflict` (`STALE_ACTION_CONFLICT`). Missing tokens return `400 Bad Request` (`MISSING_CONCURRENCY_TOKEN`). | Server Update Controller (`PUT /api/tickets/:id/actions/:actionId`) |
@@ -222,7 +223,7 @@ To maintain clean architecture and ensure code reusability between client and se
      ```json
      {
        "error": {
-         "code": "RESOLUTION_ACTION_REQUIRED",
+         "code": "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION",
          "message": "At least one action taken must be recorded before resolving this ticket.",
          "details": {
            "ticketId": 42,
@@ -334,7 +335,7 @@ model ActionTaken {
 * **AC-20-05:** Action creation and updates emit atomic audit log entries in `TicketActivity`.
 
 ### Issue 21 — Server-Enforced Resolution Gate & State Machine Enforcement
-* **AC-21-01:** Transitioning `IN_PROGRESS -> RESOLVED` without recorded actions (`actionsCount === 0`) returns `422 Unprocessable Entity` (`RESOLUTION_ACTION_REQUIRED`).
+* **AC-21-01:** Transitioning `IN_PROGRESS -> RESOLVED` without recorded actions (`actionsCount === 0`) returns `422 Unprocessable Entity` (`ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`).
 * **AC-21-02:** Transitioning `IN_PROGRESS -> RESOLVED` enforces full boundary validation on `resolutionSummary`:
   - Missing `resolutionSummary` (undefined/null/empty) returns `422 Unprocessable Entity` (`VALIDATION_ERROR`).
   - Fewer than 10 characters (e.g. 9 chars or whitespace-only) returns `422 Unprocessable Entity` (`VALIDATION_ERROR`).
@@ -348,10 +349,10 @@ model ActionTaken {
 ### Issue 22 — Operational Dashboard & Analytics API
 * **AC-22-01:** `GET /api/staff/dashboard` returns aggregated counts for Total Open (`NEW`, `OPEN`), In Progress (`IN_PROGRESS`), Waiting for Requester (`WAITING_FOR_REQUESTER`), and Unassigned active tickets (`ownerId IS NULL` in active workable states).
 * **AC-22-02:** `recentlyResolved` metric is accurately calculated using a rolling 7-day window on `status = 'RESOLVED'`.
-* **AC-22-03:** `totalTimeSpentMinutes` and `categoryBreakdown.totalTimeSpentMinutes` strictly aggregate actions on active workable tickets (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`) or recently resolved tickets (`RESOLVED` within 7 days), excluding actions on `CLOSED` or `CANCELLED` tickets.
-* **AC-22-04:** `categoryBreakdown.ticketCount` and `priorityBreakdown` strictly count non-terminal tickets (`status NOT IN ('CLOSED', 'CANCELLED')`).
-* **AC-22-05:** Metric calculations distinguish Lab Sheet mandates from project design decisions.
-* **AC-22-06:** Endpoint is restricted strictly to `IT_STAFF` and `ADMINISTRATOR` (`403 Forbidden` for Requesters).
+* **AC-22-03:** `totalTimeSpentMinutes` aggregates ActionTaken durations for tickets in active workable states (`OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `REOPENED`) and recently resolved tickets (`RESOLVED` within the rolling 7-day window). Excludes `CLOSED`, `CANCELLED`, and stale `RESOLVED` tickets.
+* **AC-22-04:** `categoryBreakdown.ticketCount` and `priorityBreakdown` count non-terminal tickets (`status NOT IN ('CLOSED', 'CANCELLED')`). Priority grouping uses `COALESCE(itPriority, requestedPriority)`.
+* **AC-22-05:** Verify the required dashboard calculations and metadata, and assert that the sum of `categoryBreakdown[].totalTimeSpentMinutes` equals `metrics.totalTimeSpentMinutes`. Include empty-data and relevant time-boundary cases.
+* **AC-22-06:** `GET /api/staff/dashboard` permits `IT_STAFF` and `ADMINISTRATOR`, returns 401 for unauthenticated requests, and returns 403 for Requester requests.
 
 ### Issue 23 — Actions Taken Client UI & Concurrency Handling
 * **AC-23-01:** Staff Ticket Detail displays chronological Actions Taken timeline with author name, timestamp, and duration badges.
