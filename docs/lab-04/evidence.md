@@ -727,9 +727,10 @@ Screenshots systematically captured across 3 standard viewports (Desktop $1280 \
 | View Category                        | Screenshot Target Folder                               | Responsive Check Status | Captured Artifact Files |
 | :----------------------------------- | :----------------------------------------------------- | :---------------------: | :---------------------- |
 | Staff Ticket Detail Actions Timeline | `artifacts/lab-04/screenshots/actions-timeline/`       | **Verified (1280, 768, 375)** | `actions-timeline-staff-1280.png`<br>`actions-timeline-staff-768.png`<br>`actions-timeline-staff-375.png` |
+| Requester Read-Only Work History     | `artifacts/lab-04/screenshots/requester-actions-view/` | **Verified (1280, 768, 375)** | `actions-timeline-requester-1280.png`<br>`actions-timeline-requester-768.png`<br>`actions-timeline-requester-375.png` |
+| Role Authorization Comparison (Staff vs Requester) | `artifacts/lab-04/screenshots/` | **Verified (Side-by-Side)** | `role-comparison-staff-vs-requester.png` |
 | Log Action Modal & Form Validation   | `artifacts/lab-04/screenshots/log-action-modal/`       | **Verified (1280, 375)** | `log-action-modal-1280.png`<br>`log-action-modal-375.png` |
 | 409 Concurrency Conflict Dialog      | `artifacts/lab-04/screenshots/concurrency-conflict/`   | **Verified (1280, 375)** | `concurrency-conflict-1280.png`<br>`concurrency-conflict-375.png` |
-| Requester Read-Only Work History     | `artifacts/lab-04/screenshots/requester-actions-view/` | **Verified (1280, 768, 375)** | `actions-timeline-requester-1280.png`<br>`actions-timeline-requester-768.png`<br>`actions-timeline-requester-375.png` |
 | Resolution Gate Warning (0 Actions)  | `artifacts/lab-04/screenshots/resolution-gate/`        |         Planned         | Planned for Issue 25 |
 | Operational Dashboard KPI Grid       | `artifacts/lab-04/screenshots/operational-dashboard/`  |         Planned         | Planned for Issue 25 |
 | Dashboard Workload Distribution      | `artifacts/lab-04/screenshots/dashboard-breakdowns/`   |         Planned         | Planned for Issue 25 |
