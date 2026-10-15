@@ -76,13 +76,21 @@ export class ApiError extends Error {
   code?: string;
   fieldErrors?: FieldError[];
   status?: number;
+  details?: any;
 
-  constructor(message: string, code?: string, fieldErrors?: FieldError[], status?: number) {
+  constructor(
+    message: string,
+    code?: string,
+    fieldErrors?: FieldError[],
+    status?: number,
+    details?: any
+  ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.fieldErrors = fieldErrors;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -1102,3 +1110,137 @@ export async function resetAdminUserInitialPassword(
   return body;
 }
 
+// ---------------------------------------------------------------------------
+// Issue 20 / Issue 23: Actions Taken Client APIs
+// ---------------------------------------------------------------------------
+
+export type ActionType =
+  | "INVESTIGATION"
+  | "CONFIGURATION"
+  | "REPAIR"
+  | "COMMUNICATION"
+  | "OTHER";
+
+export interface ActionTakenItem {
+  id: number;
+  ticketId: number;
+  performedById: number;
+  actionDateTime?: string;
+  description: string;
+  result: string;
+  actionType: ActionType | string;
+  timeSpentMinutes: number;
+  followUpRequired: boolean;
+  followUpNote: string | null;
+  attachmentNotes: string | null;
+  performedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  performedBy: {
+    id: number;
+    fullName: string;
+    email: string;
+    role: string;
+  };
+}
+
+export interface CreateActionPayload {
+  description: string;
+  result: string;
+  actionType?: ActionType | string;
+  timeSpentMinutes: number;
+  performedAt?: string;
+  followUpRequired?: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+}
+
+export interface UpdateActionPayload {
+  expectedUpdatedAt: string;
+  description?: string;
+  result?: string;
+  actionType?: ActionType | string;
+  timeSpentMinutes?: number;
+  performedAt?: string;
+  followUpRequired?: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+}
+
+export async function fetchTicketActions(
+  ticketId: number
+): Promise<{ data: ActionTakenItem[]; totalDurationMinutes?: number }> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch actions with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status,
+      errorObj?.details
+    );
+  }
+
+  return body;
+}
+
+export async function createTicketAction(
+  ticketId: number,
+  payload: CreateActionPayload
+): Promise<{ data: ActionTakenItem }> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to create action with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status,
+      errorObj?.details
+    );
+  }
+
+  return body;
+}
+
+export async function updateTicketAction(
+  ticketId: number,
+  actionId: number,
+  payload: UpdateActionPayload
+): Promise<{ data: ActionTakenItem }> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions/${actionId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to update action with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status,
+      errorObj?.details
+    );
+  }
+
+  return body;
+}
