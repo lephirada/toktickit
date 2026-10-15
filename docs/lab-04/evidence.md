@@ -11,17 +11,17 @@
 
 ## 1. GitHub Issues & Pull Requests Registry
 
-| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status   | Merge Commit    |
-| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :-------------- | :-------------- |
-| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`    | `[Merged]`      |
-| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`    | `[Merged]`      |
-| **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Approved]`    | `[Merged]`      |
-| **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[https://github.com/lephirada/toktickit/pull/53]` | `[Approved]`    | `[Merged]`      |
-| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[https://github.com/lephirada/toktickit/pull/55]` | `[In Progress]` | `[In Progress]` |
-| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`     | `[Planned]`     |
-| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`     | `[Planned]`     |
-| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`     | `[Planned]`     |
-| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`     | `[Planned]`     |
+| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status | Merge Commit |
+| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :------------ | :----------- |
+| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`  | `[Merged]`   |
+| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`  | `[Merged]`   |
+| **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Approved]`  | `[Merged]`   |
+| **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[https://github.com/lephirada/toktickit/pull/53]` | `[Approved]`  | `[Merged]`   |
+| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[https://github.com/lephirada/toktickit/pull/55]` | `[Approved]`  | `[Merged]`   |
+| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 
 ---
 

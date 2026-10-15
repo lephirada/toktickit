@@ -13,7 +13,7 @@
 | `[PR #51]`              | `feature/19-database-migration-actions` | `[Approved]`                    |
 | `[PR #52]`              | `feature/20-actions-taken-backend`      | `[Request Changes -> Approved]` |
 | `[PR #53]`              | `feature/21-ticket-resolution-gate`     | `[Request Changes -> Approved]` |
-| `[PR #... Placeholder]` | `feature/22-dashboard-backend-apis`     | `[Planned]`                     |
+| `[PR #55]`              | `feature/22-dashboard-backend-apis`     | `[Approved]`                    |
 | `[PR #... Placeholder]` | `feature/23-actions-taken-ui`           | `[Planned]`                     |
 | `[PR #... Placeholder]` | `feature/24-role-dashboards-ui`         | `[Planned]`                     |
 | `[PR #... Placeholder]` | `feature/25-e2e-regression-hardening`   | `[Planned]`                     |
@@ -216,10 +216,20 @@
 - **Branch:** `feature/22-dashboard-backend-apis`
 - **Reviewer comment I received:**
 
-  > <!-- Placeholder for partner review comments -->
+  > Approved. The implementation aligns with the Lab 4 dashboard API requirements.
+
+  Implements GET /api/staff/dashboard with the required response structure: metrics, categoryBreakdown, priorityBreakdown, and meta.
+  Enforces role-based access control for IT_STAFF and ADMINISTRATOR, with appropriate handling for unauthorized and unauthenticated requests.
+  Applies the rolling seven-day window for recently resolved tickets and excludes ineligible ticket states from time-spent calculations.
+  Uses effective priority (itPriority ?? requestedPriority) for priority breakdowns.
+  Maintains the invariant that the sum of category time-spent values equals metrics.totalTimeSpentMinutes.
+  Includes tests covering the acceptance criteria, authorization, time-window boundaries, excluded states, empty datasets, and the time-spent invariant.
+  The reported test suites pass, and CI has passed.
+
+  No blocking issues found. Thank you for the implementation.
 
 - **How I responded:**
-  > <!-- Placeholder for author response -->
+  > Thanks for approving the PR! I have already updated docs/lab-04/reviewer.md with the latest comment. You can merge this PR.
 
 ---
 
@@ -284,3 +294,17 @@
 
 - **Partner's response:**
   > Thank you for the review and approval! All review comments, type safety enhancements, and negative test suites covering boolean types, note boundaries, and ISO-8601 UTC date formats are in place. All 35 Actions Taken API tests, 43 total Lab 4 tests, and 152 regression tests pass cleanly. PR #60 is ready to merge into lab4-staging.
+
+### PR - Issue 22 : Ticket Workflow Hardening & Resolution Gate (Backend & State Enforcement)
+
+- **My comment:**
+
+  > The backend workflow enforcement looks good to me. The resolution gate, status transition matrix, reassignment validation, and optimistic concurrency checks are implemented and covered by tests. The CI checks also pass, including the server tests, client build, and Playwright E2E tests. I approved Ka.
+
+- **Partner's response:**
+  > Thank you for the review and approval! All workflow enforcement rules—including the authoritative resolution gate, strict status transition matrix, ticket reassignment validation, atomic optimistic concurrency control with monotonic timestamp advancement, and strict calendar validation—are fully implemented and verified across unit, API, client, and Playwright E2E test suites with zero regressions. PR #61 is ready to merge into lab4-staging.
+
+### PR - Issue 23 : Actions Taken UI & Ticket Detail Integration (Frontend)
+
+- **My comment:**
+  > The Actions Taken UI looks good to me. IT Staff and Administrators can create and edit actions, while Requesters have a read-only view. The follow-up validation, status transition rules, and 409 conflict handling with form state preservation are also covered by tests. The CI checks pass, including the client tests and build. I approved Ka.
