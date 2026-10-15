@@ -164,4 +164,66 @@ describe("ConcurrencyConflictDialog Component (Lab 4 Issue #23 AC-23-06)", () =>
 
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("fetches the latest action from server when serverRecord is missing and updates expectedUpdatedAt", async () => {
+    const mockFetchedRecord: api.ActionTakenItem = {
+      ...mockServerRecord,
+      description: "Fetched fresh from server directly.",
+      updatedAt: "2026-02-01T12:05:00.000Z",
+    };
+
+    const spyFetch = vi.spyOn(api, "fetchTicketActions").mockResolvedValue({
+      data: [mockFetchedRecord],
+    });
+
+    const onReloadMock = vi.fn();
+
+    render(
+      <ConcurrencyConflictDialog
+        {...defaultProps}
+        serverRecord={null}
+        serverUpdatedAt={null}
+        ticketId={101}
+        actionId={42}
+        onReloadLatest={onReloadMock}
+      />
+    );
+
+    const reloadBtn = screen.getByRole("button", { name: /Reload Latest Version/i });
+    fireEvent.click(reloadBtn);
+
+    await waitFor(() => {
+      expect(spyFetch).toHaveBeenCalledWith(101);
+      expect(onReloadMock).toHaveBeenCalledWith(mockFetchedRecord, "2026-02-01T12:05:00.000Z");
+    });
+  });
+
+  it("preserves local draft and displays error notice if reload from server fails", async () => {
+    vi.spyOn(api, "fetchTicketActions").mockRejectedValue(new Error("Network connection dropped"));
+
+    const onReloadMock = vi.fn();
+
+    render(
+      <ConcurrencyConflictDialog
+        {...defaultProps}
+        serverRecord={null}
+        serverUpdatedAt={null}
+        ticketId={101}
+        actionId={42}
+        onReloadLatest={onReloadMock}
+      />
+    );
+
+    const reloadBtn = screen.getByRole("button", { name: /Reload Latest Version/i });
+    fireEvent.click(reloadBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reload-error-alert")).toBeInTheDocument();
+      expect(screen.getByTestId("reload-error-alert")).toHaveTextContent(/Network connection dropped/i);
+    });
+
+    // Local draft is preserved, onReloadMock is not called
+    expect(onReloadMock).not.toHaveBeenCalled();
+    expect(screen.getByText(/My local draft: Reconfigured VLAN tagging on switch port\./i)).toBeInTheDocument();
+  });
 });

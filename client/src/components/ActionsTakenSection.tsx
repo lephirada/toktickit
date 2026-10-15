@@ -7,6 +7,7 @@ interface ActionsTakenSectionProps {
   ticketId: number;
   ticketStatus?: string;
   isStaffOrAdmin: boolean;
+  staffName?: string;
 }
 
 const ACTION_TYPE_STYLES: Record<string, { bg: string; color: string; border: string }> = {
@@ -21,6 +22,7 @@ export const ActionsTakenSection: React.FC<ActionsTakenSectionProps> = ({
   ticketId,
   ticketStatus,
   isStaffOrAdmin,
+  staffName,
 }) => {
   const [actions, setActions] = useState<ActionTakenItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -319,6 +321,7 @@ export const ActionsTakenSection: React.FC<ActionsTakenSectionProps> = ({
         <LogActionModal
           isOpen={isLogModalOpen}
           ticketId={ticketId}
+          staffName={staffName}
           onClose={() => setIsLogModalOpen(false)}
           onSuccess={loadActions}
         />

@@ -1053,6 +1053,7 @@ export const StaffTicketDetail: React.FC<StaffTicketDetailProps> = ({
         ticketId={ticketId}
         ticketStatus={ticket.status}
         isStaffOrAdmin={currentUser.role === "IT_STAFF" || currentUser.role === "ADMINISTRATOR"}
+        staffName={currentUser.fullName}
       />
 
       {/* 4. Discussion & Notes Tabs Card (Full Width) */}

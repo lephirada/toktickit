@@ -977,6 +977,7 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
         ticketId={ticketId}
         ticketStatus={ticket?.status}
         isStaffOrAdmin={user?.role === "IT_STAFF" || user?.role === "ADMINISTRATOR"}
+        staffName={user?.fullName}
       />
 
       {/* 3. Public Comments Thread Card */}

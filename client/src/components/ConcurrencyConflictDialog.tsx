@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ActionTakenItem, UpdateActionPayload } from "../api.js";
+import { ActionTakenItem, UpdateActionPayload, fetchTicketActions } from "../api.js";
 
 interface ConcurrencyConflictDialogProps {
   isOpen: boolean;
@@ -7,7 +7,9 @@ interface ConcurrencyConflictDialogProps {
   serverRecord: ActionTakenItem | null;
   serverUpdatedAt: string | null;
   localDraft: UpdateActionPayload;
-  onReloadLatest: (latestRecord: ActionTakenItem, latestUpdatedAt: string) => void;
+  onReloadLatest: (latestRecord?: ActionTakenItem | null, latestUpdatedAt?: string | null) => Promise<void> | void;
+  ticketId?: number;
+  actionId?: number;
 }
 
 export const ConcurrencyConflictDialog: React.FC<ConcurrencyConflictDialogProps> = ({
@@ -17,8 +19,12 @@ export const ConcurrencyConflictDialog: React.FC<ConcurrencyConflictDialogProps>
   serverUpdatedAt,
   localDraft,
   onReloadLatest,
+  ticketId,
+  actionId,
 }) => {
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">("idle");
+  const [isReloading, setIsReloading] = useState<boolean>(false);
+  const [reloadError, setReloadError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -44,11 +50,28 @@ export const ConcurrencyConflictDialog: React.FC<ConcurrencyConflictDialogProps>
     setCopyStatus("error");
   };
 
-  const handleReload = () => {
-    if (serverRecord) {
-      onReloadLatest(serverRecord, serverUpdatedAt || serverRecord.updatedAt || "");
-    } else {
-      onClose();
+  const handleReload = async () => {
+    setReloadError(null);
+    setIsReloading(true);
+    try {
+      if (serverRecord) {
+        await onReloadLatest(serverRecord, serverUpdatedAt || serverRecord.updatedAt || "");
+      } else {
+        let latest: ActionTakenItem | null = null;
+        if (ticketId && actionId) {
+          const res = await fetchTicketActions(ticketId);
+          latest = (res.data || []).find((a) => a.id === actionId) || null;
+        }
+        if (!latest) {
+          await onReloadLatest(null, null);
+        } else {
+          await onReloadLatest(latest, latest.updatedAt);
+        }
+      }
+    } catch (err: any) {
+      setReloadError(err?.message || "Failed to reload latest action from server. Your draft has been preserved.");
+    } finally {
+      setIsReloading(false);
     }
   };
 
@@ -282,6 +305,13 @@ export const ConcurrencyConflictDialog: React.FC<ConcurrencyConflictDialogProps>
                 />
               </div>
             )}
+
+            {/* Reload Error Feedback */}
+            {reloadError && (
+              <div className="alert alert-danger py-2 px-3 small mb-3" data-testid="reload-error-alert" role="alert">
+                ⚠️ {reloadError}
+              </div>
+            )}
           </div>
 
           {/* Footer Actions */}
@@ -293,6 +323,7 @@ export const ConcurrencyConflictDialog: React.FC<ConcurrencyConflictDialogProps>
               type="button"
               className="btn btn-outline-secondary btn-sm px-3"
               onClick={onClose}
+              disabled={isReloading}
             >
               Cancel
             </button>
@@ -302,6 +333,7 @@ export const ConcurrencyConflictDialog: React.FC<ConcurrencyConflictDialogProps>
                 type="button"
                 className="btn btn-outline-primary btn-sm px-3"
                 onClick={handleCopy}
+                disabled={isReloading}
               >
                 Copy My Changes
               </button>
@@ -311,8 +343,9 @@ export const ConcurrencyConflictDialog: React.FC<ConcurrencyConflictDialogProps>
                 className="btn btn-primary btn-sm px-3 text-white fw-semibold"
                 style={{ backgroundColor: "var(--zg-primary, #006B3C)", borderColor: "var(--zg-primary, #006B3C)" }}
                 onClick={handleReload}
+                disabled={isReloading}
               >
-                Reload Latest Version
+                {isReloading ? "Reloading..." : "Reload Latest Version"}
               </button>
             </div>
           </div>

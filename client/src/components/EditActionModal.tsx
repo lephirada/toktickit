@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ActionTakenItem, updateTicketAction, UpdateActionPayload, ActionType, ApiError } from "../api.js";
+import { ActionTakenItem, updateTicketAction, fetchTicketActions, UpdateActionPayload, ActionType, ApiError } from "../api.js";
 import { ConcurrencyConflictDialog } from "./ConcurrencyConflictDialog.js";
 
 interface EditActionModalProps {
@@ -171,16 +171,29 @@ export const EditActionModal: React.FC<EditActionModalProps> = ({
     }
   };
 
-  const handleReloadLatest = (latestRecord: ActionTakenItem, latestUpdatedAt: string) => {
-    setActionType((latestRecord.actionType as ActionType) || "INVESTIGATION");
-    setTimeSpentMinutes(latestRecord.timeSpentMinutes || 30);
-    setPerformedAt(formatLocalInputString(latestRecord.performedAt || latestRecord.actionDateTime));
-    setDescription(latestRecord.description || "");
-    setResult(latestRecord.result || "");
-    setFollowUpRequired(latestRecord.followUpRequired || false);
-    setFollowUpNote(latestRecord.followUpNote || "");
-    setAttachmentNotes(latestRecord.attachmentNotes || "");
-    setExpectedUpdatedAt(latestUpdatedAt || latestRecord.updatedAt || "");
+  const handleReloadLatest = async (latestRecord?: ActionTakenItem | null, latestUpdatedAt?: string | null) => {
+    let recordToApply = latestRecord;
+    let updatedAtToApply = latestUpdatedAt;
+
+    if (!recordToApply) {
+      const res = await fetchTicketActions(ticketId);
+      const found = (res.data || []).find((a) => a.id === action.id);
+      if (!found) {
+        throw new Error("Action record was not found on server.");
+      }
+      recordToApply = found;
+      updatedAtToApply = found.updatedAt;
+    }
+
+    setActionType((recordToApply.actionType as ActionType) || "INVESTIGATION");
+    setTimeSpentMinutes(recordToApply.timeSpentMinutes || 30);
+    setPerformedAt(formatLocalInputString(recordToApply.performedAt || recordToApply.actionDateTime));
+    setDescription(recordToApply.description || "");
+    setResult(recordToApply.result || "");
+    setFollowUpRequired(recordToApply.followUpRequired || false);
+    setFollowUpNote(recordToApply.followUpNote || "");
+    setAttachmentNotes(recordToApply.attachmentNotes || "");
+    setExpectedUpdatedAt(updatedAtToApply || recordToApply.updatedAt || "");
 
     setConflictOpen(false);
     setErrorBanner(null);
@@ -475,6 +488,8 @@ export const EditActionModal: React.FC<EditActionModalProps> = ({
         serverUpdatedAt={conflictServerUpdatedAt}
         localDraft={getCurrentDraftPayload()}
         onReloadLatest={handleReloadLatest}
+        ticketId={ticketId}
+        actionId={action.id}
       />
     </>
   );

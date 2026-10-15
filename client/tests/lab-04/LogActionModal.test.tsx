@@ -41,6 +41,18 @@ describe("LogActionModal Component (Lab 4 Issue #23 AC-23-03)", () => {
     expect(timeInput).toHaveValue(60);
   });
 
+  it("renders authenticated staff member name in the Performed By input when provided", () => {
+    render(<LogActionModal {...defaultProps} staffName="David Lee" />);
+    const performedByInput = screen.getByLabelText(/Performed By/i);
+    expect(performedByInput).toHaveValue("David Lee");
+  });
+
+  it("falls back to Current Staff User when staffName is not provided", () => {
+    render(<LogActionModal {...defaultProps} />);
+    const performedByInput = screen.getByLabelText(/Performed By/i);
+    expect(performedByInput).toHaveValue("Current Staff User");
+  });
+
   it("dynamically shows and validates followUpNote only when followUpRequired is checked", () => {
     render(<LogActionModal {...defaultProps} />);
 
