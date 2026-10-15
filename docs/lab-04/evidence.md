@@ -18,7 +18,7 @@
 | **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Approved]`  | `[Merged]`   |
 | **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[https://github.com/lephirada/toktickit/pull/53]` | `[Approved]`  | `[Merged]`   |
 | **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[https://github.com/lephirada/toktickit/pull/55]` | `[Approved]`  | `[Merged]`   |
-| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[https://github.com/lephirada/toktickit/pull/56]` | `[Approved]`  | `[Merged]`   |
 | **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 | **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 | **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
@@ -48,7 +48,7 @@ To fulfill the Spec-Driven Development (Spec DD) grading criterion proving speci
 
 ---
 
-## 3. Automated Test Execution Evidence (Issues 19–22 Verified; Issues 23–25 Planned)
+## 3. Automated Test Execution Evidence (Issues 19–23 Verified; Issues 24–25 Planned)
 
 ### 3.1 Database Migration & Seed Verification (Issue 19)
 
@@ -582,10 +582,136 @@ $ npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts
 }
 ```
 
-### 3.5 Client Component & Conflict UI Tests (Issue 23 & 24)
+### 3.5 Actions Taken UI Integration & Concurrency Conflict Dialog (Issue 23)
 
-- **Target Command:** `npm --prefix client test`
-- **Status:** Pending implementation in Issues 23–24.
+- **Target Commands:**
+  - `npm --prefix client test tests/lab-04/` (Issue 23 component tests)
+  - `npm --prefix client test` (Full client regression suite)
+  - `npm --prefix client run build` (Production client build)
+  - `npm --prefix server run test` (Full server regression suite)
+  - `npx playwright test e2e/lab-04/responsive-actions-screenshots.spec.ts` (Responsive overflow & screenshot verification)
+- **Verification Status:** **Verified (30/30 Lab 4 client tests passing, 141/141 full client suite passing, 341/341 full server suite passing, 2/2 e2e browser tests passing, 0 build errors)**
+- **Components Implemented & Hardened:**
+  - `ActionsTakenSection.tsx`: Timeline list container displaying action history with formatted badges (`actionType`), formatted timestamps, duration (`timeSpentMinutes`), description, result, follow-up notes, and performer metadata. Renders friendly empty state when no actions have been logged yet. Implements error alert with retry button on API failure.
+  - **Role-Based Control Omission (AC-23-02, BR-02, BR-03):** When viewed by a Requester (`role === "REQUESTER"`), the work history timeline is fully accessible read-only, but mutation controls (`+ Log Action Taken` button, individual `Edit` buttons, and modal dialogs) are **completely omitted from the DOM** (not hidden via CSS display:none), preventing DOM inspection bypass or unauthorized trigger. When viewed on terminal tickets (`CLOSED`, `CANCELLED`), mutation controls are disabled and omitted.
+  - `LogActionModal.tsx` (AC-23-03): Accessible modal dialog for staff/admin with default `INVESTIGATION` action type, quick-select preset duration buttons (15m, 30m, 45m, 60m), real-time character counters, dynamic conditional rendering for `followUpNote` only when `followUpRequired` is checked, client-side validation for minimum lengths (`description` >= 5, `result` >= 3, `followUpNote` >= 3), and strict rejection of future `performedAt` timestamps. Wires the authenticated user's actual name (`staffName={currentUser.fullName}`) into the "Performed By" field with fallback protection.
+  - `EditActionModal.tsx` (AC-23-04, AC-23-05): Edit modal pre-filled with existing action data, sending `expectedUpdatedAt` concurrency token on update. Gracefully intercepts HTTP 409 `STALE_ACTION_CONFLICT` without crashing or losing user input, delegating directly to `ConcurrencyConflictDialog`.
+  - `ConcurrencyConflictDialog.tsx` (AC-23-06): Accessible side-by-side comparison modal displaying server's latest version vs. user's unsaved local draft. Provides safe "Copy My Changes" (with safe Clipboard API error handling that avoids false success confirmations and renders a selectable fallback textarea if clipboard write is blocked), "Cancel", and "Reload Latest Version". When the server version is missing from conflict details, it fetches the latest record from the server, updates `expectedUpdatedAt`, and preserves the local draft with an inline alert if the reload fails.
+  - **Responsive Design & DOM Safety (AC-23-07):** Timeline and conflict views implement responsive wrapping (`break-words`, `overflow-hidden`, flex-wrap) to support mobile (375px), tablet (768px), and desktop (1280px) viewports. Verified zero horizontal overflow in real Chromium browser via Playwright.
+
+#### Terminal Execution Logs (Executed from Project Root)
+
+**Log 1: Issue 23 Client Component Tests (4 Test Files, 30/30 Passing)**
+
+```text
+$ npm --prefix client test tests/lab-04/
+> toktickit-client@1.0.0 test
+> vitest run tests/lab-04/
+
+ ✓ tests/lab-04/EditActionModal.test.tsx (5) 356ms
+ ✓ tests/lab-04/ActionsTakenSection.test.tsx (7) 362ms
+ ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8) 430ms
+ ✓ tests/lab-04/LogActionModal.test.tsx (10) 411ms
+
+ Test Files  4 passed (4)
+      Tests  30 passed (30)
+   Start at  16:55:36
+   Duration  2.63s (transform 524ms, setup 1.64s, collect 845ms, tests 1.56s, environment 4.61s, prepare 399ms)
+```
+
+**Log 2: Full Client Regression Test Suite (16 Test Files, 141/141 Passing)**
+
+```text
+$ npm --prefix client test
+> toktickit-client@1.0.0 test
+> vitest run
+
+ ✓ tests/lab-01/App.test.tsx (5)
+ ✓ tests/lab-02/App.test.tsx (16) 1720ms
+ ✓ tests/lab-02/AttachmentSection.test.tsx (9) 3320ms
+ ✓ tests/lab-02/CreateTicket.test.tsx (7) 2823ms
+ ✓ tests/lab-02/MyTickets.test.tsx (13) 2904ms
+ ✓ tests/lab-02/RequesterHeader.test.tsx (6) 319ms
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx (7) 1352ms
+ ✓ tests/lab-03/ChangePassword.test.tsx (4) 368ms
+ ✓ tests/lab-03/Login.test.tsx (8) 1414ms
+ ✓ tests/lab-03/StaffTicketDetail.test.tsx (10) 1899ms
+ ✓ tests/lab-03/StaffTicketQueue.test.tsx (19) 2569ms
+ ✓ tests/lab-03/UserManagement.test.tsx (7) 1250ms
+ ✓ tests/lab-04/ActionsTakenSection.test.tsx (7) 1811ms
+ ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8) 772ms
+ ✓ tests/lab-04/EditActionModal.test.tsx (5)
+ ✓ tests/lab-04/LogActionModal.test.tsx (10) 515ms
+
+ Test Files  16 passed (16)
+      Tests  141 passed (141)
+   Start at  16:55:44
+   Duration  9.39s
+```
+
+**Log 3: Client Production Build Verification (Zero Type & Bundle Errors)**
+
+```text
+$ npm --prefix client run build
+> toktickit-client@1.0.0 build
+> tsc && vite build
+
+vite v6.4.3 building for production...
+✓ 70 modules transformed.
+dist/index.html                   0.39 kB │ gzip:  0.27 kB
+dist/assets/index-BpJaf12f.css  248.22 kB │ gzip: 34.84 kB
+dist/assets/index-D5T90wxn.js   421.28 kB │ gzip: 99.78 kB
+✓ built in 666ms
+```
+
+**Log 4: Full Server Regression Test Suite (20 Test Files, 341/341 Passing — Zero Regressions)**
+
+```text
+$ npm --prefix server run test
+> toktickit-server@1.0.0 test
+> vitest run
+
+ ✓ tests/lab-01/categories.test.ts (1)
+ ✓ tests/lab-01/health.test.ts (1)
+ ✓ tests/lab-02/attachments.api.test.ts (7)
+ ✓ tests/lab-02/create-ticket.api.test.ts (13)
+ ✓ tests/lab-02/my-tickets.api.test.ts (17)
+ ✓ tests/lab-02/requesters.test.ts (5)
+ ✓ tests/lab-02/ticket-detail.api.test.ts (20)
+ ✓ tests/lab-03/auth.api.test.ts (20) 1035ms
+ ✓ tests/lab-03/authorization.api.test.ts (28) 333ms
+ ✓ tests/lab-03/comments-notes.api.test.ts (16) 320ms
+ ✓ tests/lab-03/jwt-password.test.ts (9) 450ms
+ ✓ tests/lab-03/migration-verification.test.ts (3) 3080ms
+ ✓ tests/lab-03/migration.test.ts (3) 3546ms
+ ✓ tests/lab-03/staff-queue.api.test.ts (23) 332ms
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (54) 695ms
+ ✓ tests/lab-03/users-admin.api.test.ts (30) 1767ms
+ ✓ tests/lab-04/actions-taken.api.test.ts (37) 1713ms
+ ✓ tests/lab-04/dashboard.api.test.ts (22) 467ms
+ ✓ tests/lab-04/migration-verification.test.ts (8)
+ ✓ tests/lab-04/ticket-workflow.api.test.ts (24) 358ms
+
+ Test Files  20 passed (20)
+      Tests  341 passed (341)
+   Start at  15:27:05
+   Duration  25.82s
+```
+
+**Log 5: Playwright Responsive Layout & Horizontal Overflow Verification (2/2 Passing)**
+
+```text
+$ npx playwright test e2e/lab-04/responsive-actions-screenshots.spec.ts
+
+Running 2 tests using 1 worker
+
+     1 …f Actions Timeline, Log Modal, and Concurrency Conflict across viewports
+  ✓  1 …ns Timeline, Log Modal, and Concurrency Conflict across viewports (4.9s)
+     2 …ead-Only View has no mutation controls in DOM and no horizontal overflow
+  ✓  2 …y View has no mutation controls in DOM and no horizontal overflow (2.1s)
+
+  2 passed (8.2s)
+```
 
 ### 3.6 Playwright Multi-Persona E2E & Regression Suite (Issue 25)
 
@@ -594,19 +720,20 @@ $ npm --prefix server run test -- tests/lab-04/dashboard.api.test.ts
 
 ---
 
-## 4. UI Visual Verification & Screenshot Inventory (Planned for Issue 25)
+## 4. UI Visual Verification & Screenshot Inventory
 
-Screenshots will be systematically captured across 3 standard viewports (Desktop $1280 \times 900$, Tablet $768 \times 1024$, Mobile $375 \times 812$):
+Screenshots systematically captured across 3 standard viewports (Desktop $1280 \times 900$, Tablet $768 \times 1024$, Mobile $375 \times 812$):
 
-| View Category                        | Screenshot Target Folder                               | Responsive Check Status |
-| :----------------------------------- | :----------------------------------------------------- | :---------------------: |
-| Staff Ticket Detail Actions Timeline | `artifacts/lab-04/screenshots/actions-timeline/`       |         Planned         |
-| Log Action Modal & Form Validation   | `artifacts/lab-04/screenshots/log-action-modal/`       |         Planned         |
-| 409 Concurrency Conflict Dialog      | `artifacts/lab-04/screenshots/concurrency-conflict/`   |         Planned         |
-| Resolution Gate Warning (0 Actions)  | `artifacts/lab-04/screenshots/resolution-gate/`        |         Planned         |
-| Requester Read-Only Work History     | `artifacts/lab-04/screenshots/requester-actions-view/` |         Planned         |
-| Operational Dashboard KPI Grid       | `artifacts/lab-04/screenshots/operational-dashboard/`  |         Planned         |
-| Dashboard Workload Distribution      | `artifacts/lab-04/screenshots/dashboard-breakdowns/`   |         Planned         |
+| View Category                                      | Screenshot Target Folder                               |    Responsive Check Status    | Captured Artifact Files                                                                                               |
+| :------------------------------------------------- | :----------------------------------------------------- | :---------------------------: | :-------------------------------------------------------------------------------------------------------------------- |
+| Staff Ticket Detail Actions Timeline               | `artifacts/lab-04/screenshots/actions-timeline/`       | **Verified (1280, 768, 375)** | `actions-timeline-staff-1280.png`<br>`actions-timeline-staff-768.png`<br>`actions-timeline-staff-375.png`             |
+| Requester Read-Only Work History                   | `artifacts/lab-04/screenshots/requester-actions-view/` | **Verified (1280, 768, 375)** | `actions-timeline-requester-1280.png`<br>`actions-timeline-requester-768.png`<br>`actions-timeline-requester-375.png` |
+| Role Authorization Comparison (Staff vs Requester) | `artifacts/lab-04/screenshots/`                        |  **Verified (Side-by-Side)**  | `role-comparison-staff-vs-requester.png`                                                                              |
+| Log Action Modal & Form Validation                 | `artifacts/lab-04/screenshots/log-action-modal/`       |   **Verified (1280, 375)**    | `log-action-modal-1280.png`<br>`log-action-modal-375.png`                                                             |
+| 409 Concurrency Conflict Dialog                    | `artifacts/lab-04/screenshots/concurrency-conflict/`   |   **Verified (1280, 375)**    | `concurrency-conflict-1280.png`<br>`concurrency-conflict-375.png`                                                     |
+| Resolution Gate Warning (0 Actions)                | `artifacts/lab-04/screenshots/resolution-gate/`        |            Planned            | Planned for Issue 25                                                                                                  |
+| Operational Dashboard KPI Grid                     | `artifacts/lab-04/screenshots/operational-dashboard/`  |            Planned            | Planned for Issue 25                                                                                                  |
+| Dashboard Workload Distribution                    | `artifacts/lab-04/screenshots/dashboard-breakdowns/`   |            Planned            | Planned for Issue 25                                                                                                  |
 
 ---
 
