@@ -11,17 +11,17 @@
 
 ## 1. GitHub Issues & Pull Requests Registry
 
-| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status | Merge Commit |
-| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :------------ | :----------- |
-| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`  | `[Merged]`   |
-| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`  | `[Merged]`   |
-| **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Approved]`  | `[Merged]`   |
-| **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[https://github.com/lephirada/toktickit/pull/53]` | `[Approved]`  | `[Merged]`   |
-| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[https://github.com/lephirada/toktickit/pull/55]` | `[Approved]`  | `[Merged]`   |
-| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[Pending PR Review]`                              | `[Ready for Review]` | `[Pending Merge]` |
-| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
-| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
-| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| Issue ID     | Branch Name                             | Issue Description                               | Pull Request Link                                  | Review Status        | Merge Commit      |
+| :----------- | :-------------------------------------- | :---------------------------------------------- | :------------------------------------------------- | :------------------- | :---------------- |
+| **Issue 18** | `feature/18-lab4-spec-docs`             | Sprint 4 Documentation, Contracts & Test Plan   | `[https://github.com/lephirada/toktickit/pull/50]` | `[Approved]`         | `[Merged]`        |
+| **Issue 19** | `feature/19-database-migration-actions` | Database Evolution, ActionTaken Schema & Seed   | `[https://github.com/lephirada/toktickit/pull/51]` | `[Approved]`         | `[Merged]`        |
+| **Issue 20** | `feature/20-actions-taken-backend`      | Actions Taken REST APIs & Concurrency Control   | `[https://github.com/lephirada/toktickit/pull/52]` | `[Approved]`         | `[Merged]`        |
+| **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[https://github.com/lephirada/toktickit/pull/53]` | `[Approved]`         | `[Merged]`        |
+| **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[https://github.com/lephirada/toktickit/pull/55]` | `[Approved]`         | `[Merged]`        |
+| **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[https://github.com/lephirada/toktickit/pull/56]` | `[Ready for Review]` | `[Pending Merge]` |
+| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`          | `[Planned]`       |
+| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`          | `[Planned]`       |
+| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`          | `[Planned]`       |
 
 ---
 
@@ -724,16 +724,16 @@ Running 2 tests using 1 worker
 
 Screenshots systematically captured across 3 standard viewports (Desktop $1280 \times 900$, Tablet $768 \times 1024$, Mobile $375 \times 812$):
 
-| View Category                        | Screenshot Target Folder                               | Responsive Check Status | Captured Artifact Files |
-| :----------------------------------- | :----------------------------------------------------- | :---------------------: | :---------------------- |
-| Staff Ticket Detail Actions Timeline | `artifacts/lab-04/screenshots/actions-timeline/`       | **Verified (1280, 768, 375)** | `actions-timeline-staff-1280.png`<br>`actions-timeline-staff-768.png`<br>`actions-timeline-staff-375.png` |
-| Requester Read-Only Work History     | `artifacts/lab-04/screenshots/requester-actions-view/` | **Verified (1280, 768, 375)** | `actions-timeline-requester-1280.png`<br>`actions-timeline-requester-768.png`<br>`actions-timeline-requester-375.png` |
-| Role Authorization Comparison (Staff vs Requester) | `artifacts/lab-04/screenshots/` | **Verified (Side-by-Side)** | `role-comparison-staff-vs-requester.png` |
-| Log Action Modal & Form Validation   | `artifacts/lab-04/screenshots/log-action-modal/`       | **Verified (1280, 375)** | `log-action-modal-1280.png`<br>`log-action-modal-375.png` |
-| 409 Concurrency Conflict Dialog      | `artifacts/lab-04/screenshots/concurrency-conflict/`   | **Verified (1280, 375)** | `concurrency-conflict-1280.png`<br>`concurrency-conflict-375.png` |
-| Resolution Gate Warning (0 Actions)  | `artifacts/lab-04/screenshots/resolution-gate/`        |         Planned         | Planned for Issue 25 |
-| Operational Dashboard KPI Grid       | `artifacts/lab-04/screenshots/operational-dashboard/`  |         Planned         | Planned for Issue 25 |
-| Dashboard Workload Distribution      | `artifacts/lab-04/screenshots/dashboard-breakdowns/`   |         Planned         | Planned for Issue 25 |
+| View Category                                      | Screenshot Target Folder                               |    Responsive Check Status    | Captured Artifact Files                                                                                               |
+| :------------------------------------------------- | :----------------------------------------------------- | :---------------------------: | :-------------------------------------------------------------------------------------------------------------------- |
+| Staff Ticket Detail Actions Timeline               | `artifacts/lab-04/screenshots/actions-timeline/`       | **Verified (1280, 768, 375)** | `actions-timeline-staff-1280.png`<br>`actions-timeline-staff-768.png`<br>`actions-timeline-staff-375.png`             |
+| Requester Read-Only Work History                   | `artifacts/lab-04/screenshots/requester-actions-view/` | **Verified (1280, 768, 375)** | `actions-timeline-requester-1280.png`<br>`actions-timeline-requester-768.png`<br>`actions-timeline-requester-375.png` |
+| Role Authorization Comparison (Staff vs Requester) | `artifacts/lab-04/screenshots/`                        |  **Verified (Side-by-Side)**  | `role-comparison-staff-vs-requester.png`                                                                              |
+| Log Action Modal & Form Validation                 | `artifacts/lab-04/screenshots/log-action-modal/`       |   **Verified (1280, 375)**    | `log-action-modal-1280.png`<br>`log-action-modal-375.png`                                                             |
+| 409 Concurrency Conflict Dialog                    | `artifacts/lab-04/screenshots/concurrency-conflict/`   |   **Verified (1280, 375)**    | `concurrency-conflict-1280.png`<br>`concurrency-conflict-375.png`                                                     |
+| Resolution Gate Warning (0 Actions)                | `artifacts/lab-04/screenshots/resolution-gate/`        |            Planned            | Planned for Issue 25                                                                                                  |
+| Operational Dashboard KPI Grid                     | `artifacts/lab-04/screenshots/operational-dashboard/`  |            Planned            | Planned for Issue 25                                                                                                  |
+| Dashboard Workload Distribution                    | `artifacts/lab-04/screenshots/dashboard-breakdowns/`   |            Planned            | Planned for Issue 25                                                                                                  |
 
 ---
 
