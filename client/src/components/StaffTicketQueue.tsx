@@ -159,6 +159,70 @@ interface StaffTicketQueueProps {
   onViewTicket?: (ticketId: number) => void;
 }
 
+export function getInitialQueueFilters(): {
+  category: string;
+  reqPriority: string;
+  itPriority: string;
+  status: string;
+  owner: "ALL" | "UNASSIGNED" | "MY_TICKETS";
+  search: string;
+} {
+  if (typeof window === "undefined") {
+    return {
+      category: "ALL",
+      reqPriority: "ALL",
+      itPriority: "ALL",
+      status: "ALL",
+      owner: "ALL",
+      search: "",
+    };
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+
+  // Status
+  const statusParam = searchParams.get("status")?.toUpperCase();
+  const validStatuses = [
+    "NEW",
+    "OPEN",
+    "IN_PROGRESS",
+    "WAITING_FOR_REQUESTER",
+    "RESOLVED",
+    "CLOSED",
+    "REOPENED",
+    "CANCELLED",
+  ];
+  const initialStatus = statusParam && validStatuses.includes(statusParam) ? statusParam : "ALL";
+
+  // Owner
+  const ownerParam = searchParams.get("owner")?.toUpperCase();
+  const initialOwner: "ALL" | "UNASSIGNED" | "MY_TICKETS" =
+    ownerParam === "UNASSIGNED" || ownerParam === "MY_TICKETS" ? ownerParam : "ALL";
+
+  // Category
+  const catParam = searchParams.get("categoryId");
+  const initialCategory = catParam && !isNaN(parseInt(catParam, 10)) ? catParam : "ALL";
+
+  // Priority
+  const prioParam = (searchParams.get("requestedPriority") || searchParams.get("priority"))?.toUpperCase();
+  const validPriorities = ["P0_URGENT", "P1_HIGH", "P2_MEDIUM", "P3_LOW"];
+  const initialReqPriority = prioParam && validPriorities.includes(prioParam) ? prioParam : "ALL";
+
+  const itPrioParam = searchParams.get("itPriority")?.toUpperCase();
+  const initialItPriority = itPrioParam && validPriorities.includes(itPrioParam) ? itPrioParam : "ALL";
+
+  const searchVal = searchParams.get("search") || "";
+
+  return {
+    category: initialCategory,
+    reqPriority: initialReqPriority,
+    itPriority: initialItPriority,
+    status: initialStatus,
+    owner: initialOwner,
+    search: searchVal,
+  };
+}
+
 export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps = {}) {
   const handleTicketClick = (ticketId: number) => {
     if (onViewTicket) {
@@ -173,17 +237,36 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Search state & debounce
-  const [searchInput, setSearchInput] = useState<string>("");
-  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
+  // Search state & debounce initialized from URL query params (Issue 24 drill-down)
+  const [initialFilters] = useState(() => getInitialQueueFilters());
+  const [searchInput, setSearchInput] = useState<string>(initialFilters.search);
+  const [debouncedSearch, setDebouncedSearch] = useState<string>(initialFilters.search);
 
   // Filters state
-  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
-  const [selectedReqPriority, setSelectedReqPriority] = useState<string>("ALL");
-  const [selectedItPriority, setSelectedItPriority] = useState<string>("ALL");
-  const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
-  const [selectedOwner, setSelectedOwner] = useState<"ALL" | "UNASSIGNED" | "MY_TICKETS">("ALL");
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialFilters.category);
+  const [selectedReqPriority, setSelectedReqPriority] = useState<string>(initialFilters.reqPriority);
+  const [selectedItPriority, setSelectedItPriority] = useState<string>(initialFilters.itPriority);
+  const [selectedStatus, setSelectedStatus] = useState<string>(initialFilters.status);
+  const [selectedOwner, setSelectedOwner] = useState<"ALL" | "UNASSIGNED" | "MY_TICKETS">(initialFilters.owner);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState<boolean>(false);
+
+  // Re-sync filter states if browser Back/Forward (popstate) navigates between query parameters
+  useEffect(() => {
+    const handlePopState = () => {
+      const filters = getInitialQueueFilters();
+      setSelectedCategory(filters.category);
+      setSelectedReqPriority(filters.reqPriority);
+      setSelectedItPriority(filters.itPriority);
+      setSelectedStatus(filters.status);
+      setSelectedOwner(filters.owner);
+      setSearchInput(filters.search);
+      setDebouncedSearch(filters.search);
+      setPage(1);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Sorting state (Strictly whitelisted columns)
   const [sortBy, setSortBy] = useState<"createdAt" | "itPriority" | "status" | "updatedAt">("createdAt");
@@ -193,6 +276,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+
 
   // Stale request guard
   const requestSequenceRef = useRef<number>(0);

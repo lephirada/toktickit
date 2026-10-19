@@ -1244,3 +1244,67 @@ export async function updateTicketAction(
 
   return body;
 }
+
+// ---------------------------------------------------------------------------
+// Issue 24 — Operational Dashboard API Types & Fetcher (FR-07, FR-08, AC-24-01..04)
+// ---------------------------------------------------------------------------
+
+export interface DashboardMetrics {
+  totalOpen: number;
+  inProgress: number;
+  waitingForRequester: number;
+  recentlyResolved: number;
+  unassignedCount: number;
+  totalTimeSpentMinutes: number;
+}
+
+export interface CategoryBreakdownItem {
+  categoryId: number;
+  categoryName: string;
+  ticketCount: number;
+  totalTimeSpentMinutes: number;
+}
+
+export interface PriorityBreakdown {
+  P0_URGENT: number;
+  P1_HIGH: number;
+  P2_MEDIUM: number;
+  P3_LOW: number;
+}
+
+export interface DashboardMeta {
+  calculationTimestamp: string;
+  recentlyResolvedWindowDays: number;
+  recentlyResolvedWindowStart: string;
+}
+
+export interface DashboardResponse {
+  data: {
+    metrics: DashboardMetrics;
+    categoryBreakdown: CategoryBreakdownItem[];
+    priorityBreakdown: PriorityBreakdown;
+    meta: DashboardMeta;
+  };
+}
+
+export async function fetchStaffDashboard(): Promise<DashboardResponse> {
+  const res = await fetch(`${API_URL}/api/staff/dashboard`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch staff dashboard with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status,
+      errorObj?.details
+    );
+  }
+
+  return body;
+}
+

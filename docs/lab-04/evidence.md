@@ -19,7 +19,7 @@
 | **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[https://github.com/lephirada/toktickit/pull/53]` | `[Approved]`  | `[Merged]`   |
 | **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[https://github.com/lephirada/toktickit/pull/55]` | `[Approved]`  | `[Merged]`   |
 | **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[https://github.com/lephirada/toktickit/pull/56]` | `[Approved]`  | `[Merged]`   |
-| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[In Review]` | `[Pending]`  |
 | **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 | **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 
@@ -713,7 +713,127 @@ Running 2 tests using 1 worker
   2 passed (8.2s)
 ```
 
-### 3.6 Playwright Multi-Persona E2E & Regression Suite (Issue 25)
+### 3.6 Operational Dashboard UI & Metric Drill-Down Navigation (Issue 24)
+
+- **Target Commands:**
+  - `npm --prefix client test tests/lab-04/` (Issue 24 component tests)
+  - `npm --prefix client test` (Full client regression suite)
+  - `npm --prefix client run build` (Production client build)
+  - `npm --prefix server run test` (Full server regression suite)
+  - `npx playwright test -c e2e/lab-04/playwright.config.ts e2e/lab-04/dashboard-screenshots.spec.ts` (Responsive overflow & screenshot verification)
+- **Verification Status:** **Verified (55/55 Lab 4 client tests passing, 166/166 full client suite passing, 341/341 full server suite passing, 4/4 Playwright browser tests passing, 0 build errors)**
+- **Components Implemented & Hardened:**
+  - `RequesterDashboard.tsx` (AC-24-01, DSH-UI-01): User-facing helpdesk overview for Requesters. Aggregates the full requester dataset by assembling all pagination pages concurrently (`fetchAllRequesterPages`). Computes 4 real-time KPI cards using Zen Green tokens: **Total Open** (`NEW`, `OPEN`), **Action Needed** (`WAITING_FOR_REQUESTER`), **Recently Resolved** (strictly tickets in `RESOLVED` status updated within the rolling 7-day cutoff `updatedAt >= now - 7d`), and **Total Closed** (`CLOSED`). Implements atomic error handling: if any page fails to load, the dashboard displays an error alert with a "Try Again" retry action instead of presenting inaccurate partial data. Renders a Recent Service Requests table with status/priority badges and direct links to ticket detail, quick CTAs (`+ Create Ticket`, `View My Tickets`), and a clean empty state with a `+ Create First Ticket` button.
+  - `StaffDashboard.tsx` (AC-24-02, DSH-UI-02): Operational command center for IT Staff and Administrators consuming `GET /api/staff/dashboard`. Renders 7 core KPI cards with Zen Green color-coded accents: **Unassigned**, **My Assigned**, **In Progress**, **Waiting Req.**, **Total Open**, **Recently Resolved**, and **Total Labor Time** (formatted in hours and minutes `Xh Ym`). Displays non-terminal workload distributions by Category (tickets and labor hours) and Priority (P0–P3 distribution bars with effective priority). Renders a Recent Queue Activity table with clickable ticket navigation.
+  - **Administrator-Only Account Health Card (AC-24-03, DSH-UI-03):** Renders a dedicated summary card for `ADMINISTRATOR` users displaying system-wide user metrics: Total Users, Active Staff, Administrators, Active Requesters, and Password Reset Required accounts, with a direct CTA to `/admin/users`. For `IT_STAFF` users, this card is **completely omitted from the DOM** (not hidden via CSS display:none), preserving strict least-privilege role boundaries.
+  - `StaffTicketQueue.tsx` (AC-24-04, DSH-UI-04): Enhanced queue filter initialization from URL search parameters (`owner`, `status`, `categoryId`, `requestedPriority`, `search`). Clicking any metric card or breakdown bar in `StaffDashboard` triggers direct drill-down navigation into `/staff/queue?<filters>`, instantly applying the corresponding filter scope. Listens for browser `popstate` events to ensure browser Back/Forward navigation functions smoothly without lost filter state or duplicate history entries.
+  - `Header.tsx` & `App.tsx` (AC-24-05, DSH-UI-05): Added role-based navigation links for `Dashboard` in both desktop header and mobile drawer menus. Highlights the active view using Zen Green design tokens (`rgba(255, 255, 255, 0.2)` background and subtle border). Implements route guarding in `resolveAllowedView`: redirects unauthenticated users to `/login`, prevents Requesters from accessing staff dashboards, and directs Staff/Admin to `/staff/dashboard`.
+  - **Responsive Design & DOM Safety (AC-24-06):** Dashboards feature responsive card wrapping and fluid gutters (`g-2 g-md-3`, `p-3 p-md-4`) ensuring zero horizontal overflow (`scrollWidth <= innerWidth`) across Mobile (375px), Tablet (768px), and Desktop (1280px). Verified via Playwright automation.
+
+#### Terminal Execution Logs (Executed from Project Root)
+
+**Log 1: Lab 4 Client Tests (7 Test Files, 55/55 Passing)**
+
+```text
+$ npm --prefix client test tests/lab-04/
+> toktickit-client@1.0.0 test
+> vitest run tests/lab-04/
+
+ ✓ tests/lab-04/ActionsTakenSection.test.tsx (7) 1008ms
+ ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8) 1115ms
+ ✓ tests/lab-04/DashboardRouting.test.tsx (12) 412ms
+ ✓ tests/lab-04/EditActionModal.test.tsx (5) 891ms
+ ✓ tests/lab-04/LogActionModal.test.tsx (10) 1299ms
+ ✓ tests/lab-04/RequesterDashboard.test.tsx (6) 1029ms
+ ✓ tests/lab-04/StaffDashboard.test.tsx (7) 1294ms
+
+ Test Files  7 passed (7)
+      Tests  55 passed (55)
+   Start at  00:33:24
+   Duration  5.79s
+```
+
+**Log 2: Full Client Regression Test Suite (19 Test Files, 166/166 Passing)**
+
+```text
+$ npm --prefix client test
+> toktickit-client@1.0.0 test
+> vitest run
+
+ ✓ tests/lab-01/App.test.tsx (5) 2012ms
+ ✓ tests/lab-02/App.test.tsx (16) 3484ms
+ ✓ tests/lab-02/AttachmentSection.test.tsx (9) 5079ms
+ ✓ tests/lab-02/CreateTicket.test.tsx (7) 7633ms
+ ✓ tests/lab-02/MyTickets.test.tsx (13) 6052ms
+ ✓ tests/lab-02/RequesterHeader.test.tsx (6) 2116ms
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx (7) 2694ms
+ ✓ tests/lab-03/ChangePassword.test.tsx (4) 2016ms
+ ✓ tests/lab-03/Login.test.tsx (8) 2068ms
+ ✓ tests/lab-03/StaffTicketDetail.test.tsx (10) 3889ms
+ ✓ tests/lab-03/StaffTicketQueue.test.tsx (19) 5935ms
+ ✓ tests/lab-03/UserManagement.test.tsx (7) 1979ms
+ ✓ tests/lab-04/ActionsTakenSection.test.tsx (7) 1698ms
+ ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8) 2206ms
+ ✓ tests/lab-04/DashboardRouting.test.tsx (12) 582ms
+ ✓ tests/lab-04/EditActionModal.test.tsx (5) 1648ms
+ ✓ tests/lab-04/LogActionModal.test.tsx (10) 2397ms
+ ✓ tests/lab-04/RequesterDashboard.test.tsx (6) 1711ms
+ ✓ tests/lab-04/StaffDashboard.test.tsx (7) 1381ms
+
+ Test Files  19 passed (19)
+      Tests  166 passed (166)
+   Start at  00:33:37
+   Duration  27.22s
+```
+
+**Log 3: Client Production Build Verification (Zero Type & Bundle Errors)**
+
+```text
+$ npm --prefix client run build
+> toktickit-client@1.0.0 build
+> tsc && vite build
+
+vite v6.4.3 building for production...
+✓ 72 modules transformed.
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-BpJaf12f.css  248.22 kB │ gzip:  34.84 kB
+dist/assets/index-D28tswVo.js   458.01 kB │ gzip: 105.35 kB
+✓ built in 1.72s
+```
+
+**Log 4: Full Server Regression Test Suite (20 Test Files, 341/341 Passing — Zero Regressions)**
+
+```text
+$ npm --prefix server run test
+> toktickit-server@1.0.0 test
+> vitest run
+
+ Test Files  20 passed (20)
+      Tests  341 passed (341)
+   Start at  00:14:33
+   Duration  25.46s
+```
+
+**Log 5: Playwright Responsive Dashboard Layout & Screenshot Verification (4/4 Passing)**
+
+```text
+$ npx playwright test -c e2e/lab-04/playwright.config.ts e2e/lab-04/dashboard-screenshots.spec.ts
+
+Running 4 tests using 1 worker
+
+     1 …creenshots › 1. Requester Dashboard visual verification across viewports
+  ✓  1 …ots › 1. Requester Dashboard visual verification across viewports (2.6s)
+     2 …ots › 2. Staff Dashboard visual verification across viewports (IT Staff)
+  ✓  2 …. Staff Dashboard visual verification across viewports (IT Staff) (1.9s)
+     3 …ds UI & Screenshots › 3. Admin Dashboard with User Accounts Summary Card
+  ✓  3 … Screenshots › 3. Admin Dashboard with User Accounts Summary Card (1.4s)
+     4 …ards UI & Screenshots › 4. Metric Drill-Down Navigation to Queue Filters
+  ✓  4 …& Screenshots › 4. Metric Drill-Down Navigation to Queue Filters (742ms)
+
+  4 passed (10.4s)
+```
+
+### 3.7 Playwright Multi-Persona E2E & Regression Suite (Issue 25)
 
 - **Target Command:** `npm run test:e2e`
 - **Status:** Pending implementation in Issue 25.
@@ -731,9 +851,11 @@ Screenshots systematically captured across 3 standard viewports (Desktop $1280 \
 | Role Authorization Comparison (Staff vs Requester) | `artifacts/lab-04/screenshots/`                        |  **Verified (Side-by-Side)**  | `role-comparison-staff-vs-requester.png`                                                                              |
 | Log Action Modal & Form Validation                 | `artifacts/lab-04/screenshots/log-action-modal/`       |   **Verified (1280, 375)**    | `log-action-modal-1280.png`<br>`log-action-modal-375.png`                                                             |
 | 409 Concurrency Conflict Dialog                    | `artifacts/lab-04/screenshots/concurrency-conflict/`   |   **Verified (1280, 375)**    | `concurrency-conflict-1280.png`<br>`concurrency-conflict-375.png`                                                     |
+| Requester Helpdesk Dashboard                       | `artifacts/lab-04/screenshots/dashboards/`             | **Verified (1280, 768, 375)** | `requester-dashboard-1280.png`<br>`requester-dashboard-768.png`<br>`requester-dashboard-375.png`                       |
+| Staff Operational Dashboard                        | `artifacts/lab-04/screenshots/dashboards/`             | **Verified (1280, 768, 375)** | `staff-dashboard-1280.png`<br>`staff-dashboard-768.png`<br>`staff-dashboard-375.png`                                 |
+| Administrator User Accounts Summary Card           | `artifacts/lab-04/screenshots/dashboards/`             |   **Verified (1280, 375)**    | `admin-dashboard-1280.png`<br>`admin-dashboard-375.png`                                                               |
+| Dashboard Metric Drill-Down to Queue               | `artifacts/lab-04/screenshots/dashboards/`             |       **Verified (1280)**     | `dashboard-drilldown-queue-1280.png`                                                                                  |
 | Resolution Gate Warning (0 Actions)                | `artifacts/lab-04/screenshots/resolution-gate/`        |            Planned            | Planned for Issue 25                                                                                                  |
-| Operational Dashboard KPI Grid                     | `artifacts/lab-04/screenshots/operational-dashboard/`  |            Planned            | Planned for Issue 25                                                                                                  |
-| Dashboard Workload Distribution                    | `artifacts/lab-04/screenshots/dashboard-breakdowns/`   |            Planned            | Planned for Issue 25                                                                                                  |
 
 ---
 
