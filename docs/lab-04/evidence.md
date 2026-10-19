@@ -2,7 +2,7 @@
 
 **Course:** CPE 334 Software Engineering Laboratory  
 **Sprint:** 4 — Parent-Child Work Structures, Resolution Gates, Operational Dashboards, and Regression Traceability  
-**Status:** In Progress — Baseline Specifications Established (Issue 18)
+**Status:** In Progress — Role-Based Dashboards & Visualizations Implemented (Issue 24)
 
 > [!NOTE]
 > Per project guidelines, all test results, screenshots, and verification artifacts documented herein are authentic and un-fabricated. This living document maintains the verified evidence inventory for Sprint 4 across Issues 18 through 26.
@@ -19,7 +19,7 @@
 | **Issue 21** | `feature/21-ticket-resolution-gate`     | Server-Enforced Resolution Gate & State Machine | `[https://github.com/lephirada/toktickit/pull/53]` | `[Approved]`  | `[Merged]`   |
 | **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[https://github.com/lephirada/toktickit/pull/55]` | `[Approved]`  | `[Merged]`   |
 | **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[https://github.com/lephirada/toktickit/pull/56]` | `[Approved]`  | `[Merged]`   |
-| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[PR Placeholder]`                                 | `[In Review]` | `[Pending]`  |
+| **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[https://github.com/lephirada/toktickit/pull/57]` | `[In Review]` | `[Pending]`  |
 | **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 | **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 
@@ -48,7 +48,7 @@ To fulfill the Spec-Driven Development (Spec DD) grading criterion proving speci
 
 ---
 
-## 3. Automated Test Execution Evidence (Issues 19–23 Verified; Issues 24–25 Planned)
+## 3. Automated Test Execution Evidence (Issues 19–24 Verified; Issue 25 Planned)
 
 ### 3.1 Database Migration & Seed Verification (Issue 19)
 
