@@ -479,6 +479,10 @@ app.get(
         sortOrder,
         page,
         pageSize,
+        resolvedWithinDays,
+        days,
+        updatedAfter,
+        updatedSince,
       } = req.query;
 
       // 1. Pagination parameters
@@ -559,7 +563,7 @@ app.get(
         where.itPriority = itPrioStr as Priority;
       }
 
-      // Status validation
+      // Status validation (supports single status or comma-separated list e.g. "NEW,OPEN")
       const validStatuses = [
         "NEW",
         "OPEN",
@@ -571,8 +575,15 @@ app.get(
         "CANCELLED",
       ];
       if (status !== undefined && status !== "") {
-        const statusStr = String(status).toUpperCase();
-        if (!validStatuses.includes(statusStr)) {
+        const rawStatus = Array.isArray(status) ? status.join(",") : String(status);
+        const statusParts = rawStatus
+          .toUpperCase()
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const invalidStatuses = statusParts.filter((s) => !validStatuses.includes(s));
+        if (invalidStatuses.length > 0 || statusParts.length === 0) {
           res
             .status(400)
             .json(
@@ -584,7 +595,54 @@ app.get(
             );
           return;
         }
-        where.status = statusStr as TicketStatus;
+
+        if (statusParts.length === 1) {
+          where.status = statusParts[0] as TicketStatus;
+        } else {
+          where.status = { in: statusParts as TicketStatus[] };
+        }
+      }
+
+      // Rolling window date filter (e.g. resolvedWithinDays=7 or days=7 for Recently Resolved drill-down)
+      const targetDaysParam = resolvedWithinDays !== undefined ? resolvedWithinDays : days;
+      if (targetDaysParam !== undefined && targetDaysParam !== "") {
+        const parsedDays = parseInt(String(targetDaysParam), 10);
+        if (isNaN(parsedDays) || parsedDays <= 0) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid resolvedWithinDays parameter.",
+                [{ field: "resolvedWithinDays", message: "resolvedWithinDays must be a positive integer" }]
+              )
+            );
+          return;
+        }
+        const windowStart = new Date(Date.now() - parsedDays * 24 * 60 * 60 * 1000);
+        where.updatedAt = { gte: windowStart };
+      }
+
+      // Optional explicit updatedAfter/updatedSince date filter
+      const afterParam = updatedAfter || updatedSince;
+      if (afterParam !== undefined && afterParam !== "") {
+        const parsedDate = new Date(String(afterParam));
+        if (isNaN(parsedDate.getTime())) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid updatedAfter parameter.",
+                [{ field: "updatedAfter", message: "updatedAfter must be a valid ISO date" }]
+              )
+            );
+          return;
+        }
+        where.updatedAt = {
+          ...((where.updatedAt as Prisma.DateTimeFilter) || {}),
+          gte: parsedDate,
+        };
       }
 
       // Owner filter: ALL, UNASSIGNED, MY_TICKETS

@@ -256,9 +256,13 @@ describe("StaffDashboard Component (Lab 4 Issue #24)", () => {
     fireEvent.click(screen.getByTestId("kpi-card-waiting-requester"));
     expect(handleNavigateQueue).toHaveBeenCalledWith({ status: "WAITING_FOR_REQUESTER" });
 
-    // Click Recently Resolved card
+    // Click Total Open card (must drill down into both NEW and OPEN tickets)
+    fireEvent.click(screen.getByTestId("kpi-card-total-open"));
+    expect(handleNavigateQueue).toHaveBeenCalledWith({ status: "NEW,OPEN" });
+
+    // Click Recently Resolved card (must limit results to rolling 7-day window)
     fireEvent.click(screen.getByTestId("kpi-card-recently-resolved"));
-    expect(handleNavigateQueue).toHaveBeenCalledWith({ status: "RESOLVED" });
+    expect(handleNavigateQueue).toHaveBeenCalledWith({ status: "RESOLVED", resolvedWithinDays: "7" });
   });
 
   it("DSH-UI-02: category and priority workload distributions render and trigger filtered queue drill-down", async () => {

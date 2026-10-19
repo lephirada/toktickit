@@ -762,6 +762,11 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
 
     it("handles empty-data state with zero-valued metrics, zero action duration, and all priority breakdown keys at zero", async () => {
       // Simulate empty data state across ticket and action queries while preserving user auth query
+      const origCount = prisma.ticket.count;
+      const origTicketFindMany = prisma.ticket.findMany;
+      const origActionFindMany = prisma.actionTaken.findMany;
+      const origCategoryFindMany = prisma.category.findMany;
+
       const countSpy = vi.spyOn(prisma.ticket, "count").mockResolvedValue(0);
       const ticketFindManySpy = vi.spyOn(prisma.ticket, "findMany").mockResolvedValue([]);
       const actionFindManySpy = vi.spyOn(prisma.actionTaken, "findMany").mockResolvedValue([]);
@@ -815,7 +820,61 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
         ticketFindManySpy.mockRestore();
         actionFindManySpy.mockRestore();
         categoryFindManySpy.mockRestore();
+        (prisma.ticket as any).count = origCount;
+        (prisma.ticket as any).findMany = origTicketFindMany;
+        (prisma.actionTaken as any).findMany = origActionFindMany;
+        (prisma.category as any).findMany = origCategoryFindMany;
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Issue 24 Drill-Down Consistency: Dashboard Metrics vs Queue Filter Queries
+  // ---------------------------------------------------------------------------
+  describe("Issue 24 Drill-Down Consistency: Dashboard Metrics vs Queue Filter Queries", () => {
+    it("ensures Total Open metric count precisely equals queue results for ?status=NEW,OPEN", async () => {
+      // 1. Fetch current dashboard metrics
+      const dashRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(dashRes.status).toBe(200);
+      const totalOpenMetric = dashRes.body.data.metrics.totalOpen;
+
+      // 2. Fetch staff queue with status=NEW,OPEN
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?status=NEW,OPEN&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+      expect(queueRes.body.pagination.totalItems).toBe(totalOpenMetric);
+
+      // Verify every returned ticket in the queue has status NEW or OPEN
+      for (const ticket of queueRes.body.data) {
+        expect(["NEW", "OPEN"]).toContain(ticket.status);
+      }
+    });
+
+    it("ensures Recently Resolved metric count precisely equals queue results for ?status=RESOLVED&resolvedWithinDays=7", async () => {
+      // 1. Fetch current dashboard metrics
+      const dashRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(dashRes.status).toBe(200);
+      const recentlyResolvedMetric = dashRes.body.data.metrics.recentlyResolved;
+
+      // 2. Fetch staff queue with status=RESOLVED&resolvedWithinDays=7
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?status=RESOLVED&resolvedWithinDays=7&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+      expect(queueRes.body.pagination.totalItems).toBe(recentlyResolvedMetric);
+
+      // Verify all tickets returned are RESOLVED and within rolling 7 days
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime();
+      for (const ticket of queueRes.body.data) {
+        expect(ticket.status).toBe("RESOLVED");
+        expect(new Date(ticket.updatedAt).getTime()).toBeGreaterThanOrEqual(sevenDaysAgo - 2000); // 2s tolerance
       }
     });
   });
 });
+

@@ -339,6 +339,8 @@ export interface StaffTicketQueryParams {
   sortOrder?: "asc" | "desc";
   page?: number;
   pageSize?: number;
+  resolvedWithinDays?: number;
+  days?: number;
 }
 
 export interface FetchStaffTicketsResponse {
@@ -371,6 +373,8 @@ export async function fetchStaffTickets(
     if (params.sortOrder) query.set("sortOrder", params.sortOrder);
     if (params.page !== undefined) query.set("page", String(params.page));
     if (params.pageSize !== undefined) query.set("pageSize", String(params.pageSize));
+    if (params.resolvedWithinDays !== undefined) query.set("resolvedWithinDays", String(params.resolvedWithinDays));
+    if (params.days !== undefined) query.set("days", String(params.days));
   }
 
   const queryString = query.toString() ? `?${query.toString()}` : "";

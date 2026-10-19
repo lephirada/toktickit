@@ -336,11 +336,11 @@ export default function StaffDashboard({
               borderLeft: "4px solid #344054",
               cursor: "pointer",
             }}
-            onClick={() => onNavigateQueue?.({ status: "OPEN" })}
+            onClick={() => onNavigateQueue?.({ status: "NEW,OPEN" })}
             data-testid="kpi-card-total-open"
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && onNavigateQueue?.({ status: "OPEN" })}
+            onKeyDown={(e) => e.key === "Enter" && onNavigateQueue?.({ status: "NEW,OPEN" })}
             aria-label="View open tickets in queue"
           >
             <div className="d-flex align-items-center justify-content-between mb-2">
@@ -369,11 +369,11 @@ export default function StaffDashboard({
               borderLeft: "4px solid var(--zg-primary)",
               cursor: "pointer",
             }}
-            onClick={() => onNavigateQueue?.({ status: "RESOLVED" })}
+            onClick={() => onNavigateQueue?.({ status: "RESOLVED", resolvedWithinDays: "7" })}
             data-testid="kpi-card-recently-resolved"
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && onNavigateQueue?.({ status: "RESOLVED" })}
+            onKeyDown={(e) => e.key === "Enter" && onNavigateQueue?.({ status: "RESOLVED", resolvedWithinDays: "7" })}
             aria-label="View recently resolved tickets in queue"
           >
             <div className="d-flex align-items-center justify-content-between mb-2">

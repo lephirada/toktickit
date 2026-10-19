@@ -166,6 +166,7 @@ export function getInitialQueueFilters(): {
   status: string;
   owner: "ALL" | "UNASSIGNED" | "MY_TICKETS";
   search: string;
+  resolvedWithinDays?: number;
 } {
   if (typeof window === "undefined") {
     return {
@@ -180,7 +181,7 @@ export function getInitialQueueFilters(): {
 
   const searchParams = new URLSearchParams(window.location.search);
 
-  // Status
+  // Status (supports single status or comma-separated NEW,OPEN)
   const statusParam = searchParams.get("status")?.toUpperCase();
   const validStatuses = [
     "NEW",
@@ -192,7 +193,20 @@ export function getInitialQueueFilters(): {
     "REOPENED",
     "CANCELLED",
   ];
-  const initialStatus = statusParam && validStatuses.includes(statusParam) ? statusParam : "ALL";
+  let initialStatus = "ALL";
+  if (statusParam) {
+    if (statusParam === "NEW,OPEN" || statusParam === "OPEN,NEW" || statusParam === "OPEN_ALL") {
+      initialStatus = "NEW,OPEN";
+    } else if (validStatuses.includes(statusParam)) {
+      initialStatus = statusParam;
+    }
+  }
+
+  // Days / Resolved within rolling window (Issue 24 drill-down consistency)
+  const daysParam = searchParams.get("resolvedWithinDays") || searchParams.get("days");
+  const parsedDays = daysParam ? parseInt(daysParam, 10) : undefined;
+  const initialResolvedWithinDays =
+    parsedDays && !isNaN(parsedDays) && parsedDays > 0 ? parsedDays : undefined;
 
   // Owner
   const ownerParam = searchParams.get("owner")?.toUpperCase();
@@ -220,6 +234,7 @@ export function getInitialQueueFilters(): {
     status: initialStatus,
     owner: initialOwner,
     search: searchVal,
+    resolvedWithinDays: initialResolvedWithinDays,
   };
 }
 
@@ -248,6 +263,9 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
   const [selectedItPriority, setSelectedItPriority] = useState<string>(initialFilters.itPriority);
   const [selectedStatus, setSelectedStatus] = useState<string>(initialFilters.status);
   const [selectedOwner, setSelectedOwner] = useState<"ALL" | "UNASSIGNED" | "MY_TICKETS">(initialFilters.owner);
+  const [resolvedWithinDays, setResolvedWithinDays] = useState<number | undefined>(
+    initialFilters.resolvedWithinDays
+  );
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState<boolean>(false);
 
   // Re-sync filter states if browser Back/Forward (popstate) navigates between query parameters
@@ -259,6 +277,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
       setSelectedItPriority(filters.itPriority);
       setSelectedStatus(filters.status);
       setSelectedOwner(filters.owner);
+      setResolvedWithinDays(filters.resolvedWithinDays);
       setSearchInput(filters.search);
       setDebouncedSearch(filters.search);
       setPage(1);
@@ -322,6 +341,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
       sortOrder,
       page,
       pageSize,
+      resolvedWithinDays: selectedStatus === "RESOLVED" ? resolvedWithinDays : undefined,
     };
 
     try {
@@ -346,6 +366,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     selectedItPriority,
     selectedStatus,
     selectedOwner,
+    resolvedWithinDays,
     sortBy,
     sortOrder,
     page,
@@ -373,7 +394,11 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
   };
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedStatus(e.target.value);
+    const val = e.target.value;
+    setSelectedStatus(val);
+    if (val !== "RESOLVED") {
+      setResolvedWithinDays(undefined);
+    }
     setPage(1);
   };
 
@@ -400,6 +425,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     setSelectedItPriority("ALL");
     setSelectedStatus("ALL");
     setSelectedOwner("ALL");
+    setResolvedWithinDays(undefined);
     setSortBy("createdAt");
     setSortOrder("desc");
     setPage(1);
@@ -411,7 +437,8 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     selectedReqPriority !== "ALL" ||
     selectedItPriority !== "ALL" ||
     selectedStatus !== "ALL" ||
-    selectedOwner !== "ALL";
+    selectedOwner !== "ALL" ||
+    resolvedWithinDays !== undefined;
 
   const activeDropdownCount =
     (selectedCategory !== "ALL" ? 1 : 0) +
@@ -592,11 +619,14 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
                   }}
                 >
                   <option value="ALL">All Statuses</option>
+                  <option value="NEW,OPEN">Total Open (New &amp; Open)</option>
                   <option value="NEW">New</option>
                   <option value="OPEN">Open</option>
                   <option value="IN_PROGRESS">In Progress</option>
                   <option value="WAITING_FOR_REQUESTER">Waiting for Requester</option>
-                  <option value="RESOLVED">Resolved</option>
+                  <option value="RESOLVED">
+                    {resolvedWithinDays ? `Recently Resolved (Last ${resolvedWithinDays} Days)` : "Resolved"}
+                  </option>
                   <option value="CLOSED">Closed</option>
                   <option value="REOPENED">Reopened</option>
                   <option value="CANCELLED">Cancelled</option>
@@ -747,19 +777,44 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
                 </div>
               </div>
 
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-link text-secondary d-inline-flex align-items-center gap-1 text-decoration-none px-2 py-1 rounded-2 zg-ghost-reset-btn"
-                  style={{
-                    fontSize: "0.8rem",
-                    color: "#667085",
-                    border: "none",
-                    background: "transparent",
-                  }}
-                  onClick={handleResetFilters}
-                  data-testid="queue-clear-filters-btn"
-                >
+              <div className="d-flex align-items-center gap-2">
+                {resolvedWithinDays !== undefined && selectedStatus === "RESOLVED" && (
+                  <span
+                    className="badge px-2 py-1 rounded-pill d-inline-flex align-items-center gap-1"
+                    style={{
+                      backgroundColor: "var(--zg-pale)",
+                      color: "var(--zg-primary)",
+                      border: "1px solid #A6F4C5",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                    }}
+                    data-testid="queue-resolved-window-badge"
+                  >
+                    <span>Last {resolvedWithinDays} Days</span>
+                    <button
+                      type="button"
+                      className="btn-close btn-close-sm p-0 ms-1"
+                      style={{ fontSize: "0.6rem" }}
+                      aria-label="Clear rolling window limit"
+                      onClick={() => setResolvedWithinDays(undefined)}
+                      data-testid="queue-clear-window-btn"
+                    />
+                  </span>
+                )}
+
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-link text-secondary d-inline-flex align-items-center gap-1 text-decoration-none px-2 py-1 rounded-2 zg-ghost-reset-btn"
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "#667085",
+                      border: "none",
+                      background: "transparent",
+                    }}
+                    onClick={handleResetFilters}
+                    data-testid="queue-clear-filters-btn"
+                  >
                   <svg
                     width="13"
                     height="13"
@@ -776,6 +831,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
                   <span className="fw-medium">Reset Filters</span>
                 </button>
               )}
+              </div>
             </div>
           </div>
         </div>
