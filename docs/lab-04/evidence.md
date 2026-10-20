@@ -721,7 +721,7 @@ Running 2 tests using 1 worker
   - `npm --prefix client run build` (Production client build)
   - `npm --prefix server run test` (Full server regression suite)
   - `npx playwright test -c e2e/lab-04/playwright.config.ts e2e/lab-04/dashboard-screenshots.spec.ts` (Responsive overflow & screenshot verification)
-- **Verification Status:** **Verified (70/70 Lab 4 client tests passing, 181/181 full client suite passing, 351/351 full server suite passing, 4/4 Playwright browser tests passing, 0 build errors)**
+- **Verification Status:** **Verified (71/71 Lab 4 client tests passing, 182/182 full client suite passing, 351/351 full server suite passing, 4/4 Playwright browser tests passing, 0 build errors)**
 - **Components Implemented & Hardened:**
   - `RequesterDashboard.tsx` (AC-24-01, DSH-UI-01): User-facing helpdesk overview for Requesters. Aggregates the full requester dataset by assembling all pagination pages concurrently (`fetchAllRequesterPages`). Computes 4 real-time KPI cards using Zen Green tokens: **Total Open** (`NEW`, `OPEN`), **Action Needed** (`WAITING_FOR_REQUESTER`), **Recently Resolved** (strictly tickets in `RESOLVED` status updated within the rolling 7-day cutoff `updatedAt >= now - 7d`), and **Total Closed** (`CLOSED`). Implements atomic error handling: if any page fails to load, the dashboard displays an error alert with a "Try Again" retry action instead of presenting inaccurate partial data. Renders a Recent Service Requests table with status/priority badges and direct links to ticket detail, quick CTAs (`+ Create Ticket`, `View My Tickets`), and a clean empty state with a `+ Create First Ticket` button.
   - `StaffDashboard.tsx` (AC-24-02, DSH-UI-02): Operational command center for IT Staff and Administrators consuming `GET /api/staff/dashboard`. Renders 7 core KPI cards with Zen Green color-coded accents: **Unassigned**, **My Assigned**, **In Progress**, **Waiting Req.**, **Total Open**, **Recently Resolved**, and **Total Labor Time** (formatted in hours and minutes `Xh Ym`). Displays non-terminal workload distributions by Category (tickets and labor hours) and Priority (P0–P3 distribution bars with effective priority).
@@ -730,14 +730,14 @@ Running 2 tests using 1 worker
   - `StaffTicketQueue.tsx` & Drill-Down Consistency (AC-24-04, DSH-UI-04): Enhanced queue filter initialization from URL search parameters (`owner`, `status`, `categoryId`, `requestedPriority`, `priority`, `search`, `resolvedWithinDays`):
     - **Total Open Drill-Down Consistency:** `Total Open` KPI card links to `/staff/queue?status=NEW,OPEN`. Both backend `GET /api/staff/tickets` and client queue parsing support comma-separated statuses (`NEW,OPEN`), ensuring the queue returns both `NEW` and `OPEN` tickets exactly matching the dashboard metric.
     - **Recently Resolved Rolling Window Consistency:** `Recently Resolved` KPI card links to `/staff/queue?status=RESOLVED&resolvedWithinDays=7`. Backend accepts `resolvedWithinDays` and filters by `updatedAt >= now - 7d`, strictly restricting queue results to the rolling 7-day window. The queue displays an active filter badge (`Last 7 Days`) with a clear button to remove the window limit if desired.
-    - **Effective Priority Drill-Down Consistency:** Urgent tickets deep links and Priority breakdown clicks navigate to `/staff/queue?priority=P0_URGENT`. `StaffTicketQueue` and backend `GET /api/staff/tickets` evaluate effective priority, returning tickets matching the selected priority regardless of whether it was set at request or overridden by IT Staff.
+    - **Effective Priority Drill-Down Consistency & Active Filter Recognition:** Urgent tickets deep links and Priority breakdown clicks navigate to `/staff/queue?priority=P0_URGENT`. `StaffTicketQueue` and backend `GET /api/staff/tickets` evaluate effective priority. Crucially, `priorityFilter` is included in `hasActiveFilters` and `activeDropdownCount`, rendering a removable badge (`Priority: P0 URGENT`) and guaranteeing that if no tickets match the priority, the queue displays `queue-no-results-state` ("No matching tickets found") and the "Reset Filters" action button.
     - **Single `pushState` Browser History Safety:** `App.tsx` composes path and query parameters into a single string via `URLSearchParams` and calls `window.history.pushState` strictly once per navigation, eliminating duplicate history entries and ensuring browser Back/Forward navigation functions smoothly.
   - `Header.tsx` & `App.tsx` (AC-24-05, DSH-UI-05): Added role-based navigation links for `Dashboard` in both desktop header and mobile drawer menus. Highlights the active view using Zen Green design tokens (`rgba(255, 255, 255, 0.2)` background and subtle border) with `aria-current="page"`. Implements route guarding in `resolveAllowedView`: redirects unauthenticated users to `/login`, prevents Requesters from accessing `/staff/dashboard` and `/admin/users` (redirecting to `/my-tickets`), blocks IT Staff from `/admin/users` (redirecting to `/staff/queue`), and allows Admin access to both.
   - **Responsive Design & DOM Safety (AC-24-06):** Dashboards feature responsive card wrapping and fluid gutters (`g-2 g-md-3`, `p-3 p-md-4`) ensuring zero horizontal overflow (`scrollWidth <= innerWidth`) across Mobile (375px), Tablet (768px), and Desktop (1280px). Verified via Playwright automation.
 
 #### Terminal Execution Logs (Executed from Project Root)
 
-**Log 1: Lab 4 Client Tests (7 Test Files, 70/70 Passing)**
+**Log 1: Lab 4 Client Tests (7 Test Files, 71/71 Passing)**
 
 ```text
 $ npm --prefix client test tests/lab-04/
@@ -746,17 +746,17 @@ $ npm --prefix client test tests/lab-04/
 
  ✓ tests/lab-04/ActionsTakenSection.test.tsx (7)
  ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8)
- ✓ tests/lab-04/DashboardRouting.test.tsx (23)
+ ✓ tests/lab-04/DashboardRouting.test.tsx (24)
  ✓ tests/lab-04/EditActionModal.test.tsx (5)
  ✓ tests/lab-04/LogActionModal.test.tsx (10)
  ✓ tests/lab-04/RequesterDashboard.test.tsx (6)
  ✓ tests/lab-04/StaffDashboard.test.tsx (11)
 
  Test Files  7 passed (7)
-      Tests  70 passed (70)
+      Tests  71 passed (71)
 ```
 
-**Log 2: Full Client Regression Test Suite (19 Test Files, 181/181 Passing)**
+**Log 2: Full Client Regression Test Suite (19 Test Files, 182/182 Passing)**
 
 ```text
 $ npm --prefix client test
@@ -777,14 +777,14 @@ $ npm --prefix client test
  ✓ tests/lab-03/UserManagement.test.tsx (7)
  ✓ tests/lab-04/ActionsTakenSection.test.tsx (7)
  ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8)
- ✓ tests/lab-04/DashboardRouting.test.tsx (23)
+ ✓ tests/lab-04/DashboardRouting.test.tsx (24)
  ✓ tests/lab-04/EditActionModal.test.tsx (5)
  ✓ tests/lab-04/LogActionModal.test.tsx (10)
  ✓ tests/lab-04/RequesterDashboard.test.tsx (6)
  ✓ tests/lab-04/StaffDashboard.test.tsx (11)
 
  Test Files  19 passed (19)
-      Tests  181 passed (181)
+      Tests  182 passed (182)
 ```
 
 **Log 3: Client Production Build Verification (Zero Type & Bundle Errors)**

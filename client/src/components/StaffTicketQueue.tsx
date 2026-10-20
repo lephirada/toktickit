@@ -447,6 +447,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     selectedCategory !== "ALL" ||
     selectedReqPriority !== "ALL" ||
     selectedItPriority !== "ALL" ||
+    priorityFilter !== undefined ||
     selectedStatus !== "ALL" ||
     selectedOwner !== "ALL" ||
     resolvedWithinDays !== undefined;
@@ -455,7 +456,8 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     (selectedCategory !== "ALL" ? 1 : 0) +
     (selectedStatus !== "ALL" ? 1 : 0) +
     (selectedItPriority !== "ALL" ? 1 : 0) +
-    (selectedReqPriority !== "ALL" ? 1 : 0);
+    (selectedReqPriority !== "ALL" ? 1 : 0) +
+    (priorityFilter !== undefined ? 1 : 0);
 
   return (
     <div className="w-100" data-testid="staff-ticket-queue-view">
@@ -809,6 +811,30 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
                       aria-label="Clear rolling window limit"
                       onClick={() => setResolvedWithinDays(undefined)}
                       data-testid="queue-clear-window-btn"
+                    />
+                  </span>
+                )}
+
+                {priorityFilter !== undefined && (
+                  <span
+                    className="badge px-2 py-1 rounded-pill d-inline-flex align-items-center gap-1"
+                    style={{
+                      backgroundColor: "rgba(239, 68, 68, 0.1)",
+                      color: "#DC2626",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                    }}
+                    data-testid="queue-priority-filter-badge"
+                  >
+                    <span>Priority: {priorityFilter.replace("_", " ")}</span>
+                    <button
+                      type="button"
+                      className="btn-close btn-close-sm p-0 ms-1"
+                      style={{ fontSize: "0.6rem" }}
+                      aria-label="Clear priority filter"
+                      onClick={() => setPriorityFilter(undefined)}
+                      data-testid="queue-clear-priority-btn"
                     />
                   </span>
                 )}

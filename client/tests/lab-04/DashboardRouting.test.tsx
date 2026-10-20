@@ -248,6 +248,47 @@ describe("Dashboard Routing & Query Filter Integration (Lab 4 Issue #24)", () =>
       });
       expect(screen.queryByTestId("queue-resolved-window-badge")).not.toBeInTheDocument();
     });
+
+    it("recognizes priority filter as an active filter, showing no-results state and reset button on empty queue", async () => {
+      window.history.replaceState({}, "", "/staff/queue?priority=P0_URGENT");
+      const fetchSpy = vi.spyOn(api, "fetchStaffTickets").mockResolvedValue({
+        data: [],
+        pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+      });
+
+      render(<StaffTicketQueue />);
+
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            priority: "P0_URGENT",
+          })
+        );
+      });
+
+      // Renders priority filter badge
+      const badge = screen.getByTestId("queue-priority-filter-badge");
+      expect(badge).toBeInTheDocument();
+      expect(badge).toHaveTextContent("Priority: P0 URGENT");
+
+      // Renders queue-no-results-state instead of queue-empty-state
+      expect(screen.getByTestId("queue-no-results-state")).toBeInTheDocument();
+      expect(screen.getByText("No matching tickets found")).toBeInTheDocument();
+      expect(screen.queryByTestId("queue-empty-state")).toBeNull();
+
+      // Clear button on badge resets priority
+      const clearBtn = screen.getByTestId("queue-clear-priority-btn");
+      fireEvent.click(clearBtn);
+
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            priority: undefined,
+          })
+        );
+      });
+      expect(screen.queryByTestId("queue-priority-filter-badge")).not.toBeInTheDocument();
+    });
   });
 
   describe("Header role-based navigation & Dashboard active highlighting", () => {
