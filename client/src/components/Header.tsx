@@ -151,6 +151,24 @@ export default function Header({ activeView = "my-tickets", currentScreen, onNav
               {user.role === "REQUESTER" && (
                 <>
                   <a
+                    href="/dashboard"
+                    onClick={handleNavClick("requester-dashboard")}
+                    className={`nav-link text-white px-3 py-1 rounded-2 transition-all d-flex align-items-center gap-1 ${
+                      currentView === "requester-dashboard"
+                        ? "fw-bold shadow-sm"
+                        : "opacity-85 hover-opacity-100"
+                    }`}
+                    style={{
+                      backgroundColor: currentView === "requester-dashboard" ? "rgba(255, 255, 255, 0.2)" : "transparent",
+                      border: currentView === "requester-dashboard" ? "1px solid rgba(255, 255, 255, 0.35)" : "1px solid transparent",
+                      fontSize: "0.875rem",
+                    }}
+                    aria-current={currentView === "requester-dashboard" ? "page" : undefined}
+                    data-testid="nav-requester-dashboard"
+                  >
+                    Dashboard
+                  </a>
+                  <a
                     href="/my-tickets"
                     onClick={handleNavClick("my-tickets")}
                     className={`nav-link text-white px-3 py-1 rounded-2 transition-all d-flex align-items-center gap-1 ${
@@ -190,21 +208,40 @@ export default function Header({ activeView = "my-tickets", currentScreen, onNav
               )}
 
               {user.role === "IT_STAFF" && (
-                <a
-                  href="/staff/queue"
-                  onClick={handleNavClick("staff-queue")}
-                  className={`nav-link text-white px-3 py-1 rounded-2 transition-all ${
-                    currentView === "staff-queue" ? "fw-bold shadow-sm" : "opacity-85 hover-opacity-100"
-                  }`}
-                  style={{
-                    backgroundColor: currentView === "staff-queue" ? "rgba(255, 255, 255, 0.2)" : "transparent",
-                    border: currentView === "staff-queue" ? "1px solid rgba(255, 255, 255, 0.35)" : "1px solid transparent",
-                    fontSize: "0.875rem",
-                  }}
-                  data-testid="nav-staff-queue"
-                >
-                  Ticket Queue
-                </a>
+                <>
+                  <a
+                    href="/staff/queue"
+                    onClick={handleNavClick("staff-queue")}
+                    className={`nav-link text-white px-3 py-1 rounded-2 transition-all ${
+                      currentView === "staff-queue" ? "fw-bold shadow-sm" : "opacity-85 hover-opacity-100"
+                    }`}
+                    style={{
+                      backgroundColor: currentView === "staff-queue" ? "rgba(255, 255, 255, 0.2)" : "transparent",
+                      border: currentView === "staff-queue" ? "1px solid rgba(255, 255, 255, 0.35)" : "1px solid transparent",
+                      fontSize: "0.875rem",
+                    }}
+                    aria-current={currentView === "staff-queue" ? "page" : undefined}
+                    data-testid="nav-staff-queue"
+                  >
+                    Ticket Queue
+                  </a>
+                  <a
+                    href="/staff/dashboard"
+                    onClick={handleNavClick("staff-dashboard")}
+                    className={`nav-link text-white px-3 py-1 rounded-2 transition-all ${
+                      currentView === "staff-dashboard" ? "fw-bold shadow-sm" : "opacity-85 hover-opacity-100"
+                    }`}
+                    style={{
+                      backgroundColor: currentView === "staff-dashboard" ? "rgba(255, 255, 255, 0.2)" : "transparent",
+                      border: currentView === "staff-dashboard" ? "1px solid rgba(255, 255, 255, 0.35)" : "1px solid transparent",
+                      fontSize: "0.875rem",
+                    }}
+                    aria-current={currentView === "staff-dashboard" ? "page" : undefined}
+                    data-testid="nav-staff-dashboard"
+                  >
+                    Dashboard
+                  </a>
+                </>
               )}
 
               {user.role === "ADMINISTRATOR" && (
@@ -220,9 +257,26 @@ export default function Header({ activeView = "my-tickets", currentScreen, onNav
                       border: currentView === "staff-queue" ? "1px solid rgba(255, 255, 255, 0.35)" : "1px solid transparent",
                       fontSize: "0.875rem",
                     }}
+                    aria-current={currentView === "staff-queue" ? "page" : undefined}
                     data-testid="nav-admin-queue"
                   >
                     Ticket Queue
+                  </a>
+                  <a
+                    href="/staff/dashboard"
+                    onClick={handleNavClick("staff-dashboard")}
+                    className={`nav-link text-white px-3 py-1 rounded-2 transition-all ${
+                      currentView === "staff-dashboard" ? "fw-bold shadow-sm" : "opacity-85 hover-opacity-100"
+                    }`}
+                    style={{
+                      backgroundColor: currentView === "staff-dashboard" ? "rgba(255, 255, 255, 0.2)" : "transparent",
+                      border: currentView === "staff-dashboard" ? "1px solid rgba(255, 255, 255, 0.35)" : "1px solid transparent",
+                      fontSize: "0.875rem",
+                    }}
+                    aria-current={currentView === "staff-dashboard" ? "page" : undefined}
+                    data-testid="nav-admin-dashboard"
+                  >
+                    Dashboard
                   </a>
                   <a
                     href="/admin/users"
@@ -235,6 +289,7 @@ export default function Header({ activeView = "my-tickets", currentScreen, onNav
                       border: currentView === "admin-users" ? "1px solid rgba(255, 255, 255, 0.35)" : "1px solid transparent",
                       fontSize: "0.875rem",
                     }}
+                    aria-current={currentView === "admin-users" ? "page" : undefined}
                     data-testid="nav-admin-users"
                   >
                     User Management
@@ -361,6 +416,16 @@ export default function Header({ activeView = "my-tickets", currentScreen, onNav
             {user.role === "REQUESTER" && (
               <>
                 <a
+                  href="/dashboard"
+                  onClick={handleNavClick("requester-dashboard")}
+                  className={`text-white text-decoration-none py-2 px-3 rounded-2 ${
+                    currentView === "requester-dashboard" ? "bg-black bg-opacity-25 fw-bold" : ""
+                  }`}
+                  data-testid="mobile-nav-requester-dashboard"
+                >
+                  Dashboard
+                </a>
+                <a
                   href="/my-tickets"
                   onClick={handleNavClick("my-tickets")}
                   className={`text-white text-decoration-none py-2 px-3 rounded-2 ${
@@ -382,15 +447,27 @@ export default function Header({ activeView = "my-tickets", currentScreen, onNav
             )}
 
             {user.role === "IT_STAFF" && (
-              <a
-                href="/staff/queue"
-                onClick={handleNavClick("staff-queue")}
-                className={`text-white text-decoration-none py-2 px-3 rounded-2 ${
-                  currentView === "staff-queue" ? "bg-black bg-opacity-25 fw-bold" : ""
-                }`}
-              >
-                Ticket Queue
-              </a>
+              <>
+                <a
+                  href="/staff/queue"
+                  onClick={handleNavClick("staff-queue")}
+                  className={`text-white text-decoration-none py-2 px-3 rounded-2 ${
+                    currentView === "staff-queue" ? "bg-black bg-opacity-25 fw-bold" : ""
+                  }`}
+                >
+                  Ticket Queue
+                </a>
+                <a
+                  href="/staff/dashboard"
+                  onClick={handleNavClick("staff-dashboard")}
+                  className={`text-white text-decoration-none py-2 px-3 rounded-2 ${
+                    currentView === "staff-dashboard" ? "bg-black bg-opacity-25 fw-bold" : ""
+                  }`}
+                  data-testid="mobile-nav-staff-dashboard"
+                >
+                  Dashboard
+                </a>
+              </>
             )}
 
             {user.role === "ADMINISTRATOR" && (
@@ -403,6 +480,16 @@ export default function Header({ activeView = "my-tickets", currentScreen, onNav
                   }`}
                 >
                   Ticket Queue
+                </a>
+                <a
+                  href="/staff/dashboard"
+                  onClick={handleNavClick("staff-dashboard")}
+                  className={`text-white text-decoration-none py-2 px-3 rounded-2 ${
+                    currentView === "staff-dashboard" ? "bg-black bg-opacity-25 fw-bold" : ""
+                  }`}
+                  data-testid="mobile-nav-admin-dashboard"
+                >
+                  Dashboard
                 </a>
                 <a
                   href="/admin/users"
