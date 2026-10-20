@@ -473,6 +473,8 @@ app.get(
         categoryId,
         requestedPriority,
         itPriority,
+        priority,
+        effectivePriority,
         status,
         owner,
         sortBy,
@@ -561,6 +563,39 @@ app.get(
           return;
         }
         where.itPriority = itPrioStr as Priority;
+      }
+
+      // Effective priority filter (e.g. priority=P0_URGENT or effectivePriority=P0_URGENT)
+      const rawEffPriority = priority !== undefined && priority !== "" ? priority : effectivePriority;
+      if (rawEffPriority !== undefined && rawEffPriority !== "") {
+        const effPrioStr = String(rawEffPriority).toUpperCase();
+        if (!validPriorities.includes(effPrioStr)) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid priority parameter.",
+                [{ field: "priority", message: `priority must be one of: ${validPriorities.join(", ")}` }]
+              )
+            );
+          return;
+        }
+        const effectiveCondition: Prisma.TicketWhereInput = {
+          OR: [
+            { itPriority: effPrioStr as Priority },
+            { itPriority: null, requestedPriority: effPrioStr as Priority },
+          ],
+        };
+        if (where.AND) {
+          if (Array.isArray(where.AND)) {
+            where.AND.push(effectiveCondition);
+          } else {
+            where.AND = [where.AND, effectiveCondition];
+          }
+        } else {
+          where.AND = [effectiveCondition];
+        }
       }
 
       // Status validation (supports single status or comma-separated list e.g. "NEW,OPEN")

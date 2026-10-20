@@ -163,6 +163,7 @@ export function getInitialQueueFilters(): {
   category: string;
   reqPriority: string;
   itPriority: string;
+  priority?: string;
   status: string;
   owner: "ALL" | "UNASSIGNED" | "MY_TICKETS";
   search: string;
@@ -222,6 +223,9 @@ export function getInitialQueueFilters(): {
   const validPriorities = ["P0_URGENT", "P1_HIGH", "P2_MEDIUM", "P3_LOW"];
   const initialReqPriority = prioParam && validPriorities.includes(prioParam) ? prioParam : "ALL";
 
+  const effectivePriorityParam = searchParams.get("priority")?.toUpperCase();
+  const initialPriority = effectivePriorityParam && validPriorities.includes(effectivePriorityParam) ? effectivePriorityParam : undefined;
+
   const itPrioParam = searchParams.get("itPriority")?.toUpperCase();
   const initialItPriority = itPrioParam && validPriorities.includes(itPrioParam) ? itPrioParam : "ALL";
 
@@ -231,6 +235,7 @@ export function getInitialQueueFilters(): {
     category: initialCategory,
     reqPriority: initialReqPriority,
     itPriority: initialItPriority,
+    priority: initialPriority,
     status: initialStatus,
     owner: initialOwner,
     search: searchVal,
@@ -261,6 +266,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
   const [selectedCategory, setSelectedCategory] = useState<string>(initialFilters.category);
   const [selectedReqPriority, setSelectedReqPriority] = useState<string>(initialFilters.reqPriority);
   const [selectedItPriority, setSelectedItPriority] = useState<string>(initialFilters.itPriority);
+  const [priorityFilter, setPriorityFilter] = useState<string | undefined>(initialFilters.priority);
   const [selectedStatus, setSelectedStatus] = useState<string>(initialFilters.status);
   const [selectedOwner, setSelectedOwner] = useState<"ALL" | "UNASSIGNED" | "MY_TICKETS">(initialFilters.owner);
   const [resolvedWithinDays, setResolvedWithinDays] = useState<number | undefined>(
@@ -275,6 +281,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
       setSelectedCategory(filters.category);
       setSelectedReqPriority(filters.reqPriority);
       setSelectedItPriority(filters.itPriority);
+      setPriorityFilter(filters.priority);
       setSelectedStatus(filters.status);
       setSelectedOwner(filters.owner);
       setResolvedWithinDays(filters.resolvedWithinDays);
@@ -333,7 +340,8 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     const queryParams: StaffTicketQueryParams = {
       search: debouncedSearch || undefined,
       categoryId: selectedCategory !== "ALL" ? parseInt(selectedCategory, 10) : undefined,
-      requestedPriority: selectedReqPriority !== "ALL" ? selectedReqPriority : undefined,
+      priority: priorityFilter,
+      requestedPriority: !priorityFilter && selectedReqPriority !== "ALL" ? selectedReqPriority : undefined,
       itPriority: selectedItPriority !== "ALL" ? selectedItPriority : undefined,
       status: selectedStatus !== "ALL" ? selectedStatus : undefined,
       owner: selectedOwner !== "ALL" ? selectedOwner : undefined,
@@ -364,6 +372,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     selectedCategory,
     selectedReqPriority,
     selectedItPriority,
+    priorityFilter,
     selectedStatus,
     selectedOwner,
     resolvedWithinDays,
@@ -385,6 +394,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
 
   const handleReqPriorityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedReqPriority(e.target.value);
+    setPriorityFilter(undefined);
     setPage(1);
   };
 
@@ -423,6 +433,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     setSelectedCategory("ALL");
     setSelectedReqPriority("ALL");
     setSelectedItPriority("ALL");
+    setPriorityFilter(undefined);
     setSelectedStatus("ALL");
     setSelectedOwner("ALL");
     setResolvedWithinDays(undefined);

@@ -944,6 +944,49 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
         expect(ticket.owner?.id).toBe(staffUser.id);
       }
     });
+
+    it("ensures priority=P0_URGENT correctly resolves effective priority (includes staff upgrade P0, excludes staff downgrade P3)", async () => {
+      // 1. Staff upgrade: requested P2_MEDIUM, itPriority P0_URGENT -> Effective P0
+      const upgradedTicket = await createTicket({
+        status: TicketStatus.IN_PROGRESS,
+        requestedPriority: Priority.P2_MEDIUM,
+        itPriority: Priority.P0_URGENT,
+      });
+
+      // 2. Staff downgrade: requested P0_URGENT, itPriority P3_LOW -> Effective P3
+      const downgradedTicket = await createTicket({
+        status: TicketStatus.OPEN,
+        requestedPriority: Priority.P0_URGENT,
+        itPriority: Priority.P3_LOW,
+      });
+
+      // 3. Untriaged urgent: requested P0_URGENT, itPriority null -> Effective P0
+      const untriagedUrgentTicket = await createTicket({
+        status: TicketStatus.NEW,
+        requestedPriority: Priority.P0_URGENT,
+        itPriority: null,
+      });
+
+      const res = await request(app)
+        .get("/api/staff/tickets?priority=P0_URGENT&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(res.status).toBe(200);
+
+      const returnedIds = res.body.data.map((t: any) => t.id);
+
+      // Must include upgraded ticket (Effective P0) and untriaged urgent ticket (Effective P0)
+      expect(returnedIds).toContain(upgradedTicket.id);
+      expect(returnedIds).toContain(untriagedUrgentTicket.id);
+
+      // Must EXCLUDE downgraded ticket (Effective P3, even though requested was P0)
+      expect(returnedIds).not.toContain(downgradedTicket.id);
+
+      // Verify all returned tickets actually have effective priority P0_URGENT
+      for (const ticket of res.body.data) {
+        const effective = ticket.itPriority || ticket.requestedPriority;
+        expect(effective).toBe("P0_URGENT");
+      }
+    });
   });
 });
 

@@ -303,7 +303,7 @@ describe("StaffDashboard Component (Lab 4 Issue #24)", () => {
 
     // Click priority drill-down
     fireEvent.click(screen.getByTestId("priority-drilldown-P0_URGENT"));
-    expect(handleNavigateQueue).toHaveBeenCalledWith({ requestedPriority: "P0_URGENT" });
+    expect(handleNavigateQueue).toHaveBeenCalledWith({ priority: "P0_URGENT" });
   });
 
   it("DSH-UI-02: renders recent queue activity table and opens ticket detail on click", async () => {
@@ -353,7 +353,7 @@ describe("StaffDashboard Component (Lab 4 Issue #24)", () => {
 
     vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue(mockDashboardResponse);
     vi.spyOn(api, "fetchStaffTickets").mockImplementation(async (params) => {
-      if (params?.requestedPriority === "P0_URGENT") {
+      if (params?.priority === "P0_URGENT" || params?.requestedPriority === "P0_URGENT") {
         return {
           data: [mockRecentStaffTickets[0]], // TCK-101 is P0_URGENT
           pagination: {
@@ -400,17 +400,89 @@ describe("StaffDashboard Component (Lab 4 Issue #24)", () => {
 
     // Click "View all urgent in queue ->" link
     fireEvent.click(screen.getByTestId("see-all-urgent-link"));
-    expect(handleNavigateQueue).toHaveBeenCalledWith({ requestedPriority: "P0_URGENT" });
+    expect(handleNavigateQueue).toHaveBeenCalledWith({ priority: "P0_URGENT" });
 
     // Click open urgent ticket button
     fireEvent.click(screen.getByTestId("view-urgent-ticket-btn-101"));
     expect(handleViewTicket).toHaveBeenCalledWith(101);
   });
 
+  it("DSH-UI-02: accurately resolves effective priority for urgent tickets (includes staff upgrade P0, excludes staff downgrade P3)", async () => {
+    const upgradedTicket: api.StaffTicketItem = {
+      id: 201,
+      ticketNo: "TCK-UPGRADE-P0",
+      summary: "Database outage (triaged from P2 to P0 by IT Staff)",
+      requestedPriority: "P2_MEDIUM",
+      itPriority: "P0_URGENT", // Staff upgraded to P0
+      status: "IN_PROGRESS",
+      resolutionIndicated: false,
+      createdAt: "2026-10-18T09:00:00.000Z",
+      updatedAt: "2026-10-18T09:30:00.000Z",
+      requester: { id: 3, fullName: "Jennifer Anderson", email: "jennifer@toktickit.com" },
+      category: { id: 1, name: "Database" },
+      owner: { id: 6, fullName: "David Lee" },
+    };
+
+    const downgradedTicket: api.StaffTicketItem = {
+      id: 202,
+      ticketNo: "TCK-DOWNGRADE-P3",
+      summary: "Mouse cursor size adjustment (requested P0 but triaged to P3)",
+      requestedPriority: "P0_URGENT",
+      itPriority: "P3_LOW", // Staff downgraded to P3
+      status: "OPEN",
+      resolutionIndicated: false,
+      createdAt: "2026-10-18T09:00:00.000Z",
+      updatedAt: "2026-10-18T09:30:00.000Z",
+      requester: { id: 2, fullName: "John Doe", email: "john@toktickit.com" },
+      category: { id: 2, name: "Hardware" },
+      owner: null,
+    };
+
+    vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue(mockDashboardResponse);
+    vi.spyOn(api, "fetchStaffTickets").mockImplementation(async (params) => {
+      if (params?.priority === "P0_URGENT" || params?.requestedPriority === "P0_URGENT") {
+        return {
+          // API returns both tickets that touched P0
+          data: [upgradedTicket, downgradedTicket],
+          pagination: {
+            page: 1,
+            pageSize: 5,
+            totalItems: 2,
+            totalPages: 1,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
+      }
+      return {
+        data: [],
+        pagination: { page: 1, pageSize: 5, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+      };
+    });
+
+    render(<StaffDashboard currentUser={mockStaffUser} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("staff-urgent-tickets-card")).toBeInTheDocument();
+    });
+
+    const urgentTable = screen.getByTestId("staff-urgent-tickets-table");
+
+    // Upgraded ticket (effective priority P0) MUST be included
+    expect(within(urgentTable).getByText("TCK-UPGRADE-P0")).toBeInTheDocument();
+    expect(within(urgentTable).getByText("Database outage (triaged from P2 to P0 by IT Staff)")).toBeInTheDocument();
+
+    // Downgraded ticket (effective priority P3) MUST be excluded
+    expect(within(urgentTable).queryByText("TCK-DOWNGRADE-P3")).toBeNull();
+
+    // Count badge reflects exactly 1 urgent ticket
+    expect(screen.getByTestId("urgent-tickets-count-badge")).toHaveTextContent("1");
+  });
+
   it("DSH-UI-02: renders accessible empty state when no P0 urgent tickets require attention", async () => {
     vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue(mockDashboardResponse);
     vi.spyOn(api, "fetchStaffTickets").mockImplementation(async (params) => {
-      if (params?.requestedPriority === "P0_URGENT") {
+      if (params?.priority === "P0_URGENT" || params?.requestedPriority === "P0_URGENT") {
         return {
           data: [],
           pagination: {

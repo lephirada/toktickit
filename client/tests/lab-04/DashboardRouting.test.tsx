@@ -165,6 +165,13 @@ describe("Dashboard Routing & Query Filter Integration (Lab 4 Issue #24)", () =>
       expect(filters.resolvedWithinDays).toBe(7);
     });
 
+    it("parses ?priority=P0_URGENT for effective priority drill-down", () => {
+      window.history.replaceState({}, "", "/staff/queue?priority=P0_URGENT");
+      const filters = getInitialQueueFilters();
+      expect(filters.reqPriority).toBe("P0_URGENT");
+      expect(filters.priority).toBe("P0_URGENT");
+    });
+
     it("safely ignores unknown or invalid query parameter values", () => {
       window.history.replaceState({}, "", "/staff/queue?owner=HACKED&status=INVALID_STATUS&categoryId=notanumber&resolvedWithinDays=invalid");
       const filters = getInitialQueueFilters();

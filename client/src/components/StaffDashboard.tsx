@@ -65,7 +65,7 @@ export default function StaffDashboard({
         fetchStaffDashboard(),
         fetchStaffTickets({ owner: "MY_TICKETS", pageSize: 1 }),
         fetchStaffTickets({ pageSize: 5, sortBy: "createdAt", sortOrder: "desc" }),
-        fetchStaffTickets({ requestedPriority: "P0_URGENT", pageSize: 5, sortBy: "createdAt", sortOrder: "desc" }),
+        fetchStaffTickets({ priority: "P0_URGENT", pageSize: 5, sortBy: "createdAt", sortOrder: "desc" }),
       ];
 
       // Concurrently fetch admin user statistics if caller is ADMINISTRATOR
@@ -590,13 +590,13 @@ export default function StaffDashboard({
                       backgroundColor: "var(--zg-surface-subtle)",
                       transition: "background 0.15s ease",
                     }}
-                    onClick={() => onNavigateQueue?.({ requestedPriority: cfg.key })}
+                    onClick={() => onNavigateQueue?.({ priority: cfg.key })}
                     data-testid={`priority-drilldown-${cfg.key}`}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) =>
                       e.key === "Enter" &&
-                      onNavigateQueue?.({ requestedPriority: cfg.key })
+                      onNavigateQueue?.({ priority: cfg.key })
                     }
                   >
                     <div className="d-flex align-items-center justify-content-between mb-1">
@@ -653,7 +653,7 @@ export default function StaffDashboard({
             type="button"
             className="btn btn-link btn-sm text-decoration-none fw-semibold p-0"
             style={{ color: "#B42318" }}
-            onClick={() => onNavigateQueue?.({ requestedPriority: "P0_URGENT" })}
+            onClick={() => onNavigateQueue?.({ priority: "P0_URGENT" })}
             data-testid="see-all-urgent-link"
           >
             View all urgent in queue &rarr;

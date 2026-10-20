@@ -333,6 +333,8 @@ export interface StaffTicketQueryParams {
   categoryId?: number;
   requestedPriority?: string;
   itPriority?: string;
+  priority?: string;
+  effectivePriority?: string;
   status?: string;
   owner?: "ALL" | "UNASSIGNED" | "MY_TICKETS" | string;
   sortBy?: "createdAt" | "itPriority" | "status" | "updatedAt" | string;
@@ -356,6 +358,12 @@ export async function fetchStaffTickets(
     if (params.search && params.search.trim()) query.set("search", params.search.trim());
     if (params.categoryId !== undefined && params.categoryId !== null && !isNaN(params.categoryId)) {
       query.set("categoryId", String(params.categoryId));
+    }
+    if (params.priority && params.priority !== "ALL") {
+      query.set("priority", params.priority);
+    }
+    if (params.effectivePriority && params.effectivePriority !== "ALL") {
+      query.set("effectivePriority", params.effectivePriority);
     }
     if (params.requestedPriority && params.requestedPriority !== "ALL") {
       query.set("requestedPriority", params.requestedPriority);
