@@ -721,11 +721,11 @@ Running 2 tests using 1 worker
   - `npm --prefix client run build` (Production client build)
   - `npm --prefix server run test` (Full server regression suite)
   - `npx playwright test -c e2e/lab-04/playwright.config.ts e2e/lab-04/dashboard-screenshots.spec.ts` (Responsive overflow & screenshot verification)
-- **Verification Status:** **Verified (69/69 Lab 4 client tests passing, 180/180 full client suite passing, 350/350 full server suite passing, 4/4 Playwright browser tests passing, 0 build errors)**
+- **Verification Status:** **Verified (70/70 Lab 4 client tests passing, 181/181 full client suite passing, 351/351 full server suite passing, 4/4 Playwright browser tests passing, 0 build errors)**
 - **Components Implemented & Hardened:**
   - `RequesterDashboard.tsx` (AC-24-01, DSH-UI-01): User-facing helpdesk overview for Requesters. Aggregates the full requester dataset by assembling all pagination pages concurrently (`fetchAllRequesterPages`). Computes 4 real-time KPI cards using Zen Green tokens: **Total Open** (`NEW`, `OPEN`), **Action Needed** (`WAITING_FOR_REQUESTER`), **Recently Resolved** (strictly tickets in `RESOLVED` status updated within the rolling 7-day cutoff `updatedAt >= now - 7d`), and **Total Closed** (`CLOSED`). Implements atomic error handling: if any page fails to load, the dashboard displays an error alert with a "Try Again" retry action instead of presenting inaccurate partial data. Renders a Recent Service Requests table with status/priority badges and direct links to ticket detail, quick CTAs (`+ Create Ticket`, `View My Tickets`), and a clean empty state with a `+ Create First Ticket` button.
   - `StaffDashboard.tsx` (AC-24-02, DSH-UI-02): Operational command center for IT Staff and Administrators consuming `GET /api/staff/dashboard`. Renders 7 core KPI cards with Zen Green color-coded accents: **Unassigned**, **My Assigned**, **In Progress**, **Waiting Req.**, **Total Open**, **Recently Resolved**, and **Total Labor Time** (formatted in hours and minutes `Xh Ym`). Displays non-terminal workload distributions by Category (tickets and labor hours) and Priority (P0–P3 distribution bars with effective priority).
-  - **P0 Urgent Tickets Immediate Attention Section (Effective Priority Resolution):** Renders a dedicated alert section (`data-testid="staff-urgent-tickets-card"`) displaying non-terminal P0 urgent tickets requiring immediate staff intervention with count badge, ticket rows, direct ticket link, and deep link to queue (`priority=P0_URGENT`). Uses effective priority evaluation (`COALESCE(itPriority, requestedPriority) = 'P0_URGENT'`) across both client and server (`GET /api/staff/tickets?priority=P0_URGENT`), correctly retrieving staff-upgraded P0 tickets (`itPriority=P0_URGENT`, `requestedPriority=P2_MEDIUM`) while strictly excluding staff-downgraded P3 tickets (`itPriority=P3_LOW`, `requestedPriority=P0_URGENT`). When no P0 tickets exist, renders an accessible empty state (`staff-empty-urgent-tickets`) with a CheckCircle icon and message: *"No urgent P0 tickets currently requiring immediate attention."*
+  - **P0 Urgent Tickets Immediate Attention Section (Effective Priority Resolution & Non-Terminal Querying):** Renders a dedicated alert section (`data-testid="staff-urgent-tickets-card"`) displaying non-terminal P0 urgent tickets requiring immediate staff intervention with count badge, ticket rows, direct ticket link, and deep link to queue (`priority=P0_URGENT`). Uses effective priority evaluation (`COALESCE(itPriority, requestedPriority) = 'P0_URGENT'`) across both client and server (`GET /api/staff/tickets?priority=P0_URGENT`), correctly retrieving staff-upgraded P0 tickets (`itPriority=P0_URGENT`, `requestedPriority=P2_MEDIUM`) while strictly excluding staff-downgraded P3 tickets (`itPriority=P3_LOW`, `requestedPriority=P0_URGENT`). Crucially, passes `excludeStatus=CLOSED,CANCELLED` to filter out terminal tickets at the database level before pagination (`pageSize=5`), guaranteeing that older active P0 tickets are not displaced from the first page by recently closed tickets. When no P0 tickets exist, renders an accessible empty state (`staff-empty-urgent-tickets`) with a CheckCircle icon and message: *"No urgent P0 tickets currently requiring immediate attention."*
   - **Administrator-Only Account Health Card (AC-24-03, DSH-UI-03):** Renders a dedicated summary card for `ADMINISTRATOR` users displaying system-wide user metrics: Total Users, Active Staff, Administrators, Active Requesters, and Password Reset Required accounts, with a direct CTA to `/admin/users`. For `IT_STAFF` users, this card is **completely omitted from the DOM** (not hidden via CSS display:none), preserving strict least-privilege role boundaries.
   - `StaffTicketQueue.tsx` & Drill-Down Consistency (AC-24-04, DSH-UI-04): Enhanced queue filter initialization from URL search parameters (`owner`, `status`, `categoryId`, `requestedPriority`, `priority`, `search`, `resolvedWithinDays`):
     - **Total Open Drill-Down Consistency:** `Total Open` KPI card links to `/staff/queue?status=NEW,OPEN`. Both backend `GET /api/staff/tickets` and client queue parsing support comma-separated statuses (`NEW,OPEN`), ensuring the queue returns both `NEW` and `OPEN` tickets exactly matching the dashboard metric.
@@ -737,7 +737,7 @@ Running 2 tests using 1 worker
 
 #### Terminal Execution Logs (Executed from Project Root)
 
-**Log 1: Lab 4 Client Tests (7 Test Files, 69/69 Passing)**
+**Log 1: Lab 4 Client Tests (7 Test Files, 70/70 Passing)**
 
 ```text
 $ npm --prefix client test tests/lab-04/
@@ -750,13 +750,13 @@ $ npm --prefix client test tests/lab-04/
  ✓ tests/lab-04/EditActionModal.test.tsx (5)
  ✓ tests/lab-04/LogActionModal.test.tsx (10)
  ✓ tests/lab-04/RequesterDashboard.test.tsx (6)
- ✓ tests/lab-04/StaffDashboard.test.tsx (10)
+ ✓ tests/lab-04/StaffDashboard.test.tsx (11)
 
  Test Files  7 passed (7)
-      Tests  69 passed (69)
+      Tests  70 passed (70)
 ```
 
-**Log 2: Full Client Regression Test Suite (19 Test Files, 180/180 Passing)**
+**Log 2: Full Client Regression Test Suite (19 Test Files, 181/181 Passing)**
 
 ```text
 $ npm --prefix client test
@@ -781,10 +781,10 @@ $ npm --prefix client test
  ✓ tests/lab-04/EditActionModal.test.tsx (5)
  ✓ tests/lab-04/LogActionModal.test.tsx (10)
  ✓ tests/lab-04/RequesterDashboard.test.tsx (6)
- ✓ tests/lab-04/StaffDashboard.test.tsx (10)
+ ✓ tests/lab-04/StaffDashboard.test.tsx (11)
 
  Test Files  19 passed (19)
-      Tests  180 passed (180)
+      Tests  181 passed (181)
 ```
 
 **Log 3: Client Production Build Verification (Zero Type & Bundle Errors)**
@@ -798,11 +798,11 @@ vite v6.4.3 building for production...
 ✓ 72 modules transformed.
 dist/index.html                   0.39 kB │ gzip:   0.27 kB
 dist/assets/index-BpJaf12f.css  248.22 kB │ gzip:  34.84 kB
-dist/assets/index-C67JRZlb.js   462.66 kB │ gzip: 106.07 kB
-✓ built in 913ms
+dist/assets/index-DoURLfFP.js   463.09 kB │ gzip: 106.17 kB
+✓ built in 1.08s
 ```
 
-**Log 4: Full Server Regression Test Suite (20 Test Files, 350/350 Passing — Zero Regressions)**
+**Log 4: Full Server Regression Test Suite (20 Test Files, 351/351 Passing — Zero Regressions)**
 
 ```text
 $ npm --prefix server run test
@@ -811,15 +811,15 @@ $ npm --prefix server run test
 
  ✓ tests/lab-01/categories.test.ts (1)
  ✓ tests/lab-01/health.test.ts (1)
+ ✓ tests/lab-04/actions-taken.api.test.ts (37)
+ ✓ tests/lab-04/dashboard.api.test.ts (30)
+ ✓ tests/lab-04/migration-verification.test.ts (8)
+ ✓ tests/lab-04/ticket-workflow.api.test.ts (24)
  ✓ tests/lab-02/attachments.api.test.ts (7)
  ✓ tests/lab-02/create-ticket.api.test.ts (13)
  ✓ tests/lab-02/my-tickets.api.test.ts (17)
  ✓ tests/lab-02/requesters.test.ts (5)
  ✓ tests/lab-02/ticket-detail.api.test.ts (20)
- ✓ tests/lab-04/actions-taken.api.test.ts (37)
- ✓ tests/lab-04/dashboard.api.test.ts (29)
- ✓ tests/lab-04/migration-verification.test.ts (8)
- ✓ tests/lab-04/ticket-workflow.api.test.ts (24)
  ✓ tests/lab-03/auth.api.test.ts (20)
  ✓ tests/lab-03/authorization.api.test.ts (28)
  ✓ tests/lab-03/comments-notes.api.test.ts (16)
@@ -831,7 +831,7 @@ $ npm --prefix server run test
  ✓ tests/lab-03/users-admin.api.test.ts (30)
 
  Test Files  20 passed (20)
-      Tests  350 passed (350)
+      Tests  351 passed (351)
 ```
 
 **Log 5: Playwright Responsive Dashboard Layout & Screenshot Verification (4/4 Passing)**

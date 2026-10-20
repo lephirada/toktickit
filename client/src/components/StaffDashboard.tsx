@@ -65,7 +65,13 @@ export default function StaffDashboard({
         fetchStaffDashboard(),
         fetchStaffTickets({ owner: "MY_TICKETS", pageSize: 1 }),
         fetchStaffTickets({ pageSize: 5, sortBy: "createdAt", sortOrder: "desc" }),
-        fetchStaffTickets({ priority: "P0_URGENT", pageSize: 5, sortBy: "createdAt", sortOrder: "desc" }),
+        fetchStaffTickets({
+          priority: "P0_URGENT",
+          excludeStatus: "CLOSED,CANCELLED",
+          pageSize: 5,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        }),
       ];
 
       // Concurrently fetch admin user statistics if caller is ADMINISTRATOR

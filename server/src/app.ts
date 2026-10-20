@@ -476,6 +476,7 @@ app.get(
         priority,
         effectivePriority,
         status,
+        excludeStatus,
         owner,
         sortBy,
         sortOrder,
@@ -635,6 +636,43 @@ app.get(
           where.status = statusParts[0] as TicketStatus;
         } else {
           where.status = { in: statusParts as TicketStatus[] };
+        }
+      }
+
+      // Exclude status validation (e.g. excludeStatus=CLOSED,CANCELLED for non-terminal queries)
+      if (excludeStatus !== undefined && excludeStatus !== "") {
+        const rawExclude = Array.isArray(excludeStatus) ? excludeStatus.join(",") : String(excludeStatus);
+        const excludeParts = rawExclude
+          .toUpperCase()
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const invalidExclude = excludeParts.filter((s) => !validStatuses.includes(s));
+        if (invalidExclude.length > 0 || excludeParts.length === 0) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid excludeStatus parameter.",
+                [{ field: "excludeStatus", message: `excludeStatus must be one of: ${validStatuses.join(", ")}` }]
+              )
+            );
+          return;
+        }
+
+        const excludeCondition: Prisma.TicketWhereInput = {
+          status: { notIn: excludeParts as TicketStatus[] },
+        };
+        if (where.AND) {
+          if (Array.isArray(where.AND)) {
+            where.AND.push(excludeCondition);
+          } else {
+            where.AND = [where.AND, excludeCondition];
+          }
+        } else {
+          where.AND = [excludeCondition];
         }
       }
 

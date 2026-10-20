@@ -987,6 +987,56 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
         expect(effective).toBe("P0_URGENT");
       }
     });
+
+    it("ensures excludeStatus=CLOSED,CANCELLED filters terminal tickets before pagination, preventing active P0 tickets from being missed", async () => {
+      // 1. Create 2 active workable P0 tickets created earlier
+      const activeTicket1 = await createTicket({
+        status: TicketStatus.OPEN,
+        requestedPriority: Priority.P0_URGENT,
+        summary: "Active Urgent Database Failover Required",
+      });
+      const activeTicket2 = await createTicket({
+        status: TicketStatus.IN_PROGRESS,
+        requestedPriority: Priority.P0_URGENT,
+        summary: "Active Urgent Security Patching",
+      });
+
+      // 2. Create 6 CLOSED P0 tickets created more recently (newer createdAt)
+      for (let i = 1; i <= 6; i++) {
+        await createTicket({
+          status: TicketStatus.CLOSED,
+          requestedPriority: Priority.P0_URGENT,
+          summary: `Resolved and Closed P0 Incident #${i}`,
+        });
+      }
+
+      // 1. Without excludeStatus: pageSize=5 returns 5 CLOSED tickets (active tickets missed due to page limit)
+      const unexcludedRes = await request(app)
+        .get("/api/staff/tickets?priority=P0_URGENT&pageSize=5&sortBy=createdAt&sortOrder=desc")
+        .set("Cookie", cookieStaff);
+      expect(unexcludedRes.status).toBe(200);
+      expect(unexcludedRes.body.data.length).toBe(5);
+      // All 5 are CLOSED, active tickets were displaced past page 1
+      for (const t of unexcludedRes.body.data) {
+        expect(t.status).toBe("CLOSED");
+      }
+
+      // 2. With excludeStatus=CLOSED,CANCELLED: database filters before pagination, returning the active P0 tickets!
+      const excludedRes = await request(app)
+        .get("/api/staff/tickets?priority=P0_URGENT&excludeStatus=CLOSED,CANCELLED&pageSize=5&sortBy=createdAt&sortOrder=desc")
+        .set("Cookie", cookieStaff);
+      expect(excludedRes.status).toBe(200);
+
+      const returnedIds = excludedRes.body.data.map((t: any) => t.id);
+      expect(returnedIds).toContain(activeTicket1.id);
+      expect(returnedIds).toContain(activeTicket2.id);
+
+      // Zero CLOSED or CANCELLED tickets returned
+      for (const t of excludedRes.body.data) {
+        expect(t.status).not.toBe("CLOSED");
+        expect(t.status).not.toBe("CANCELLED");
+      }
+    });
   });
 });
 

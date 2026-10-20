@@ -479,6 +479,71 @@ describe("StaffDashboard Component (Lab 4 Issue #24)", () => {
     expect(screen.getByTestId("urgent-tickets-count-badge")).toHaveTextContent("1");
   });
 
+  it("DSH-UI-02: requests excludeStatus=CLOSED,CANCELLED so terminal tickets do not displace active urgent P0 tickets", async () => {
+    let capturedUrgentParams: api.StaffTicketQueryParams | undefined;
+
+    const activeUrgentTicket: api.StaffTicketItem = {
+      id: 301,
+      ticketNo: "TCK-URGENT-ACTIVE",
+      summary: "Critical core switch offline in datacenter",
+      requestedPriority: "P0_URGENT",
+      itPriority: "P0_URGENT",
+      status: "OPEN",
+      resolutionIndicated: false,
+      createdAt: "2026-10-18T10:00:00.000Z",
+      updatedAt: "2026-10-18T10:00:00.000Z",
+      requester: { id: 3, fullName: "Jennifer Anderson", email: "jennifer@toktickit.com" },
+      category: { id: 4, name: "Network" },
+      owner: null,
+    };
+
+    vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue(mockDashboardResponse);
+    vi.spyOn(api, "fetchStaffTickets").mockImplementation(async (params) => {
+      if (params?.priority === "P0_URGENT") {
+        capturedUrgentParams = params;
+        return {
+          data: [activeUrgentTicket],
+          pagination: {
+            page: 1,
+            pageSize: 5,
+            totalItems: 1,
+            totalPages: 1,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
+      }
+      return {
+        data: mockRecentStaffTickets,
+        pagination: {
+          page: 1,
+          pageSize: 5,
+          totalItems: 2,
+          totalPages: 1,
+          hasNext: false,
+          hasPrev: false,
+        },
+      };
+    });
+
+    render(<StaffDashboard currentUser={mockStaffUser} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("staff-urgent-tickets-card")).toBeInTheDocument();
+    });
+
+    // Asserts fetchStaffTickets was called with excludeStatus: "CLOSED,CANCELLED"
+    expect(capturedUrgentParams).toBeDefined();
+    expect(capturedUrgentParams?.priority).toBe("P0_URGENT");
+    expect(capturedUrgentParams?.excludeStatus).toBe("CLOSED,CANCELLED");
+    expect(capturedUrgentParams?.pageSize).toBe(5);
+
+    const urgentTable = screen.getByTestId("staff-urgent-tickets-table");
+    expect(within(urgentTable).getByText("TCK-URGENT-ACTIVE")).toBeInTheDocument();
+    expect(within(urgentTable).getByText("Critical core switch offline in datacenter")).toBeInTheDocument();
+    expect(screen.getByTestId("urgent-tickets-count-badge")).toHaveTextContent("1");
+  });
+
   it("DSH-UI-02: renders accessible empty state when no P0 urgent tickets require attention", async () => {
     vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue(mockDashboardResponse);
     vi.spyOn(api, "fetchStaffTickets").mockImplementation(async (params) => {

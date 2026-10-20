@@ -336,6 +336,7 @@ export interface StaffTicketQueryParams {
   priority?: string;
   effectivePriority?: string;
   status?: string;
+  excludeStatus?: string;
   owner?: "ALL" | "UNASSIGNED" | "MY_TICKETS" | string;
   sortBy?: "createdAt" | "itPriority" | "status" | "updatedAt" | string;
   sortOrder?: "asc" | "desc";
@@ -373,6 +374,9 @@ export async function fetchStaffTickets(
     }
     if (params.status && params.status !== "ALL") {
       query.set("status", params.status);
+    }
+    if (params.excludeStatus && params.excludeStatus !== "ALL") {
+      query.set("excludeStatus", params.excludeStatus);
     }
     if (params.owner && params.owner !== "ALL") {
       query.set("owner", params.owner);
