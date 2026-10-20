@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import * as api from "../../src/api.js";
 import StaffDashboard from "../../src/components/StaffDashboard.js";
 
@@ -333,9 +333,10 @@ describe("StaffDashboard Component (Lab 4 Issue #24)", () => {
       expect(screen.getByTestId("staff-recent-tickets-table")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("TCK-101")).toBeInTheDocument();
-    expect(screen.getByText("Production server latency spike")).toBeInTheDocument();
-    expect(screen.getByText("Jennifer Anderson")).toBeInTheDocument();
+    const recentTable = screen.getByTestId("staff-recent-tickets-table");
+    expect(within(recentTable).getByText("TCK-101")).toBeInTheDocument();
+    expect(within(recentTable).getByText("Production server latency spike")).toBeInTheDocument();
+    expect(within(recentTable).getByText("Jennifer Anderson")).toBeInTheDocument();
 
     // Click row
     fireEvent.click(screen.getByTestId("staff-ticket-row-101"));
@@ -344,6 +345,107 @@ describe("StaffDashboard Component (Lab 4 Issue #24)", () => {
     // Click open button
     fireEvent.click(screen.getByTestId("view-staff-ticket-btn-102"));
     expect(handleViewTicket).toHaveBeenCalledWith(102);
+  });
+
+  it("DSH-UI-02: renders P0 urgent attention section with urgent tickets and triggers actions", async () => {
+    const handleViewTicket = vi.fn();
+    const handleNavigateQueue = vi.fn();
+
+    vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue(mockDashboardResponse);
+    vi.spyOn(api, "fetchStaffTickets").mockImplementation(async (params) => {
+      if (params?.requestedPriority === "P0_URGENT") {
+        return {
+          data: [mockRecentStaffTickets[0]], // TCK-101 is P0_URGENT
+          pagination: {
+            page: 1,
+            pageSize: 5,
+            totalItems: 1,
+            totalPages: 1,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
+      }
+      return {
+        data: [mockRecentStaffTickets[1]],
+        pagination: {
+          page: 1,
+          pageSize: 5,
+          totalItems: 1,
+          totalPages: 1,
+          hasNext: false,
+          hasPrev: false,
+        },
+      };
+    });
+
+    render(
+      <StaffDashboard
+        currentUser={mockStaffUser}
+        onViewTicket={handleViewTicket}
+        onNavigateQueue={handleNavigateQueue}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("staff-urgent-tickets-card")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("urgent-tickets-count-badge")).toHaveTextContent("1");
+    expect(screen.getByTestId("staff-urgent-tickets-table")).toBeInTheDocument();
+
+    const urgentTable = screen.getByTestId("staff-urgent-tickets-table");
+    expect(within(urgentTable).getByText("TCK-101")).toBeInTheDocument();
+    expect(within(urgentTable).getByText("Production server latency spike")).toBeInTheDocument();
+
+    // Click "View all urgent in queue ->" link
+    fireEvent.click(screen.getByTestId("see-all-urgent-link"));
+    expect(handleNavigateQueue).toHaveBeenCalledWith({ requestedPriority: "P0_URGENT" });
+
+    // Click open urgent ticket button
+    fireEvent.click(screen.getByTestId("view-urgent-ticket-btn-101"));
+    expect(handleViewTicket).toHaveBeenCalledWith(101);
+  });
+
+  it("DSH-UI-02: renders accessible empty state when no P0 urgent tickets require attention", async () => {
+    vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue(mockDashboardResponse);
+    vi.spyOn(api, "fetchStaffTickets").mockImplementation(async (params) => {
+      if (params?.requestedPriority === "P0_URGENT") {
+        return {
+          data: [],
+          pagination: {
+            page: 1,
+            pageSize: 5,
+            totalItems: 0,
+            totalPages: 0,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
+      }
+      return {
+        data: mockRecentStaffTickets,
+        pagination: {
+          page: 1,
+          pageSize: 5,
+          totalItems: 2,
+          totalPages: 1,
+          hasNext: false,
+          hasPrev: false,
+        },
+      };
+    });
+
+    render(<StaffDashboard currentUser={mockStaffUser} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("staff-empty-urgent-tickets")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("staff-empty-urgent-tickets")).toHaveTextContent(
+      "No urgent P0 tickets currently requiring immediate attention."
+    );
+    expect(screen.queryByTestId("staff-urgent-tickets-table")).toBeNull();
   });
 
   it("DSH-UI-03: renders User Accounts Summary card for ADMINISTRATOR with accurate user stats", async () => {

@@ -875,6 +875,75 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
         expect(new Date(ticket.updatedAt).getTime()).toBeGreaterThanOrEqual(sevenDaysAgo - 2000); // 2s tolerance
       }
     });
+
+    it("ensures inProgress metric count precisely equals queue results for ?status=IN_PROGRESS", async () => {
+      const dashRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(dashRes.status).toBe(200);
+      const inProgressMetric = dashRes.body.data.metrics.inProgress;
+
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?status=IN_PROGRESS&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+      expect(queueRes.body.pagination.totalItems).toBe(inProgressMetric);
+
+      for (const ticket of queueRes.body.data) {
+        expect(ticket.status).toBe("IN_PROGRESS");
+      }
+    });
+
+    it("ensures waitingForRequester metric count precisely equals queue results for ?status=WAITING_FOR_REQUESTER", async () => {
+      const dashRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(dashRes.status).toBe(200);
+      const waitingMetric = dashRes.body.data.metrics.waitingForRequester;
+
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?status=WAITING_FOR_REQUESTER&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+      expect(queueRes.body.pagination.totalItems).toBe(waitingMetric);
+
+      for (const ticket of queueRes.body.data) {
+        expect(ticket.status).toBe("WAITING_FOR_REQUESTER");
+      }
+    });
+
+    it("ensures unassigned queue query (?owner=UNASSIGNED) strictly returns tickets without an owner", async () => {
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?owner=UNASSIGNED&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+
+      // Verify all tickets returned have owner === null
+      expect(queueRes.body.data.length).toBeGreaterThan(0);
+      for (const ticket of queueRes.body.data) {
+        expect(ticket.owner).toBeNull();
+      }
+    });
+
+    it("ensures owner=MY_TICKETS strictly returns tickets assigned to caller and excludes other staff tickets", async () => {
+      // Create ticket assigned to caller (staffUser)
+      const myTicket = await createTicket({ status: TicketStatus.IN_PROGRESS, ownerId: staffUser.id });
+      // Create ticket assigned to another staff member (adminUser)
+      const otherTicket = await createTicket({ status: TicketStatus.IN_PROGRESS, ownerId: adminUser.id });
+
+      const myTicketsRes = await request(app)
+        .get("/api/staff/tickets?owner=MY_TICKETS&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(myTicketsRes.status).toBe(200);
+
+      const returnedIds = myTicketsRes.body.data.map((t: any) => t.id);
+      expect(returnedIds).toContain(myTicket.id);
+      expect(returnedIds).not.toContain(otherTicket.id);
+
+      for (const ticket of myTicketsRes.body.data) {
+        expect(ticket.owner?.id).toBe(staffUser.id);
+      }
+    });
   });
 });
 

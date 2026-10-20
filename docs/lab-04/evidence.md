@@ -721,72 +721,69 @@ Running 2 tests using 1 worker
   - `npm --prefix client run build` (Production client build)
   - `npm --prefix server run test` (Full server regression suite)
   - `npx playwright test -c e2e/lab-04/playwright.config.ts e2e/lab-04/dashboard-screenshots.spec.ts` (Responsive overflow & screenshot verification)
-- **Verification Status:** **Verified (60/60 Lab 4 client tests passing, 171/171 full client suite passing, 345/345 full server suite passing, 4/4 Playwright browser tests passing, 0 build errors)**
+- **Verification Status:** **Verified (67/67 Lab 4 client tests passing, 178/178 full client suite passing, 349/349 full server suite passing, 4/4 Playwright browser tests passing, 0 build errors)**
 - **Components Implemented & Hardened:**
   - `RequesterDashboard.tsx` (AC-24-01, DSH-UI-01): User-facing helpdesk overview for Requesters. Aggregates the full requester dataset by assembling all pagination pages concurrently (`fetchAllRequesterPages`). Computes 4 real-time KPI cards using Zen Green tokens: **Total Open** (`NEW`, `OPEN`), **Action Needed** (`WAITING_FOR_REQUESTER`), **Recently Resolved** (strictly tickets in `RESOLVED` status updated within the rolling 7-day cutoff `updatedAt >= now - 7d`), and **Total Closed** (`CLOSED`). Implements atomic error handling: if any page fails to load, the dashboard displays an error alert with a "Try Again" retry action instead of presenting inaccurate partial data. Renders a Recent Service Requests table with status/priority badges and direct links to ticket detail, quick CTAs (`+ Create Ticket`, `View My Tickets`), and a clean empty state with a `+ Create First Ticket` button.
-  - `StaffDashboard.tsx` (AC-24-02, DSH-UI-02): Operational command center for IT Staff and Administrators consuming `GET /api/staff/dashboard`. Renders 7 core KPI cards with Zen Green color-coded accents: **Unassigned**, **My Assigned**, **In Progress**, **Waiting Req.**, **Total Open**, **Recently Resolved**, and **Total Labor Time** (formatted in hours and minutes `Xh Ym`). Displays non-terminal workload distributions by Category (tickets and labor hours) and Priority (P0–P3 distribution bars with effective priority). Renders a Recent Queue Activity table with clickable ticket navigation.
+  - `StaffDashboard.tsx` (AC-24-02, DSH-UI-02): Operational command center for IT Staff and Administrators consuming `GET /api/staff/dashboard`. Renders 7 core KPI cards with Zen Green color-coded accents: **Unassigned**, **My Assigned**, **In Progress**, **Waiting Req.**, **Total Open**, **Recently Resolved**, and **Total Labor Time** (formatted in hours and minutes `Xh Ym`). Displays non-terminal workload distributions by Category (tickets and labor hours) and Priority (P0–P3 distribution bars with effective priority).
+  - **P0 Urgent Tickets Immediate Attention Section (Issue 24 Scope Refinement):** Renders a dedicated alert section (`data-testid="staff-urgent-tickets-card"`) displaying non-terminal P0 urgent tickets requiring immediate staff intervention with count badge, ticket rows, direct ticket link, and deep link to queue (`requestedPriority=P0_URGENT`). When no P0 tickets exist, renders an accessible empty state (`staff-empty-urgent-tickets`) with a CheckCircle icon and message: *"No urgent P0 tickets currently requiring immediate attention."*
   - **Administrator-Only Account Health Card (AC-24-03, DSH-UI-03):** Renders a dedicated summary card for `ADMINISTRATOR` users displaying system-wide user metrics: Total Users, Active Staff, Administrators, Active Requesters, and Password Reset Required accounts, with a direct CTA to `/admin/users`. For `IT_STAFF` users, this card is **completely omitted from the DOM** (not hidden via CSS display:none), preserving strict least-privilege role boundaries.
   - `StaffTicketQueue.tsx` & Drill-Down Consistency (AC-24-04, DSH-UI-04): Enhanced queue filter initialization from URL search parameters (`owner`, `status`, `categoryId`, `requestedPriority`, `search`, `resolvedWithinDays`):
     - **Total Open Drill-Down Consistency:** `Total Open` KPI card links to `/staff/queue?status=NEW,OPEN`. Both backend `GET /api/staff/tickets` and client queue parsing support comma-separated statuses (`NEW,OPEN`), ensuring the queue returns both `NEW` and `OPEN` tickets exactly matching the dashboard metric.
     - **Recently Resolved Rolling Window Consistency:** `Recently Resolved` KPI card links to `/staff/queue?status=RESOLVED&resolvedWithinDays=7`. Backend accepts `resolvedWithinDays` and filters by `updatedAt >= now - 7d`, strictly restricting queue results to the rolling 7-day window. The queue displays an active filter badge (`Last 7 Days`) with a clear button to remove the window limit if desired.
-    - Listens for browser `popstate` events to ensure browser Back/Forward navigation functions smoothly without lost filter state or duplicate history entries.
-  - `Header.tsx` & `App.tsx` (AC-24-05, DSH-UI-05): Added role-based navigation links for `Dashboard` in both desktop header and mobile drawer menus. Highlights the active view using Zen Green design tokens (`rgba(255, 255, 255, 0.2)` background and subtle border). Implements route guarding in `resolveAllowedView`: redirects unauthenticated users to `/login`, prevents Requesters from accessing staff dashboards, and directs Staff/Admin to `/staff/dashboard`.
+    - **Single `pushState` Browser History Safety:** `App.tsx` composes path and query parameters into a single string via `URLSearchParams` and calls `window.history.pushState` strictly once per navigation, eliminating duplicate history entries and ensuring browser Back/Forward navigation functions smoothly.
+  - `Header.tsx` & `App.tsx` (AC-24-05, DSH-UI-05): Added role-based navigation links for `Dashboard` in both desktop header and mobile drawer menus. Highlights the active view using Zen Green design tokens (`rgba(255, 255, 255, 0.2)` background and subtle border) with `aria-current="page"`. Implements route guarding in `resolveAllowedView`: redirects unauthenticated users to `/login`, prevents Requesters from accessing `/staff/dashboard` and `/admin/users` (redirecting to `/my-tickets`), blocks IT Staff from `/admin/users` (redirecting to `/staff/queue`), and allows Admin access to both.
   - **Responsive Design & DOM Safety (AC-24-06):** Dashboards feature responsive card wrapping and fluid gutters (`g-2 g-md-3`, `p-3 p-md-4`) ensuring zero horizontal overflow (`scrollWidth <= innerWidth`) across Mobile (375px), Tablet (768px), and Desktop (1280px). Verified via Playwright automation.
 
 #### Terminal Execution Logs (Executed from Project Root)
 
-**Log 1: Lab 4 Client Tests (7 Test Files, 60/60 Passing)**
+**Log 1: Lab 4 Client Tests (7 Test Files, 67/67 Passing)**
 
 ```text
 $ npm --prefix client test tests/lab-04/
 > toktickit-client@1.0.0 test
 > vitest run tests/lab-04/
 
- ✓ tests/lab-04/ActionsTakenSection.test.tsx (7) 543ms
- ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8) 603ms
- ✓ tests/lab-04/DashboardRouting.test.tsx (17) 640ms
- ✓ tests/lab-04/EditActionModal.test.tsx (5) 516ms
- ✓ tests/lab-04/LogActionModal.test.tsx (10) 671ms
- ✓ tests/lab-04/RequesterDashboard.test.tsx (6) 413ms
- ✓ tests/lab-04/StaffDashboard.test.tsx (7) 624ms
+ ✓ tests/lab-04/ActionsTakenSection.test.tsx (7)
+ ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8)
+ ✓ tests/lab-04/DashboardRouting.test.tsx (22)
+ ✓ tests/lab-04/EditActionModal.test.tsx (5)
+ ✓ tests/lab-04/LogActionModal.test.tsx (10)
+ ✓ tests/lab-04/RequesterDashboard.test.tsx (6)
+ ✓ tests/lab-04/StaffDashboard.test.tsx (9)
 
  Test Files  7 passed (7)
-      Tests  60 passed (60)
-   Start at  01:24:29
-   Duration  4.19s
+      Tests  67 passed (67)
 ```
 
-**Log 2: Full Client Regression Test Suite (19 Test Files, 171/171 Passing)**
+**Log 2: Full Client Regression Test Suite (19 Test Files, 178/178 Passing)**
 
 ```text
 $ npm --prefix client test
 > toktickit-client@1.0.0 test
 > vitest run
 
- ✓ tests/lab-01/App.test.tsx (5) 555ms
- ✓ tests/lab-02/App.test.tsx (16) 2604ms
- ✓ tests/lab-02/AttachmentSection.test.tsx (9) 4654ms
- ✓ tests/lab-02/CreateTicket.test.tsx (7) 5002ms
- ✓ tests/lab-02/MyTickets.test.tsx (13) 4616ms
- ✓ tests/lab-02/RequesterHeader.test.tsx (6) 1000ms
- ✓ tests/lab-02/RequesterTicketDetail.test.tsx (7) 3089ms
- ✓ tests/lab-03/ChangePassword.test.tsx (4) 932ms
- ✓ tests/lab-03/Login.test.tsx (8) 2217ms
- ✓ tests/lab-03/StaffTicketDetail.test.tsx (10) 3353ms
- ✓ tests/lab-03/StaffTicketQueue.test.tsx (19) 4075ms
- ✓ tests/lab-03/UserManagement.test.tsx (7) 1601ms
- ✓ tests/lab-04/ActionsTakenSection.test.tsx (7) 1172ms
- ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8) 1997ms
- ✓ tests/lab-04/DashboardRouting.test.tsx (17) 999ms
- ✓ tests/lab-04/EditActionModal.test.tsx (5) 814ms
- ✓ tests/lab-04/LogActionModal.test.tsx (10) 2358ms
- ✓ tests/lab-04/RequesterDashboard.test.tsx (6) 1164ms
- ✓ tests/lab-04/StaffDashboard.test.tsx (7) 1179ms
+ ✓ tests/lab-01/App.test.tsx (5)
+ ✓ tests/lab-02/App.test.tsx (16)
+ ✓ tests/lab-02/AttachmentSection.test.tsx (9)
+ ✓ tests/lab-02/CreateTicket.test.tsx (7)
+ ✓ tests/lab-02/MyTickets.test.tsx (13)
+ ✓ tests/lab-02/RequesterHeader.test.tsx (6)
+ ✓ tests/lab-02/RequesterTicketDetail.test.tsx (7)
+ ✓ tests/lab-03/ChangePassword.test.tsx (4)
+ ✓ tests/lab-03/Login.test.tsx (8)
+ ✓ tests/lab-03/StaffTicketDetail.test.tsx (10)
+ ✓ tests/lab-03/StaffTicketQueue.test.tsx (19)
+ ✓ tests/lab-03/UserManagement.test.tsx (7)
+ ✓ tests/lab-04/ActionsTakenSection.test.tsx (7)
+ ✓ tests/lab-04/ConcurrencyConflictDialog.test.tsx (8)
+ ✓ tests/lab-04/DashboardRouting.test.tsx (22)
+ ✓ tests/lab-04/EditActionModal.test.tsx (5)
+ ✓ tests/lab-04/LogActionModal.test.tsx (10)
+ ✓ tests/lab-04/RequesterDashboard.test.tsx (6)
+ ✓ tests/lab-04/StaffDashboard.test.tsx (9)
 
  Test Files  19 passed (19)
-      Tests  171 passed (171)
-   Start at  01:24:39
-   Duration  19.63s
+      Tests  178 passed (178)
 ```
 
 **Log 3: Client Production Build Verification (Zero Type & Bundle Errors)**
@@ -800,11 +797,11 @@ vite v6.4.3 building for production...
 ✓ 72 modules transformed.
 dist/index.html                   0.39 kB │ gzip:   0.27 kB
 dist/assets/index-BpJaf12f.css  248.22 kB │ gzip:  34.84 kB
-dist/assets/index-DIUasEyH.js   459.23 kB │ gzip: 105.66 kB
-✓ built in 1.01s
+dist/assets/index-C67JRZlb.js   462.66 kB │ gzip: 106.07 kB
+✓ built in 923ms
 ```
 
-**Log 4: Full Server Regression Test Suite (20 Test Files, 345/345 Passing — Zero Regressions)**
+**Log 4: Full Server Regression Test Suite (20 Test Files, 349/349 Passing — Zero Regressions)**
 
 ```text
 $ npm --prefix server run test
@@ -813,21 +810,28 @@ $ npm --prefix server run test
 
  ✓ tests/lab-01/categories.test.ts (1)
  ✓ tests/lab-01/health.test.ts (1)
- ✓ tests/lab-04/actions-taken.api.test.ts (37) 526ms
- ✓ tests/lab-04/dashboard.api.test.ts (24) 578ms
+ ✓ tests/lab-04/actions-taken.api.test.ts (37)
+ ✓ tests/lab-04/dashboard.api.test.ts (28)
  ✓ tests/lab-04/migration-verification.test.ts (8)
- ✓ tests/lab-04/ticket-workflow.api.test.ts (24) 531ms
- ✓ tests/lab-02/attachments.api.test.ts (7) 520ms
+ ✓ tests/lab-04/ticket-workflow.api.test.ts (24)
+ ✓ tests/lab-02/attachments.api.test.ts (7)
  ✓ tests/lab-02/create-ticket.api.test.ts (13)
- ✓ tests/lab-02/my-tickets.api.test.ts (17) 301ms
+ ✓ tests/lab-02/my-tickets.api.test.ts (17)
  ✓ tests/lab-02/requesters.test.ts (5)
  ✓ tests/lab-02/ticket-detail.api.test.ts (20)
- ✓ tests/lab-03/auth.api.test.ts (20) 2087ms
- ✓ tests/lab-03/authorization.api.test.ts (28) 383ms
- ✓ tests/lab-03/comments-notes.api.test.ts (16) 562ms
- ✓ tests/lab-03/jwt-password.test.ts (9) 775ms
- ✓ tests/lab-03/migration-verification.test.ts (3) 4609ms
- ✓ tests/lab-03/migration.test.ts (3) 5232ms
+ ✓ tests/lab-03/auth.api.test.ts (20)
+ ✓ tests/lab-03/authorization.api.test.ts (28)
+ ✓ tests/lab-03/comments-notes.api.test.ts (16)
+ ✓ tests/lab-03/jwt-password.test.ts (9)
+ ✓ tests/lab-03/migration-verification.test.ts (3)
+ ✓ tests/lab-03/migration.test.ts (3)
+ ✓ tests/lab-03/staff-queue.api.test.ts (25)
+ ✓ tests/lab-03/staff-ticket-detail.api.test.ts (54)
+ ✓ tests/lab-03/users-admin.api.test.ts (30)
+
+ Test Files  20 passed (20)
+      Tests  349 passed (349)
+```
  ✓ tests/lab-03/staff-queue.api.test.ts (25) 435ms
  ✓ tests/lab-03/staff-ticket-detail.api.test.ts (54) 726ms
  ✓ tests/lab-03/users-admin.api.test.ts (30) 2440ms

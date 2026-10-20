@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { resolveAllowedView } from "../../src/App.js";
+import App, { resolveAllowedView } from "../../src/App.js";
 import StaffTicketQueue, { getInitialQueueFilters } from "../../src/components/StaffTicketQueue.js";
+import Header from "../../src/components/Header.js";
+import { AuthProvider } from "../../src/context/AuthContext.js";
 import * as api from "../../src/api.js";
 
 describe("Dashboard Routing & Query Filter Integration (Lab 4 Issue #24)", () => {
@@ -92,6 +94,15 @@ describe("Dashboard Routing & Query Filter Integration (Lab 4 Issue #24)", () =>
       ).toEqual({
         view: "staff-queue",
         path: "/staff/queue",
+      });
+    });
+
+    it("blocks REQUESTER from accessing /admin/users and redirects to safe view", () => {
+      expect(
+        resolveAllowedView("/admin/users", { role: "REQUESTER" }, false)
+      ).toEqual({
+        view: "my-tickets",
+        path: "/my-tickets",
       });
     });
   });
@@ -229,6 +240,169 @@ describe("Dashboard Routing & Query Filter Integration (Lab 4 Issue #24)", () =>
         );
       });
       expect(screen.queryByTestId("queue-resolved-window-badge")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Header role-based navigation & Dashboard active highlighting", () => {
+    beforeEach(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+      vi.restoreAllMocks();
+    });
+
+    it("renders and highlights Dashboard tab for REQUESTER in desktop and mobile drawer", async () => {
+      vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+        id: 1,
+        fullName: "Sarah Connor",
+        email: "sarah@toktickit.com",
+        role: "REQUESTER",
+        mustChangePassword: false,
+      });
+
+      render(
+        <AuthProvider>
+          <Header activeView="requester-dashboard" />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("nav-requester-dashboard")).toBeInTheDocument();
+      });
+
+      const desktopDashboard = screen.getByTestId("nav-requester-dashboard");
+      expect(desktopDashboard).toHaveAttribute("aria-current", "page");
+      expect(desktopDashboard.className).toContain("fw-bold");
+
+      // Open mobile drawer
+      fireEvent.click(screen.getByTestId("mobile-menu-toggle"));
+      const mobileDashboard = screen.getByTestId("mobile-nav-requester-dashboard");
+      expect(mobileDashboard).toBeInTheDocument();
+      expect(mobileDashboard.className).toContain("fw-bold");
+    });
+
+    it("renders and highlights Dashboard tab for IT_STAFF in desktop and mobile drawer", async () => {
+      vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+        id: 2,
+        fullName: "David Lee",
+        email: "david@toktickit.com",
+        role: "IT_STAFF",
+        mustChangePassword: false,
+      });
+
+      render(
+        <AuthProvider>
+          <Header activeView="staff-dashboard" />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("nav-staff-dashboard")).toBeInTheDocument();
+      });
+
+      const desktopDashboard = screen.getByTestId("nav-staff-dashboard");
+      expect(desktopDashboard).toHaveAttribute("aria-current", "page");
+      expect(desktopDashboard.className).toContain("fw-bold");
+
+      // Open mobile drawer
+      fireEvent.click(screen.getByTestId("mobile-menu-toggle"));
+      const mobileDashboard = screen.getByTestId("mobile-nav-staff-dashboard");
+      expect(mobileDashboard).toBeInTheDocument();
+      expect(mobileDashboard.className).toContain("fw-bold");
+    });
+
+    it("renders and highlights Dashboard tab for ADMINISTRATOR in desktop and mobile drawer", async () => {
+      vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+        id: 3,
+        fullName: "Admin Alice",
+        email: "admin@toktickit.com",
+        role: "ADMINISTRATOR",
+        mustChangePassword: false,
+      });
+
+      render(
+        <AuthProvider>
+          <Header activeView="staff-dashboard" />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("nav-admin-dashboard")).toBeInTheDocument();
+      });
+
+      const desktopDashboard = screen.getByTestId("nav-admin-dashboard");
+      expect(desktopDashboard).toHaveAttribute("aria-current", "page");
+      expect(desktopDashboard.className).toContain("fw-bold");
+
+      // Open mobile drawer
+      fireEvent.click(screen.getByTestId("mobile-menu-toggle"));
+      const mobileDashboard = screen.getByTestId("mobile-nav-admin-dashboard");
+      expect(mobileDashboard).toBeInTheDocument();
+      expect(mobileDashboard.className).toContain("fw-bold");
+    });
+  });
+
+  describe("App metric drill-down browser history pushState integration", () => {
+    beforeEach(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+      vi.restoreAllMocks();
+    });
+
+    it("calls window.history.pushState exactly ONCE when navigating from Dashboard with query parameters", async () => {
+      window.history.replaceState({}, "", "/staff/dashboard");
+      vi.spyOn(api, "fetchCurrentUser").mockResolvedValue({
+        id: 2,
+        fullName: "David Lee",
+        email: "david@toktickit.com",
+        role: "IT_STAFF",
+        mustChangePassword: false,
+      });
+      vi.spyOn(api, "fetchCategories").mockResolvedValue([]);
+      vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue({
+        data: {
+          metrics: {
+            totalOpen: 10,
+            inProgress: 3,
+            waitingForRequester: 2,
+            recentlyResolved: 5,
+            unassignedCount: 4,
+            totalTimeSpentMinutes: 300,
+          },
+          categoryBreakdown: [],
+          priorityBreakdown: { P0_URGENT: 0, P1_HIGH: 0, P2_MEDIUM: 0, P3_LOW: 0 },
+          meta: {
+            calculationTimestamp: new Date().toISOString(),
+            recentlyResolvedWindowDays: 7,
+            recentlyResolvedWindowStart: new Date().toISOString(),
+          },
+        },
+      });
+      vi.spyOn(api, "fetchStaffTickets").mockResolvedValue({
+        data: [],
+        pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0, hasNext: false, hasPrev: false },
+      });
+
+      const pushStateSpy = vi.spyOn(window.history, "pushState");
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("kpi-card-total-open")).toBeInTheDocument();
+      });
+
+      // Clear any pushState calls that may have occurred during initial App render
+      pushStateSpy.mockClear();
+
+      // Click Total Open KPI card which triggers onNavigateQueue({ status: "NEW,OPEN" })
+      fireEvent.click(screen.getByTestId("kpi-card-total-open"));
+
+      // Assert pushState was called EXACTLY ONCE with the composed query string
+      expect(pushStateSpy).toHaveBeenCalledTimes(1);
+      expect(pushStateSpy).toHaveBeenCalledWith(
+        {},
+        "",
+        "/staff/queue?status=NEW%2COPEN"
+      );
     });
   });
 });

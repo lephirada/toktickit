@@ -46,6 +46,7 @@ export default function StaffDashboard({
   const [dashboardData, setDashboardData] = useState<DashboardResponse["data"] | null>(null);
   const [myAssignedCount, setMyAssignedCount] = useState<number>(0);
   const [recentTickets, setRecentTickets] = useState<StaffTicketItem[]>([]);
+  const [urgentTickets, setUrgentTickets] = useState<StaffTicketItem[]>([]);
   const [adminStats, setAdminStats] = useState<{
     totalUsers: number;
     activeStaff: number;
@@ -59,16 +60,12 @@ export default function StaffDashboard({
     setError(null);
 
     try {
-      // 1. Fetch staff dashboard metrics and recent tickets in parallel
-      const promises: [
-        Promise<DashboardResponse>,
-        Promise<any>,
-        Promise<any>,
-        Promise<any>?
-      ] = [
+      // 1. Fetch staff dashboard metrics, my tickets, recent tickets, and urgent tickets in parallel
+      const promises: Array<Promise<any>> = [
         fetchStaffDashboard(),
         fetchStaffTickets({ owner: "MY_TICKETS", pageSize: 1 }),
         fetchStaffTickets({ pageSize: 5, sortBy: "createdAt", sortOrder: "desc" }),
+        fetchStaffTickets({ requestedPriority: "P0_URGENT", pageSize: 5, sortBy: "createdAt", sortOrder: "desc" }),
       ];
 
       // Concurrently fetch admin user statistics if caller is ADMINISTRATOR
@@ -76,12 +73,21 @@ export default function StaffDashboard({
         promises.push(fetchAdminUsers());
       }
 
-      const [dashRes, myTicketsRes, recentTicketsRes, adminUsersRes] =
+      const [dashRes, myTicketsRes, recentTicketsRes, urgentTicketsRes, adminUsersRes] =
         await Promise.all(promises);
 
       setDashboardData(dashRes.data);
-      setMyAssignedCount(myTicketsRes.pagination?.totalItems ?? 0);
-      setRecentTickets(recentTicketsRes.data ?? []);
+      setMyAssignedCount(myTicketsRes?.pagination?.totalItems ?? 0);
+      setRecentTickets(recentTicketsRes?.data ?? []);
+
+      // Filter non-terminal urgent tickets
+      const urgentList = (urgentTicketsRes?.data ?? []).filter(
+        (t: any) =>
+          (t.itPriority ?? t.requestedPriority) === "P0_URGENT" &&
+          t.status !== "CLOSED" &&
+          t.status !== "CANCELLED"
+      );
+      setUrgentTickets(urgentList);
 
       if (adminUsersRes && adminUsersRes.data) {
         const users = adminUsersRes.data;
@@ -616,6 +622,109 @@ export default function StaffDashboard({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* P0 Urgent Tickets Section (Issue 24 Scope Refinement) */}
+      <div className="card border-0 shadow-sm rounded-3 overflow-hidden mb-4" data-testid="staff-urgent-tickets-card">
+        <div
+          className="card-header py-3 px-4 d-flex align-items-center justify-content-between"
+          style={{ backgroundColor: "#FEF3F2", borderBottom: "1px solid #FECDCA" }}
+        >
+          <div className="d-flex align-items-center gap-2">
+            <span
+              className="badge rounded-pill px-2 py-1 fw-bold text-uppercase d-inline-flex align-items-center gap-1"
+              style={{ backgroundColor: "#D92D20", color: "#FFFFFF", fontSize: "0.72rem" }}
+            >
+              <AlertTriangleIcon size={12} color="#FFFFFF" />
+              P0 Urgent
+            </span>
+            <h2 className="h6 fw-bold mb-0" style={{ color: "#B42318" }}>
+              Immediate Attention Required
+            </h2>
+            <span
+              className="badge rounded-pill fw-semibold"
+              style={{ backgroundColor: "#FEE4E2", color: "#B42318", fontSize: "0.75rem" }}
+              data-testid="urgent-tickets-count-badge"
+            >
+              {urgentTickets.length}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-link btn-sm text-decoration-none fw-semibold p-0"
+            style={{ color: "#B42318" }}
+            onClick={() => onNavigateQueue?.({ requestedPriority: "P0_URGENT" })}
+            data-testid="see-all-urgent-link"
+          >
+            View all urgent in queue &rarr;
+          </button>
+        </div>
+
+        {urgentTickets.length === 0 ? (
+          <div className="text-center py-4 text-muted small bg-white" data-testid="staff-empty-urgent-tickets">
+            <div className="text-success mb-1">
+              <CheckCircleIcon size={22} color="var(--zg-primary)" />
+            </div>
+            <span className="fw-medium">No urgent P0 tickets currently requiring immediate attention.</span>
+          </div>
+        ) : (
+          <div className="table-responsive bg-white">
+            <table className="table table-hover align-middle mb-0" data-testid="staff-urgent-tickets-table">
+              <thead className="table-light text-muted" style={{ fontSize: "0.75rem", textTransform: "uppercase" }}>
+                <tr>
+                  <th scope="col" className="ps-4">Ticket</th>
+                  <th scope="col">Summary</th>
+                  <th scope="col">Requester</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" className="text-center">Created</th>
+                  <th scope="col" className="text-end pe-4">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {urgentTickets.map((ticket) => (
+                  <tr
+                    key={ticket.id}
+                    data-testid={`urgent-ticket-row-${ticket.id}`}
+                    style={{ cursor: "pointer", backgroundColor: "#FFFBFA" }}
+                    onClick={() => onViewTicket?.(ticket.id)}
+                  >
+                    <td className="ps-4 fw-bold text-nowrap" style={{ color: "#D92D20" }}>
+                      {ticket.ticketNo}
+                    </td>
+                    <td>
+                      <div className="fw-medium text-dark text-truncate" style={{ maxWidth: "280px" }}>
+                        {ticket.summary}
+                      </div>
+                    </td>
+                    <td className="text-nowrap small text-muted">
+                      {ticket.requester?.fullName || "Requester"}
+                    </td>
+                    <td>
+                      {renderStaffStatusBadge(ticket.status)}
+                    </td>
+                    <td className="text-center">
+                      {renderCompactTicketDate(ticket.createdAt)}
+                    </td>
+                    <td className="text-end pe-4">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-danger px-2 py-1"
+                        style={{ fontSize: "0.75rem" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onViewTicket?.(ticket.id);
+                        }}
+                        data-testid={`view-urgent-ticket-btn-${ticket.id}`}
+                      >
+                        Open &rarr;
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Recent Queue Activity Section */}
