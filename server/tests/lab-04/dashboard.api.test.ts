@@ -156,12 +156,13 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
     requestedPriority?: Priority;
     itPriority?: Priority | null;
     updatedAt?: Date;
+    summary?: string;
   }) {
     const unique = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
     const ticket = await prisma.ticket.create({
       data: {
         ticketNo: `DASH-${unique}`,
-        summary: `Dashboard test ticket ${unique}`,
+        summary: options.summary ?? `Dashboard test ticket ${unique}`,
         description: "Valid ticket description for dashboard metrics suite.",
         status: options.status ?? TicketStatus.NEW,
         requestedPriority: options.requestedPriority ?? Priority.P2_MEDIUM,
