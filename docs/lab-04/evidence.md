@@ -2,7 +2,7 @@
 
 **Course:** CPE 334 Software Engineering Laboratory  
 **Sprint:** 4 — Parent-Child Work Structures, Resolution Gates, Operational Dashboards, and Regression Traceability  
-**Status:** In Progress — Role-Based Dashboards & Visualizations Implemented (Issue 24)
+**Status:** In Review — Multi-Persona E2E Verification & Full Regression Hardening (Issue 25)
 
 > [!NOTE]
 > Per project guidelines, all test results, screenshots, and verification artifacts documented herein are authentic and un-fabricated. This living document maintains the verified evidence inventory for Sprint 4 across Issues 18 through 26.
@@ -20,7 +20,7 @@
 | **Issue 22** | `feature/22-dashboard-backend-apis`     | Operational Dashboard & Analytics API           | `[https://github.com/lephirada/toktickit/pull/55]` | `[Approved]`  | `[Merged]`   |
 | **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[https://github.com/lephirada/toktickit/pull/56]` | `[Approved]`  | `[Merged]`   |
 | **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[https://github.com/lephirada/toktickit/pull/57]` | `[Approved]`  | `[Merged]`   |
-| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Sprint Release | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
+| **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Hardening      | `[https://github.com/lephirada/toktickit/pull/58]` | `[In Review]` | `[Planned]`  |
 | **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[Planned]`   | `[Planned]`  |
 
 ---
@@ -855,8 +855,62 @@ Running 4 tests using 1 worker
 
 ### 3.7 Playwright Multi-Persona E2E & Regression Suite (Issue 25)
 
-- **Target Command:** `npm run test:e2e`
-- **Status:** Pending implementation in Issue 25.
+- **Target Commands:**
+  - `npx playwright test --config e2e/lab-04/playwright.config.ts` (Lab 4 E2E Suite)
+  - `npx playwright test e2e/lab-03/` (Lab 3 Regression Suite)
+  - `npm run test:server` (Server Regression Suite)
+  - `npm run test:client` (Client Regression Suite)
+  - `npm --prefix client run build && npm --prefix server run build` (Production Builds)
+- **Verification Status:** **Verified (16/16 Lab 4 E2E passing, 64/64 Lab 3 E2E passing, 351/351 server passing, 182/182 client passing, 0 build errors)**
+
+#### 1. Lab 4 Playwright E2E Execution Log (`playwright.config.ts` — 16/16 Passing)
+
+```text
+$ npx playwright test --config e2e/lab-04/playwright.config.ts
+Running 16 tests using 1 worker
+
+  ✓   1 actions-taken-flow.spec.ts:37:7 › IT Staff creates an Action Taken and verifies it appears in the timeline (738ms)
+  ✓   2 actions-taken-flow.spec.ts:80:7 › IT Staff edits an existing action and verifies persisted changes across reload (606ms)
+  ✓   3 actions-taken-flow.spec.ts:133:7 › Stale expectedUpdatedAt update triggers real backend HTTP 409 and conflict dialog (587ms)
+  ✓   4 dashboards-ui-screenshots.spec.ts:15:7 › Lab 4 Dashboards UI & Screenshots › 1. Requester Dashboard visual verification across viewports (1.5s)
+  ✓   5 dashboards-ui-screenshots.spec.ts:39:7 › Lab 4 Dashboards UI & Screenshots › 2. Staff Dashboard visual verification across viewports (IT Staff) (1.6s)
+  ✓   6 dashboards-ui-screenshots.spec.ts:63:7 › Lab 4 Dashboards UI & Screenshots › 3. Admin Dashboard with User Accounts Summary Card (1.2s)
+  ✓   7 dashboards-ui-screenshots.spec.ts:82:7 › Lab 4 Dashboards UI & Screenshots › 4. Metric Drill-Down Navigation to Queue Filters (512ms)
+  ✓   8 dashboards.spec.ts:28:7 › Lab 4 Dashboards & Drill-Down Verification › 1. Requester Dashboard: Metrics, Quick Actions, Role Boundaries & 375px Viewport (846ms)
+  ✓   9 dashboards.spec.ts:79:7 › Lab 4 Dashboards & Drill-Down Verification › 2. Staff Dashboard: 7 KPI Cards, Complete Drill-Downs & Workload Distribution (1.3s)
+  ✓  10 dashboards.spec.ts:153:7 › Lab 4 Dashboards & Drill-Down Verification › 3. Admin Dashboard: Admin Summary Card, User Directory Navigation & Operational Access (846ms)
+  ✓  11 dashboards.spec.ts:204:7 › Lab 4 Dashboards & Drill-Down Verification › 4. Accessibility: Real Browser Focus Rings, Keyboard Navigation & Non-Color-Only Indicators (466ms)
+  ✓  12 responsive-actions-screenshots.spec.ts:14:7 › Lab 4 Responsive Actions Taken & Concurrency Screenshots › captures Actions Timeline, Log Modal, and Concurrency Conflict across viewports (4.4s)
+  ✓  13 responsive-actions-screenshots.spec.ts:81:7 › Lab 4 Responsive Actions Taken & Concurrency Screenshots › Requester Read-Only View has no mutation controls in DOM and no horizontal overflow (1.6s)
+  ✓  14 ticket-resolution.spec.ts:39:7 › Lab 4 Ticket Resolution & Advisory Indication E2E › 1. Requester resolution indication is strictly advisory and does NOT alter ticket status to RESOLVED (518ms)
+  ✓  15 ticket-resolution.spec.ts:69:7 › Lab 4 Ticket Resolution & Advisory Indication E2E › 2. Staff cannot resolve an IN_PROGRESS ticket without at least one Action Taken and valid summary (1.7s)
+  ✓  16 ticket-resolution.spec.ts:133:7 › Lab 4 Ticket Resolution & Advisory Indication E2E › 3. After a valid Action Taken exists, Staff can resolve the ticket with a valid summary (1.7s)
+
+  16 passed (22.3s)
+```
+
+#### 2. Key E2E Hardening Assertions
+
+- **Real Backend HTTP 409 Concurrency:** In `actions-taken-flow.spec.ts`, an out-of-band direct database modification simulates concurrent edit by another staff member. The subsequent browser submit triggers genuine backend HTTP 409 `STALE_ACTION_CONFLICT`, verifying the `ConcurrencyConflictDialog` displays server vs local differences, copy action works, and clicking reload refreshes the modal with server values.
+- **Resolution Gate Server Enforcement:** In `ticket-resolution.spec.ts`, Staff attempting to transition an `IN_PROGRESS` ticket with 0 actions to `RESOLVED` receives HTTP 422 with `ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`, and the UI displays the error banner without closing the modal. Once an Action Taken is logged, the same transition succeeds with HTTP 200, advancing status to `RESOLVED`.
+- **Advisory Requester Confirmation:** In `ticket-resolution.spec.ts`, Requester clicking 'Mark Resolved' confirms that `resolutionIndicated = true` is strictly advisory and ticket status remains `WAITING_FOR_REQUESTER` or `IN_PROGRESS`.
+- **Multi-Persona Role Dashboards & Drill-Downs:** In `dashboards.spec.ts`, Requester, IT Staff, and Administrator access contracts and URL deep links are strictly verified against role permissions.
+- **Measurable Accessibility & Responsive Checks:**
+  - Zero page-level horizontal overflow confirmed at 375px mobile viewport across all dashboard views (`document.documentElement.scrollWidth <= window.innerWidth`).
+  - Visible keyboard focus rings verified via computed style evaluation (`outline: 2px solid rgb(11, 122, 70)`).
+  - Status indicators verified to contain explicit badge text, ensuring information is never conveyed by color alone.
+
+#### 3. Full Regression Suite Summary
+
+| Test Suite                             | Command                                                        |  Test Count   | Status        |
+| :------------------------------------- | :------------------------------------------------------------- | :-----------: | :------------ |
+| **Lab 4 Playwright E2E Suite**         | `npx playwright test --config e2e/lab-04/playwright.config.ts` |    16 / 16    | **PASS**      |
+| **Lab 3 Playwright Regression Suite**  | `npx playwright test e2e/lab-03/`                              |    64 / 64    | **PASS**      |
+| **Server Unit/Integration Tests**      | `npm run test:server`                                          |   351 / 351   | **PASS**      |
+| **Client Component/Integration Tests** | `npm run test:client`                                          |   182 / 182   | **PASS**      |
+| **Client Production Build**            | `npm --prefix client run build`                                |      --       | **PASS**      |
+| **Server Production Build**            | `npm --prefix server run build`                                |      --       | **PASS**      |
+| **Total Automated Regression Tests**   | **All Suites Combined**                                        | **613 / 613** | **100% PASS** |
 
 ---
 
