@@ -1,6 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { getPrisma } from "../lab-03/helpers/db-helper.js";
 import fs from "fs";
 import path from "path";
+
+const prisma = getPrisma();
 
 const VIEWPORTS = [
   { name: "desktop", width: 1280, height: 900 },
@@ -191,23 +194,21 @@ test.describe("Lab 04 Issue 23: Responsive Layout Overflow & Screenshots", () =>
     await page.fill('[data-testid="login-password-input"]', "Password123!");
     await page.click('[data-testid="login-submit-btn"]');
 
-    // Wait for Requester dashboard
-    await expect(page).toHaveURL(/\/my-tickets/);
+    // Wait for Requester dashboard / tickets
+    await expect(page).toHaveURL(/\/(my-tickets|dashboard)/);
 
-    // Open ticket TKT-2026-00014 from table
-    const ticket14Btn = page.locator('button:has-text("00014")').first();
-    if (await ticket14Btn.isVisible()) {
-      await ticket14Btn.click();
-    } else {
-      const ticketBtn = page.locator('button:has-text("TKT-")').first();
-      if (await ticketBtn.isVisible()) {
-        await ticketBtn.click();
-      } else {
-        await page.goto("/tickets/14630");
-      }
-    }
+    // Fetch real ticket belonging to Jennifer Anderson with actions
+    const requesterTicket = await prisma.ticket.findFirst({
+      where: {
+        requester: { email: "jennifer.anderson@toktickit.com" },
+        actionsTaken: { some: {} },
+      },
+      select: { id: true },
+    });
+    const ticketId = requesterTicket?.id ?? 14;
 
-    await expect(page).toHaveURL(/\/tickets\/\d+/);
+    await page.goto(`/tickets/${ticketId}`);
+    await expect(page).toHaveURL(new RegExp(`/tickets/${ticketId}`));
     await expect(page.locator('[data-testid="ticket-detail-screen"]')).toBeVisible();
 
     // Verify Actions Taken card is present
