@@ -156,12 +156,13 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
     requestedPriority?: Priority;
     itPriority?: Priority | null;
     updatedAt?: Date;
+    summary?: string;
   }) {
     const unique = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
     const ticket = await prisma.ticket.create({
       data: {
         ticketNo: `DASH-${unique}`,
-        summary: `Dashboard test ticket ${unique}`,
+        summary: options.summary ?? `Dashboard test ticket ${unique}`,
         description: "Valid ticket description for dashboard metrics suite.",
         status: options.status ?? TicketStatus.NEW,
         requestedPriority: options.requestedPriority ?? Priority.P2_MEDIUM,
@@ -762,6 +763,11 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
 
     it("handles empty-data state with zero-valued metrics, zero action duration, and all priority breakdown keys at zero", async () => {
       // Simulate empty data state across ticket and action queries while preserving user auth query
+      const origCount = prisma.ticket.count;
+      const origTicketFindMany = prisma.ticket.findMany;
+      const origActionFindMany = prisma.actionTaken.findMany;
+      const origCategoryFindMany = prisma.category.findMany;
+
       const countSpy = vi.spyOn(prisma.ticket, "count").mockResolvedValue(0);
       const ticketFindManySpy = vi.spyOn(prisma.ticket, "findMany").mockResolvedValue([]);
       const actionFindManySpy = vi.spyOn(prisma.actionTaken, "findMany").mockResolvedValue([]);
@@ -815,7 +821,223 @@ describe("Issue 22 — Operational Dashboard API Suite (dashboard.api.test.ts)",
         ticketFindManySpy.mockRestore();
         actionFindManySpy.mockRestore();
         categoryFindManySpy.mockRestore();
+        (prisma.ticket as any).count = origCount;
+        (prisma.ticket as any).findMany = origTicketFindMany;
+        (prisma.actionTaken as any).findMany = origActionFindMany;
+        (prisma.category as any).findMany = origCategoryFindMany;
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Issue 24 Drill-Down Consistency: Dashboard Metrics vs Queue Filter Queries
+  // ---------------------------------------------------------------------------
+  describe("Issue 24 Drill-Down Consistency: Dashboard Metrics vs Queue Filter Queries", () => {
+    it("ensures Total Open metric count precisely equals queue results for ?status=NEW,OPEN", async () => {
+      // 1. Fetch current dashboard metrics
+      const dashRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(dashRes.status).toBe(200);
+      const totalOpenMetric = dashRes.body.data.metrics.totalOpen;
+
+      // 2. Fetch staff queue with status=NEW,OPEN
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?status=NEW,OPEN&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+      expect(queueRes.body.pagination.totalItems).toBe(totalOpenMetric);
+
+      // Verify every returned ticket in the queue has status NEW or OPEN
+      for (const ticket of queueRes.body.data) {
+        expect(["NEW", "OPEN"]).toContain(ticket.status);
+      }
+    });
+
+    it("ensures Recently Resolved metric count precisely equals queue results for ?status=RESOLVED&resolvedWithinDays=7", async () => {
+      // 1. Fetch current dashboard metrics
+      const dashRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(dashRes.status).toBe(200);
+      const recentlyResolvedMetric = dashRes.body.data.metrics.recentlyResolved;
+
+      // 2. Fetch staff queue with status=RESOLVED&resolvedWithinDays=7
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?status=RESOLVED&resolvedWithinDays=7&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+      expect(queueRes.body.pagination.totalItems).toBe(recentlyResolvedMetric);
+
+      // Verify all tickets returned are RESOLVED and within rolling 7 days
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime();
+      for (const ticket of queueRes.body.data) {
+        expect(ticket.status).toBe("RESOLVED");
+        expect(new Date(ticket.updatedAt).getTime()).toBeGreaterThanOrEqual(sevenDaysAgo - 2000); // 2s tolerance
+      }
+    });
+
+    it("ensures inProgress metric count precisely equals queue results for ?status=IN_PROGRESS", async () => {
+      const dashRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(dashRes.status).toBe(200);
+      const inProgressMetric = dashRes.body.data.metrics.inProgress;
+
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?status=IN_PROGRESS&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+      expect(queueRes.body.pagination.totalItems).toBe(inProgressMetric);
+
+      for (const ticket of queueRes.body.data) {
+        expect(ticket.status).toBe("IN_PROGRESS");
+      }
+    });
+
+    it("ensures waitingForRequester metric count precisely equals queue results for ?status=WAITING_FOR_REQUESTER", async () => {
+      const dashRes = await request(app)
+        .get("/api/staff/dashboard")
+        .set("Cookie", cookieStaff);
+      expect(dashRes.status).toBe(200);
+      const waitingMetric = dashRes.body.data.metrics.waitingForRequester;
+
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?status=WAITING_FOR_REQUESTER&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+      expect(queueRes.body.pagination.totalItems).toBe(waitingMetric);
+
+      for (const ticket of queueRes.body.data) {
+        expect(ticket.status).toBe("WAITING_FOR_REQUESTER");
+      }
+    });
+
+    it("ensures unassigned queue query (?owner=UNASSIGNED) strictly returns tickets without an owner", async () => {
+      const queueRes = await request(app)
+        .get("/api/staff/tickets?owner=UNASSIGNED&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(queueRes.status).toBe(200);
+
+      // Verify all tickets returned have owner === null
+      expect(queueRes.body.data.length).toBeGreaterThan(0);
+      for (const ticket of queueRes.body.data) {
+        expect(ticket.owner).toBeNull();
+      }
+    });
+
+    it("ensures owner=MY_TICKETS strictly returns tickets assigned to caller and excludes other staff tickets", async () => {
+      // Create ticket assigned to caller (staffUser)
+      const myTicket = await createTicket({ status: TicketStatus.IN_PROGRESS, ownerId: staffUser.id });
+      // Create ticket assigned to another staff member (adminUser)
+      const otherTicket = await createTicket({ status: TicketStatus.IN_PROGRESS, ownerId: adminUser.id });
+
+      const myTicketsRes = await request(app)
+        .get("/api/staff/tickets?owner=MY_TICKETS&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(myTicketsRes.status).toBe(200);
+
+      const returnedIds = myTicketsRes.body.data.map((t: any) => t.id);
+      expect(returnedIds).toContain(myTicket.id);
+      expect(returnedIds).not.toContain(otherTicket.id);
+
+      for (const ticket of myTicketsRes.body.data) {
+        expect(ticket.owner?.id).toBe(staffUser.id);
+      }
+    });
+
+    it("ensures priority=P0_URGENT correctly resolves effective priority (includes staff upgrade P0, excludes staff downgrade P3)", async () => {
+      // 1. Staff upgrade: requested P2_MEDIUM, itPriority P0_URGENT -> Effective P0
+      const upgradedTicket = await createTicket({
+        status: TicketStatus.IN_PROGRESS,
+        requestedPriority: Priority.P2_MEDIUM,
+        itPriority: Priority.P0_URGENT,
+      });
+
+      // 2. Staff downgrade: requested P0_URGENT, itPriority P3_LOW -> Effective P3
+      const downgradedTicket = await createTicket({
+        status: TicketStatus.OPEN,
+        requestedPriority: Priority.P0_URGENT,
+        itPriority: Priority.P3_LOW,
+      });
+
+      // 3. Untriaged urgent: requested P0_URGENT, itPriority null -> Effective P0
+      const untriagedUrgentTicket = await createTicket({
+        status: TicketStatus.NEW,
+        requestedPriority: Priority.P0_URGENT,
+        itPriority: null,
+      });
+
+      const res = await request(app)
+        .get("/api/staff/tickets?priority=P0_URGENT&pageSize=100")
+        .set("Cookie", cookieStaff);
+      expect(res.status).toBe(200);
+
+      const returnedIds = res.body.data.map((t: any) => t.id);
+
+      // Must include upgraded ticket (Effective P0) and untriaged urgent ticket (Effective P0)
+      expect(returnedIds).toContain(upgradedTicket.id);
+      expect(returnedIds).toContain(untriagedUrgentTicket.id);
+
+      // Must EXCLUDE downgraded ticket (Effective P3, even though requested was P0)
+      expect(returnedIds).not.toContain(downgradedTicket.id);
+
+      // Verify all returned tickets actually have effective priority P0_URGENT
+      for (const ticket of res.body.data) {
+        const effective = ticket.itPriority || ticket.requestedPriority;
+        expect(effective).toBe("P0_URGENT");
+      }
+    });
+
+    it("ensures excludeStatus=CLOSED,CANCELLED filters terminal tickets before pagination, preventing active P0 tickets from being missed", async () => {
+      // 1. Create 2 active workable P0 tickets created earlier
+      const activeTicket1 = await createTicket({
+        status: TicketStatus.OPEN,
+        requestedPriority: Priority.P0_URGENT,
+        summary: "Active Urgent Database Failover Required",
+      });
+      const activeTicket2 = await createTicket({
+        status: TicketStatus.IN_PROGRESS,
+        requestedPriority: Priority.P0_URGENT,
+        summary: "Active Urgent Security Patching",
+      });
+
+      // 2. Create 6 CLOSED P0 tickets created more recently (newer createdAt)
+      for (let i = 1; i <= 6; i++) {
+        await createTicket({
+          status: TicketStatus.CLOSED,
+          requestedPriority: Priority.P0_URGENT,
+          summary: `Resolved and Closed P0 Incident #${i}`,
+        });
+      }
+
+      // 1. Without excludeStatus: pageSize=5 returns 5 CLOSED tickets (active tickets missed due to page limit)
+      const unexcludedRes = await request(app)
+        .get("/api/staff/tickets?priority=P0_URGENT&pageSize=5&sortBy=createdAt&sortOrder=desc")
+        .set("Cookie", cookieStaff);
+      expect(unexcludedRes.status).toBe(200);
+      expect(unexcludedRes.body.data.length).toBe(5);
+      // All 5 are CLOSED, active tickets were displaced past page 1
+      for (const t of unexcludedRes.body.data) {
+        expect(t.status).toBe("CLOSED");
+      }
+
+      // 2. With excludeStatus=CLOSED,CANCELLED: database filters before pagination, returning the active P0 tickets!
+      const excludedRes = await request(app)
+        .get("/api/staff/tickets?priority=P0_URGENT&excludeStatus=CLOSED,CANCELLED&pageSize=5&sortBy=createdAt&sortOrder=desc")
+        .set("Cookie", cookieStaff);
+      expect(excludedRes.status).toBe(200);
+
+      const returnedIds = excludedRes.body.data.map((t: any) => t.id);
+      expect(returnedIds).toContain(activeTicket1.id);
+      expect(returnedIds).toContain(activeTicket2.id);
+
+      // Zero CLOSED or CANCELLED tickets returned
+      for (const t of excludedRes.body.data) {
+        expect(t.status).not.toBe("CLOSED");
+        expect(t.status).not.toBe("CANCELLED");
       }
     });
   });
 });
+

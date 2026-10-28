@@ -159,6 +159,90 @@ interface StaffTicketQueueProps {
   onViewTicket?: (ticketId: number) => void;
 }
 
+export function getInitialQueueFilters(): {
+  category: string;
+  reqPriority: string;
+  itPriority: string;
+  priority?: string;
+  status: string;
+  owner: "ALL" | "UNASSIGNED" | "MY_TICKETS";
+  search: string;
+  resolvedWithinDays?: number;
+} {
+  if (typeof window === "undefined") {
+    return {
+      category: "ALL",
+      reqPriority: "ALL",
+      itPriority: "ALL",
+      status: "ALL",
+      owner: "ALL",
+      search: "",
+    };
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+
+  // Status (supports single status or comma-separated NEW,OPEN)
+  const statusParam = searchParams.get("status")?.toUpperCase();
+  const validStatuses = [
+    "NEW",
+    "OPEN",
+    "IN_PROGRESS",
+    "WAITING_FOR_REQUESTER",
+    "RESOLVED",
+    "CLOSED",
+    "REOPENED",
+    "CANCELLED",
+  ];
+  let initialStatus = "ALL";
+  if (statusParam) {
+    if (statusParam === "NEW,OPEN" || statusParam === "OPEN,NEW" || statusParam === "OPEN_ALL") {
+      initialStatus = "NEW,OPEN";
+    } else if (validStatuses.includes(statusParam)) {
+      initialStatus = statusParam;
+    }
+  }
+
+  // Days / Resolved within rolling window (Issue 24 drill-down consistency)
+  const daysParam = searchParams.get("resolvedWithinDays") || searchParams.get("days");
+  const parsedDays = daysParam ? parseInt(daysParam, 10) : undefined;
+  const initialResolvedWithinDays =
+    parsedDays && !isNaN(parsedDays) && parsedDays > 0 ? parsedDays : undefined;
+
+  // Owner
+  const ownerParam = searchParams.get("owner")?.toUpperCase();
+  const initialOwner: "ALL" | "UNASSIGNED" | "MY_TICKETS" =
+    ownerParam === "UNASSIGNED" || ownerParam === "MY_TICKETS" ? ownerParam : "ALL";
+
+  // Category
+  const catParam = searchParams.get("categoryId");
+  const initialCategory = catParam && !isNaN(parseInt(catParam, 10)) ? catParam : "ALL";
+
+  // Priority
+  const prioParam = (searchParams.get("requestedPriority") || searchParams.get("priority"))?.toUpperCase();
+  const validPriorities = ["P0_URGENT", "P1_HIGH", "P2_MEDIUM", "P3_LOW"];
+  const initialReqPriority = prioParam && validPriorities.includes(prioParam) ? prioParam : "ALL";
+
+  const effectivePriorityParam = searchParams.get("priority")?.toUpperCase();
+  const initialPriority = effectivePriorityParam && validPriorities.includes(effectivePriorityParam) ? effectivePriorityParam : undefined;
+
+  const itPrioParam = searchParams.get("itPriority")?.toUpperCase();
+  const initialItPriority = itPrioParam && validPriorities.includes(itPrioParam) ? itPrioParam : "ALL";
+
+  const searchVal = searchParams.get("search") || "";
+
+  return {
+    category: initialCategory,
+    reqPriority: initialReqPriority,
+    itPriority: initialItPriority,
+    priority: initialPriority,
+    status: initialStatus,
+    owner: initialOwner,
+    search: searchVal,
+    resolvedWithinDays: initialResolvedWithinDays,
+  };
+}
+
 export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps = {}) {
   const handleTicketClick = (ticketId: number) => {
     if (onViewTicket) {
@@ -173,17 +257,42 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Search state & debounce
-  const [searchInput, setSearchInput] = useState<string>("");
-  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
+  // Search state & debounce initialized from URL query params (Issue 24 drill-down)
+  const [initialFilters] = useState(() => getInitialQueueFilters());
+  const [searchInput, setSearchInput] = useState<string>(initialFilters.search);
+  const [debouncedSearch, setDebouncedSearch] = useState<string>(initialFilters.search);
 
   // Filters state
-  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
-  const [selectedReqPriority, setSelectedReqPriority] = useState<string>("ALL");
-  const [selectedItPriority, setSelectedItPriority] = useState<string>("ALL");
-  const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
-  const [selectedOwner, setSelectedOwner] = useState<"ALL" | "UNASSIGNED" | "MY_TICKETS">("ALL");
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialFilters.category);
+  const [selectedReqPriority, setSelectedReqPriority] = useState<string>(initialFilters.reqPriority);
+  const [selectedItPriority, setSelectedItPriority] = useState<string>(initialFilters.itPriority);
+  const [priorityFilter, setPriorityFilter] = useState<string | undefined>(initialFilters.priority);
+  const [selectedStatus, setSelectedStatus] = useState<string>(initialFilters.status);
+  const [selectedOwner, setSelectedOwner] = useState<"ALL" | "UNASSIGNED" | "MY_TICKETS">(initialFilters.owner);
+  const [resolvedWithinDays, setResolvedWithinDays] = useState<number | undefined>(
+    initialFilters.resolvedWithinDays
+  );
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState<boolean>(false);
+
+  // Re-sync filter states if browser Back/Forward (popstate) navigates between query parameters
+  useEffect(() => {
+    const handlePopState = () => {
+      const filters = getInitialQueueFilters();
+      setSelectedCategory(filters.category);
+      setSelectedReqPriority(filters.reqPriority);
+      setSelectedItPriority(filters.itPriority);
+      setPriorityFilter(filters.priority);
+      setSelectedStatus(filters.status);
+      setSelectedOwner(filters.owner);
+      setResolvedWithinDays(filters.resolvedWithinDays);
+      setSearchInput(filters.search);
+      setDebouncedSearch(filters.search);
+      setPage(1);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Sorting state (Strictly whitelisted columns)
   const [sortBy, setSortBy] = useState<"createdAt" | "itPriority" | "status" | "updatedAt">("createdAt");
@@ -193,6 +302,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+
 
   // Stale request guard
   const requestSequenceRef = useRef<number>(0);
@@ -230,7 +340,8 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     const queryParams: StaffTicketQueryParams = {
       search: debouncedSearch || undefined,
       categoryId: selectedCategory !== "ALL" ? parseInt(selectedCategory, 10) : undefined,
-      requestedPriority: selectedReqPriority !== "ALL" ? selectedReqPriority : undefined,
+      priority: priorityFilter,
+      requestedPriority: !priorityFilter && selectedReqPriority !== "ALL" ? selectedReqPriority : undefined,
       itPriority: selectedItPriority !== "ALL" ? selectedItPriority : undefined,
       status: selectedStatus !== "ALL" ? selectedStatus : undefined,
       owner: selectedOwner !== "ALL" ? selectedOwner : undefined,
@@ -238,6 +349,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
       sortOrder,
       page,
       pageSize,
+      resolvedWithinDays: selectedStatus === "RESOLVED" ? resolvedWithinDays : undefined,
     };
 
     try {
@@ -260,8 +372,10 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     selectedCategory,
     selectedReqPriority,
     selectedItPriority,
+    priorityFilter,
     selectedStatus,
     selectedOwner,
+    resolvedWithinDays,
     sortBy,
     sortOrder,
     page,
@@ -280,6 +394,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
 
   const handleReqPriorityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedReqPriority(e.target.value);
+    setPriorityFilter(undefined);
     setPage(1);
   };
 
@@ -289,7 +404,11 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
   };
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedStatus(e.target.value);
+    const val = e.target.value;
+    setSelectedStatus(val);
+    if (val !== "RESOLVED") {
+      setResolvedWithinDays(undefined);
+    }
     setPage(1);
   };
 
@@ -314,8 +433,10 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     setSelectedCategory("ALL");
     setSelectedReqPriority("ALL");
     setSelectedItPriority("ALL");
+    setPriorityFilter(undefined);
     setSelectedStatus("ALL");
     setSelectedOwner("ALL");
+    setResolvedWithinDays(undefined);
     setSortBy("createdAt");
     setSortOrder("desc");
     setPage(1);
@@ -326,14 +447,17 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
     selectedCategory !== "ALL" ||
     selectedReqPriority !== "ALL" ||
     selectedItPriority !== "ALL" ||
+    priorityFilter !== undefined ||
     selectedStatus !== "ALL" ||
-    selectedOwner !== "ALL";
+    selectedOwner !== "ALL" ||
+    resolvedWithinDays !== undefined;
 
   const activeDropdownCount =
     (selectedCategory !== "ALL" ? 1 : 0) +
     (selectedStatus !== "ALL" ? 1 : 0) +
     (selectedItPriority !== "ALL" ? 1 : 0) +
-    (selectedReqPriority !== "ALL" ? 1 : 0);
+    (selectedReqPriority !== "ALL" ? 1 : 0) +
+    (priorityFilter !== undefined ? 1 : 0);
 
   return (
     <div className="w-100" data-testid="staff-ticket-queue-view">
@@ -508,11 +632,14 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
                   }}
                 >
                   <option value="ALL">All Statuses</option>
+                  <option value="NEW,OPEN">Total Open (New &amp; Open)</option>
                   <option value="NEW">New</option>
                   <option value="OPEN">Open</option>
                   <option value="IN_PROGRESS">In Progress</option>
                   <option value="WAITING_FOR_REQUESTER">Waiting for Requester</option>
-                  <option value="RESOLVED">Resolved</option>
+                  <option value="RESOLVED">
+                    {resolvedWithinDays ? `Recently Resolved (Last ${resolvedWithinDays} Days)` : "Resolved"}
+                  </option>
                   <option value="CLOSED">Closed</option>
                   <option value="REOPENED">Reopened</option>
                   <option value="CANCELLED">Cancelled</option>
@@ -663,19 +790,68 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
                 </div>
               </div>
 
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-link text-secondary d-inline-flex align-items-center gap-1 text-decoration-none px-2 py-1 rounded-2 zg-ghost-reset-btn"
-                  style={{
-                    fontSize: "0.8rem",
-                    color: "#667085",
-                    border: "none",
-                    background: "transparent",
-                  }}
-                  onClick={handleResetFilters}
-                  data-testid="queue-clear-filters-btn"
-                >
+              <div className="d-flex align-items-center gap-2">
+                {resolvedWithinDays !== undefined && selectedStatus === "RESOLVED" && (
+                  <span
+                    className="badge px-2 py-1 rounded-pill d-inline-flex align-items-center gap-1"
+                    style={{
+                      backgroundColor: "var(--zg-pale)",
+                      color: "var(--zg-primary)",
+                      border: "1px solid #A6F4C5",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                    }}
+                    data-testid="queue-resolved-window-badge"
+                  >
+                    <span>Last {resolvedWithinDays} Days</span>
+                    <button
+                      type="button"
+                      className="btn-close btn-close-sm p-0 ms-1"
+                      style={{ fontSize: "0.6rem" }}
+                      aria-label="Clear rolling window limit"
+                      onClick={() => setResolvedWithinDays(undefined)}
+                      data-testid="queue-clear-window-btn"
+                    />
+                  </span>
+                )}
+
+                {priorityFilter !== undefined && (
+                  <span
+                    className="badge px-2 py-1 rounded-pill d-inline-flex align-items-center gap-1"
+                    style={{
+                      backgroundColor: "rgba(239, 68, 68, 0.1)",
+                      color: "#DC2626",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                    }}
+                    data-testid="queue-priority-filter-badge"
+                  >
+                    <span>Priority: {priorityFilter.replace("_", " ")}</span>
+                    <button
+                      type="button"
+                      className="btn-close btn-close-sm p-0 ms-1"
+                      style={{ fontSize: "0.6rem" }}
+                      aria-label="Clear priority filter"
+                      onClick={() => setPriorityFilter(undefined)}
+                      data-testid="queue-clear-priority-btn"
+                    />
+                  </span>
+                )}
+
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-link text-secondary d-inline-flex align-items-center gap-1 text-decoration-none px-2 py-1 rounded-2 zg-ghost-reset-btn"
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "#667085",
+                      border: "none",
+                      background: "transparent",
+                    }}
+                    onClick={handleResetFilters}
+                    data-testid="queue-clear-filters-btn"
+                  >
                   <svg
                     width="13"
                     height="13"
@@ -692,6 +868,7 @@ export default function StaffTicketQueue({ onViewTicket }: StaffTicketQueueProps
                   <span className="fw-medium">Reset Filters</span>
                 </button>
               )}
+              </div>
             </div>
           </div>
         </div>

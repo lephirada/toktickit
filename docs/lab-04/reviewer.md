@@ -15,7 +15,7 @@
 | `[PR #53]`              | `feature/21-ticket-resolution-gate`     | `[Request Changes -> Approved]` |
 | `[PR #55]`              | `feature/22-dashboard-backend-apis`     | `[Approved]`                    |
 | `[PR #56]`              | `feature/23-actions-taken-ui`           | `[Approved]`                    |
-| `[PR #... Placeholder]` | `feature/24-role-dashboards-ui`         | `[Planned]`                     |
+| `[PR #57]`              | `feature/24-role-dashboards-ui`         | `[Planned]`                     |
 | `[PR #... Placeholder]` | `feature/25-e2e-regression-hardening`   | `[Planned]`                     |
 | `[PR #... Placeholder]` | `feature/26-final-submission-artifacts` | `[Planned]`                     |
 
@@ -260,10 +260,10 @@
 - **Branch:** `feature/24-role-dashboards-ui`
 - **Reviewer comment I received:**
 
-  > <!-- Placeholder for partner review comments -->
+  > The dashboard implementation looks good overall and appears to meet the main requirements. One minor issue remains with clearing the priority filter: selectedReqPriority is not reset, so the queue may remain filtered. Please consider resetting it to "ALL" and adding a regression test. This is a non-blocking issue and does not prevent approval.
 
 - **How I responded:**
-  > <!-- Placeholder for author response -->
+  > Thanks for the review and approval. I have updated docs/lab-04/evidence.md and docs/lab-04/reviewer.md in the PR, so it should be good to merge now.
 
 ---
 
