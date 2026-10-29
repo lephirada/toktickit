@@ -1,13 +1,21 @@
 import { test, expect } from "@playwright/test";
 import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 
+interface ExpectedHttpFailure {
+  method: string;
+  urlSubstring: string;
+  status: number;
+}
+
 test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E Suite", () => {
   const prisma = getPrisma();
   const createdActionIds: number[] = [];
   let initialActionIds: number[] = [];
   let consoleErrors: string[] = [];
   let pageErrors: Error[] = [];
-  let allowedNetworkErrorStatuses: number[] = [];
+  let expectedHttpFailures: ExpectedHttpFailure[] = [];
+  let unexpectedHttpResponses: Array<{ url: string; method: string; status: number }> = [];
+  let allowedNetworkLogCount = 0;
 
   test.beforeAll(async () => {
     const ticket3 = await prisma.ticket.findUnique({
@@ -26,12 +34,34 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     await resetAuthUsers();
     consoleErrors = [];
     pageErrors = [];
-    allowedNetworkErrorStatuses = [];
+    expectedHttpFailures = [];
+    unexpectedHttpResponses = [];
+    allowedNetworkLogCount = 0;
 
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
       if (msg.type() === "error") {
         consoleErrors.push(msg.text());
+      }
+    });
+
+    page.on("response", (resp) => {
+      if (resp.status() >= 400) {
+        const matchIdx = expectedHttpFailures.findIndex(
+          (exp) =>
+            resp.request().method() === exp.method &&
+            resp.url().includes(exp.urlSubstring) &&
+            resp.status() === exp.status
+        );
+        if (matchIdx !== -1) {
+          expectedHttpFailures.splice(matchIdx, 1);
+          return;
+        }
+        unexpectedHttpResponses.push({
+          url: resp.url(),
+          method: resp.request().method(),
+          status: resp.status(),
+        });
       }
     });
 
@@ -74,13 +104,18 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
 
   test.afterEach(async () => {
     expect(pageErrors).toEqual([]);
-    const unexpectedErrors = consoleErrors.filter((msg) => {
-      const isAllowedNetworkLog = allowedNetworkErrorStatuses.some(
-        (status) => msg.includes("Failed to load resource") && msg.includes(String(status))
-      );
-      return !isAllowedNetworkLog;
-    });
-    expect(unexpectedErrors).toEqual([]);
+    expect(unexpectedHttpResponses).toEqual([]);
+    expect(expectedHttpFailures).toEqual([]);
+
+    const unexpectedConsoleErrors = consoleErrors.filter(
+      (msg) => !msg.includes("Failed to load resource")
+    );
+    expect(unexpectedConsoleErrors).toEqual([]);
+
+    const networkLogs = consoleErrors.filter((msg) =>
+      msg.includes("Failed to load resource")
+    );
+    expect(networkLogs.length).toBeLessThanOrEqual(allowedNetworkLogCount);
   });
 
   test.afterAll(async () => {
@@ -290,6 +325,14 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
       "Attempted resolution summary without recording mandatory diagnostic actions."
     );
 
+    // Register expected failure strictly bound to PATCH /tickets/:id/status and HTTP 422
+    expectedHttpFailures.push({
+      method: "PATCH",
+      urlSubstring: `/tickets/${ticket3!.id}/status`,
+      status: 422,
+    });
+    allowedNetworkLogCount = 1;
+
     // Intercept network call to assert the ACTUAL backend response status is 422
     const patchResponsePromise = page.waitForResponse(
       (resp) =>
@@ -304,9 +347,6 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
 
     const errorBody = await patchResponse.json();
     expect(errorBody.error?.code).toBe("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
-
-    // Verified authentic 422 resolution gate response; allow corresponding browser network failure log in afterEach
-    allowedNetworkErrorStatuses.push(422);
 
     // UI displays the server blocker alert
     const serverAlert = page.locator('form [role="alert"]');

@@ -1,27 +1,53 @@
 import { test, expect } from "@playwright/test";
 import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 
+interface ExpectedHttpFailure {
+  method: string;
+  urlSubstring: string;
+  status: number;
+}
+
 test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () => {
   const prisma = getPrisma();
   const createdActionIds: number[] = [];
+  let initialSeedActionIds: number[] = [];
   let consoleErrors: string[] = [];
   let pageErrors: Error[] = [];
-  let allowedNetworkErrorStatuses: number[] = [];
+  let expectedHttpFailures: ExpectedHttpFailure[] = [];
+  let unexpectedHttpResponses: Array<{ url: string; method: string; status: number }> = [];
+  let allowedNetworkLogCount = 0;
 
   test.beforeAll(async () => {
-    // Clean any dangling test actions from previous aborted runs
-    await prisma.actionTaken.deleteMany({
-      where: {
-        description: { startsWith: "[E2E-" },
-      },
+    // Record initial seed actions for TKT-2026-00014 to strictly prevent seed data modification or deletion
+    const ticket14 = await prisma.ticket.findUnique({
+      where: { ticketNo: "TKT-2026-00014" },
     });
+    if (ticket14) {
+      const existing = await prisma.actionTaken.findMany({
+        where: { ticketId: ticket14.id },
+        select: { id: true },
+      });
+      initialSeedActionIds = existing.map((a: { id: number }) => a.id);
+
+      // Clean only non-seed actions from previous aborted runs
+      if (initialSeedActionIds.length > 0) {
+        await prisma.actionTaken.deleteMany({
+          where: {
+            ticketId: ticket14.id,
+            id: { notIn: initialSeedActionIds },
+          },
+        });
+      }
+    }
   });
 
   test.beforeEach(async ({ page }) => {
     await resetAuthUsers();
     consoleErrors = [];
     pageErrors = [];
-    allowedNetworkErrorStatuses = [];
+    expectedHttpFailures = [];
+    unexpectedHttpResponses = [];
+    allowedNetworkLogCount = 0;
 
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
@@ -29,17 +55,50 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
         consoleErrors.push(msg.text());
       }
     });
+
+    page.on("response", (resp) => {
+      if (resp.status() >= 400) {
+        const matchIdx = expectedHttpFailures.findIndex(
+          (exp) =>
+            resp.request().method() === exp.method &&
+            resp.url().includes(exp.urlSubstring) &&
+            resp.status() === exp.status
+        );
+        if (matchIdx !== -1) {
+          expectedHttpFailures.splice(matchIdx, 1);
+          return;
+        }
+        unexpectedHttpResponses.push({
+          url: resp.url(),
+          method: resp.request().method(),
+          status: resp.status(),
+        });
+      }
+    });
+
+    // Clean test actions created in earlier tests in this file
+    if (createdActionIds.length > 0) {
+      await prisma.actionTaken.deleteMany({
+        where: { id: { in: createdActionIds } },
+      });
+      createdActionIds.length = 0;
+    }
   });
 
   test.afterEach(async () => {
     expect(pageErrors).toEqual([]);
-    const unexpectedErrors = consoleErrors.filter((msg) => {
-      const isAllowedNetworkLog = allowedNetworkErrorStatuses.some(
-        (status) => msg.includes("Failed to load resource") && msg.includes(String(status))
-      );
-      return !isAllowedNetworkLog;
-    });
-    expect(unexpectedErrors).toEqual([]);
+    expect(unexpectedHttpResponses).toEqual([]);
+    expect(expectedHttpFailures).toEqual([]);
+
+    const unexpectedConsoleErrors = consoleErrors.filter(
+      (msg) => !msg.includes("Failed to load resource")
+    );
+    expect(unexpectedConsoleErrors).toEqual([]);
+
+    const networkLogs = consoleErrors.filter((msg) =>
+      msg.includes("Failed to load resource")
+    );
+    expect(networkLogs.length).toBeLessThanOrEqual(allowedNetworkLogCount);
   });
 
   test.afterAll(async () => {
@@ -62,6 +121,14 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
         },
       });
       expect(remaining).toBe(0);
+    }
+
+    // Postcondition assertion: verify that initial seed actions on TKT-2026-00014 remain 100% intact
+    if (initialSeedActionIds.length > 0) {
+      const remainingSeed = await prisma.actionTaken.findMany({
+        where: { id: { in: initialSeedActionIds } },
+      });
+      expect(remainingSeed.length).toBe(initialSeedActionIds.length);
     }
   });
 
@@ -279,6 +346,14 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     // 5. David Lee makes changes in the modal and submits with his stale expectedUpdatedAt
     await page.fill("#edit-description", "[E2E-CONCURRENCY-TEST] David's unsaved draft edit");
 
+    // Register expected failure strictly bound to the PUT /actions/:id endpoint and HTTP 409
+    expectedHttpFailures.push({
+      method: "PUT",
+      urlSubstring: `/actions/${testAction.id}`,
+      status: 409,
+    });
+    allowedNetworkLogCount = 1;
+
     // Intercept network call to assert the ACTUAL backend response status is 409
     const putResponsePromise = page.waitForResponse(
       (resp) => resp.url().includes(`/actions/${testAction.id}`) && resp.request().method() === "PUT"
@@ -291,9 +366,6 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
 
     const responseBody = await putResponse.json();
     expect(responseBody.error?.code).toBe("STALE_ACTION_CONFLICT");
-
-    // Verified authentic 409 conflict response; allow corresponding browser network failure log in afterEach
-    allowedNetworkErrorStatuses.push(409);
 
     // 6. Assert Concurrency Conflict Dialog is rendered
     const conflictDialog = page.locator('[data-testid="concurrency-conflict-dialog"]');
