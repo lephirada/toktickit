@@ -1,11 +1,16 @@
 import { test, expect } from "@playwright/test";
 import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 
+interface CapturedConsoleError {
+  text: string;
+  url: string;
+}
+
 test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E Suite", () => {
   const prisma = getPrisma();
   const createdActionIds: number[] = [];
   let initialActionIds: number[] = [];
-  let consoleErrors: string[] = [];
+  let consoleErrors: CapturedConsoleError[] = [];
   let pageErrors: Error[] = [];
 
   test.beforeAll(async () => {
@@ -29,7 +34,10 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
       if (msg.type() === "error") {
-        consoleErrors.push(msg.text());
+        consoleErrors.push({
+          text: msg.text(),
+          url: msg.location()?.url || "",
+        });
       }
     });
 
@@ -269,9 +277,10 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     expect(errorBody.error?.code).toBe("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
 
     // Verify and consume the expected 422 browser network log specifically for this request
-    const expectedLogPrefix = "Failed to load resource: the server responded with a status of 422";
     const expectedLogIndex = consoleErrors.findIndex(
-      (err) => err.includes(expectedLogPrefix) && err.includes(`/tickets/${ticket3!.id}/status`)
+      (err) =>
+        err.text.includes("422") &&
+        (err.url.includes(`/tickets/${ticket3!.id}/status`) || err.text.includes(`/tickets/${ticket3!.id}/status`))
     );
     if (expectedLogIndex !== -1) {
       consoleErrors.splice(expectedLogIndex, 1);

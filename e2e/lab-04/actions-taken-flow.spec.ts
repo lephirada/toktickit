@@ -1,10 +1,15 @@
 import { test, expect } from "@playwright/test";
 import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 
+interface CapturedConsoleError {
+  text: string;
+  url: string;
+}
+
 test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () => {
   const prisma = getPrisma();
   const createdActionIds: number[] = [];
-  let consoleErrors: string[] = [];
+  let consoleErrors: CapturedConsoleError[] = [];
   let pageErrors: Error[] = [];
 
   test.beforeEach(async ({ page }) => {
@@ -15,7 +20,10 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
       if (msg.type() === "error") {
-        consoleErrors.push(msg.text());
+        consoleErrors.push({
+          text: msg.text(),
+          url: msg.location()?.url || "",
+        });
       }
     });
   });
@@ -276,9 +284,10 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     expect(responseBody.error?.code).toBe("STALE_ACTION_CONFLICT");
 
     // Verify and consume the expected 409 browser network log specifically for this request
-    const expectedLogPrefix = "Failed to load resource: the server responded with a status of 409";
     const expectedLogIndex = consoleErrors.findIndex(
-      (err) => err.includes(expectedLogPrefix) && err.includes(`/actions/${testAction.id}`)
+      (err) =>
+        err.text.includes("409") &&
+        (err.url.includes(`/actions/${testAction.id}`) || err.text.includes(`/actions/${testAction.id}`))
     );
     if (expectedLogIndex !== -1) {
       consoleErrors.splice(expectedLogIndex, 1);
