@@ -15,15 +15,7 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
       if (msg.type() === "error") {
-        const text = msg.text();
-        // Allow ONLY the expected 409 conflict network response in concurrency test
-        const isExpected409 =
-          text.includes("409") ||
-          text.includes("STALE_ACTION_CONFLICT") ||
-          (text.includes("Failed to load resource") && text.includes("409"));
-        if (!isExpected409) {
-          consoleErrors.push(text);
-        }
+        consoleErrors.push(msg.text());
       }
     });
   });
@@ -282,6 +274,15 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
 
     const responseBody = await putResponse.json();
     expect(responseBody.error?.code).toBe("STALE_ACTION_CONFLICT");
+
+    // Verify and consume the expected 409 browser network log specifically for this request
+    const expectedLogPrefix = "Failed to load resource: the server responded with a status of 409";
+    const expectedLogIndex = consoleErrors.findIndex(
+      (err) => err.includes(expectedLogPrefix) && err.includes(`/actions/${testAction.id}`)
+    );
+    if (expectedLogIndex !== -1) {
+      consoleErrors.splice(expectedLogIndex, 1);
+    }
 
     // 6. Assert Concurrency Conflict Dialog is rendered
     const conflictDialog = page.locator('[data-testid="concurrency-conflict-dialog"]');

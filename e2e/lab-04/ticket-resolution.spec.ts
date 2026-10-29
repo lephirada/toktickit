@@ -29,15 +29,7 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
       if (msg.type() === "error") {
-        const text = msg.text();
-        // Allow ONLY the expected 422 Resolution Gate error during negative boundary test
-        const isExpected422 =
-          text.includes("422") ||
-          text.includes("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION") ||
-          (text.includes("Failed to load resource") && text.includes("422"));
-        if (!isExpected422) {
-          consoleErrors.push(text);
-        }
+        consoleErrors.push(msg.text());
       }
     });
 
@@ -275,6 +267,15 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
 
     const errorBody = await patchResponse.json();
     expect(errorBody.error?.code).toBe("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
+
+    // Verify and consume the expected 422 browser network log specifically for this request
+    const expectedLogPrefix = "Failed to load resource: the server responded with a status of 422";
+    const expectedLogIndex = consoleErrors.findIndex(
+      (err) => err.includes(expectedLogPrefix) && err.includes(`/tickets/${ticket3!.id}/status`)
+    );
+    if (expectedLogIndex !== -1) {
+      consoleErrors.splice(expectedLogIndex, 1);
+    }
 
     // UI displays the server blocker alert
     const serverAlert = page.locator('form [role="alert"]');
