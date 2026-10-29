@@ -3,23 +3,56 @@ import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 
 test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () => {
   const prisma = getPrisma();
+  const createdActionIds: number[] = [];
+  let consoleErrors: string[] = [];
+  let pageErrors: Error[] = [];
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ page }) => {
     await resetAuthUsers();
+    consoleErrors = [];
+    pageErrors = [];
+
+    page.on("pageerror", (err) => pageErrors.push(err));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        const text = msg.text();
+        // Allow expected 409 responses from API in concurrency test
+        if (
+          !text.includes("409") &&
+          !text.includes("STALE_ACTION_CONFLICT") &&
+          !text.includes("Failed to load resource")
+        ) {
+          consoleErrors.push(text);
+        }
+      }
+    });
+  });
+
+  test.afterEach(async () => {
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 
   test.afterAll(async () => {
-    // Targeted non-destructive cleanup: remove only test-created action records
-    try {
+    // Targeted non-destructive cleanup: remove only test-created action IDs
+    if (createdActionIds.length > 0) {
       await prisma.actionTaken.deleteMany({
         where: {
-          description: {
-            contains: "[E2E-",
+          id: {
+            in: createdActionIds,
           },
         },
       });
-    } catch {
-      // Ignore cleanup error if DB is busy
+
+      // Postcondition assertion: verify all created test actions are genuinely removed
+      const remaining = await prisma.actionTaken.count({
+        where: {
+          id: {
+            in: createdActionIds,
+          },
+        },
+      });
+      expect(remaining).toBe(0);
     }
   });
 
@@ -80,11 +113,44 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     await expect(timelineList).toContainText(testResult);
     await expect(timelineList).toContainText("35m");
     await expect(timelineList).toContainText("David Lee");
+
+    // Register created action ID for safe targeted cleanup
+    const createdAction = await prisma.actionTaken.findFirst({
+      where: { description: testDesc },
+      select: { id: true },
+    });
+    if (createdAction) {
+      createdActionIds.push(createdAction.id);
+    }
   });
 
   test("2. IT Staff edits an existing action and verifies persisted changes across reload", async ({
     page,
   }) => {
+    // 0. Pre-seed a dedicated test action in DB so seed records are strictly untouched
+    const ticket = await prisma.ticket.findUnique({
+      where: { ticketNo: "TKT-2026-00014" },
+    });
+    expect(ticket).not.toBeNull();
+
+    const david = await prisma.user.findUnique({
+      where: { email: "david.lee@toktickit.com" },
+    });
+    expect(david).not.toBeNull();
+
+    const editTargetAction = await prisma.actionTaken.create({
+      data: {
+        ticketId: ticket!.id,
+        performedById: david!.id,
+        description: "[E2E-ACTION-EDIT-TARGET] Baseline diagnostic check on MacBook battery.",
+        result: "Baseline thermals normal.",
+        actionType: "INVESTIGATION",
+        timeSpentMinutes: 20,
+        performedAt: new Date(),
+      },
+    });
+    createdActionIds.push(editTargetAction.id);
+
     // 1. Log in as David Lee
     await page.goto("/login");
     await page.fill('[data-testid="login-email-input"]', "david.lee@toktickit.com");
@@ -102,8 +168,11 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
 
     await expect(page.locator('[data-testid="staff-ticket-detail-screen"]')).toBeVisible();
 
-    // 3. Click Edit on the first action in timeline
-    const editBtn = page.locator('[data-testid="edit-action-btn"]').first();
+    // 3. Click Edit on the specific test-created action in timeline (never touching seed actions)
+    const targetActionItem = page.locator(`[data-testid="action-item-${editTargetAction.id}"]`);
+    await expect(targetActionItem).toBeVisible();
+
+    const editBtn = targetActionItem.locator('[data-testid="edit-action-btn"]');
     await expect(editBtn).toBeVisible();
     await editBtn.click();
 
@@ -161,6 +230,7 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
         performedAt: new Date(),
       },
     });
+    createdActionIds.push(testAction.id);
 
     // 2. Log in as David Lee and navigate to TKT-2026-00014
     await page.goto("/login");

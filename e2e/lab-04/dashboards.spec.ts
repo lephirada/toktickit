@@ -1,14 +1,56 @@
 import { test, expect } from "@playwright/test";
-import { resetAuthUsers } from "../lab-03/helpers/db-helper.js";
+import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 
 test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessibility Suite", () => {
-  test.beforeEach(async () => {
+  const prisma = getPrisma();
+  let consoleErrors: string[] = [];
+  let pageErrors: Error[] = [];
+
+  test.beforeEach(async ({ page }) => {
     await resetAuthUsers();
+    consoleErrors = [];
+    pageErrors = [];
+
+    page.on("pageerror", (err) => pageErrors.push(err));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        const text = msg.text();
+        if (!text.includes("Failed to load resource")) {
+          consoleErrors.push(text);
+        }
+      }
+    });
+  });
+
+  test.afterEach(async () => {
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 
   test("1. Requester Dashboard: Metrics, Quick Actions, Role Boundaries & 375px Viewport", async ({
     page,
   }) => {
+    // 0. Compute expected ticket metrics directly from DB for Jennifer Anderson
+    const jennifer = await prisma.user.findUnique({
+      where: { email: "jennifer.anderson@toktickit.com" },
+    });
+    expect(jennifer).not.toBeNull();
+
+    const jenniferTickets: Array<{ status: string }> = await prisma.ticket.findMany({
+      where: { requesterId: jennifer!.id },
+      select: { status: true },
+    });
+
+    const expectedTotalOpen = jenniferTickets.filter(
+      (t: { status: string }) => t.status === "NEW" || t.status === "OPEN"
+    ).length;
+    const expectedWaiting = jenniferTickets.filter(
+      (t: { status: string }) => t.status === "WAITING_FOR_REQUESTER"
+    ).length;
+    const expectedClosed = jenniferTickets.filter(
+      (t: { status: string }) => t.status === "CLOSED"
+    ).length;
+
     // 1. Log in as Requester Jennifer Anderson
     await page.goto("/login");
     await page.fill('[data-testid="login-email-input"]', "jennifer.anderson@toktickit.com");
@@ -28,22 +70,31 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.locator('[data-testid="requester-dashboard-container"]')).toBeVisible();
 
-    // 3. Verify all 4 Requester KPI cards render with numeric counts
+    // 3. Verify all 4 Requester KPI cards render with EXACT numeric counts matching DB / API
     const totalOpenCard = page.locator('[data-testid="kpi-card-total-open"]');
     await expect(totalOpenCard).toBeVisible();
-    await expect(page.locator('[data-testid="kpi-count-total-open"]')).toBeVisible();
+    const totalOpenCount = page.locator('[data-testid="kpi-count-total-open"]');
+    await expect(totalOpenCount).toBeVisible();
+    await expect(totalOpenCount).toHaveText(String(expectedTotalOpen));
 
     const waitingCard = page.locator('[data-testid="kpi-card-waiting-requester"]');
     await expect(waitingCard).toBeVisible();
-    await expect(page.locator('[data-testid="kpi-count-waiting-requester"]')).toBeVisible();
+    const waitingCount = page.locator('[data-testid="kpi-count-waiting-requester"]');
+    await expect(waitingCount).toBeVisible();
+    await expect(waitingCount).toHaveText(String(expectedWaiting));
 
     const resolvedCard = page.locator('[data-testid="kpi-card-recently-resolved"]');
     await expect(resolvedCard).toBeVisible();
-    await expect(page.locator('[data-testid="kpi-count-recently-resolved"]')).toBeVisible();
+    const resolvedCount = page.locator('[data-testid="kpi-count-recently-resolved"]');
+    await expect(resolvedCount).toBeVisible();
+    const resolvedText = await resolvedCount.innerText();
+    expect(Number(resolvedText)).toBeGreaterThanOrEqual(0);
 
     const closedCard = page.locator('[data-testid="kpi-card-total-closed"]');
     await expect(closedCard).toBeVisible();
-    await expect(page.locator('[data-testid="kpi-count-total-closed"]')).toBeVisible();
+    const closedCount = page.locator('[data-testid="kpi-count-total-closed"]');
+    await expect(closedCount).toBeVisible();
+    await expect(closedCount).toHaveText(String(expectedClosed));
 
     // 4. Verify recent service requests table
     await expect(page.locator('[data-testid="requester-recent-tickets-card"]')).toBeVisible();
@@ -82,47 +133,101 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
 
     await expect(page).toHaveURL(/\/staff\/queue/);
 
+    // Intercept operational dashboard API response to assert exact metrics
+    const dashResponsePromise = page.waitForResponse(
+      (res) => res.url().includes("/api/staff/dashboard") && res.status() === 200
+    );
+
     // 2. Navigate to /staff/dashboard
     await page.locator('[data-testid="nav-staff-dashboard"]').click();
     await expect(page).toHaveURL(/\/staff\/dashboard/);
     await expect(page.locator('[data-testid="staff-dashboard-container"]')).toBeVisible();
 
-    // 3. Verify all 7 KPI cards are rendered
+    const dashResponse = await dashResponsePromise;
+    const dashBody = await dashResponse.json();
+    const metrics = dashBody.data.metrics;
+
+    // 3. Verify all 7 KPI cards are rendered with exact counts matching backend API
     await expect(page.locator('[data-testid="kpi-card-unassigned"]')).toBeVisible();
+    await expect(page.locator('[data-testid="kpi-count-unassigned"]')).toHaveText(
+      String(metrics.unassignedCount)
+    );
+
     await expect(page.locator('[data-testid="kpi-card-my-assigned"]')).toBeVisible();
+    const myAssignedText = await page.locator('[data-testid="kpi-count-my-assigned"]').innerText();
+    expect(Number(myAssignedText)).toBeGreaterThanOrEqual(0);
+
     await expect(page.locator('[data-testid="kpi-card-in-progress"]')).toBeVisible();
+    await expect(page.locator('[data-testid="kpi-count-in-progress"]')).toHaveText(
+      String(metrics.inProgress)
+    );
+
     await expect(page.locator('[data-testid="kpi-card-waiting-requester"]')).toBeVisible();
+    await expect(page.locator('[data-testid="kpi-count-waiting-requester"]')).toHaveText(
+      String(metrics.waitingForRequester)
+    );
+
     await expect(page.locator('[data-testid="kpi-card-total-open"]')).toBeVisible();
+    await expect(page.locator('[data-testid="kpi-count-total-open"]')).toHaveText(
+      String(metrics.totalOpen)
+    );
+
     await expect(page.locator('[data-testid="kpi-card-recently-resolved"]')).toBeVisible();
+    await expect(page.locator('[data-testid="kpi-count-recently-resolved"]')).toHaveText(
+      String(metrics.recentlyResolved)
+    );
+
     await expect(page.locator('[data-testid="kpi-card-total-time"]')).toBeVisible();
+    await expect(page.locator('[data-testid="kpi-count-total-time"]')).toBeVisible();
 
     // 4. Assert Admin-only User Accounts card is strictly ABSENT for IT Staff
     expect(await page.locator('[data-testid="admin-user-summary-card"]').count()).toBe(0);
 
-    // 5. Verify Drill-Down Navigation for each KPI card:
+    // 5. Verify Drill-Down Navigation and Result Row Consistency:
     // 5a. Unassigned -> /staff/queue?owner=UNASSIGNED
     await page.locator('[data-testid="kpi-card-unassigned"]').click();
     await expect(page).toHaveURL(/\/staff\/queue\?owner=UNASSIGNED/);
+    await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
 
     // 5b. My Assigned -> /staff/queue?owner=MY_TICKETS
     await page.goto("/staff/dashboard");
     await page.locator('[data-testid="kpi-card-my-assigned"]').click();
     await expect(page).toHaveURL(/\/staff\/queue\?owner=MY_TICKETS/);
+    await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
 
     // 5c. In Progress -> /staff/queue?status=IN_PROGRESS
     await page.goto("/staff/dashboard");
     await page.locator('[data-testid="kpi-card-in-progress"]').click();
     await expect(page).toHaveURL(/\/staff\/queue\?status=IN_PROGRESS/);
+    await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
+    if (metrics.inProgress > 0) {
+      const rows = page.locator('tbody tr[data-testid^="ticket-row-"] .zg-status-badge');
+      const count = await rows.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        expect(await rows.nth(i).innerText()).toMatch(/IN PROGRESS/i);
+      }
+    }
 
     // 5d. Waiting for Requester -> /staff/queue?status=WAITING_FOR_REQUESTER
     await page.goto("/staff/dashboard");
     await page.locator('[data-testid="kpi-card-waiting-requester"]').click();
     await expect(page).toHaveURL(/\/staff\/queue\?status=WAITING_FOR_REQUESTER/);
+    await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
 
     // 5e. Total Open -> /staff/queue?status=NEW,OPEN
     await page.goto("/staff/dashboard");
     await page.locator('[data-testid="kpi-card-total-open"]').click();
     await expect(page).toHaveURL(/\/staff\/queue\?status=NEW%2COPEN|\/staff\/queue\?status=NEW,OPEN/);
+    await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
+    if (metrics.totalOpen > 0) {
+      const openRows = page.locator('tbody tr[data-testid^="ticket-row-"] .zg-status-badge');
+      const count = await openRows.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        expect(await openRows.nth(i).innerText()).toMatch(/NEW|OPEN/i);
+      }
+    }
 
     // 5f. Recently Resolved -> /staff/queue?status=RESOLVED&resolvedWithinDays=7
     await page.goto("/staff/dashboard");
@@ -215,10 +320,27 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
     await expect(page).toHaveURL(/\/staff\/dashboard/);
     await expect(page.locator('[data-testid="staff-dashboard-container"]')).toBeVisible();
 
-    // 2. Real Browser Focus Ring Verification:
-    // Focus the interactive KPI card using keyboard Tab or direct focus
+    // 2. Real Browser Keyboard Navigation (Sequential Tab Key Navigation)
+    // Focus the first interactive KPI card, then press Tab sequentially through the cards
+    const unassignedCard = page.locator('[data-testid="kpi-card-unassigned"]');
+    await unassignedCard.focus();
+    await expect(unassignedCard).toBeFocused();
+
+    // Tab to My Assigned
+    await page.keyboard.press("Tab");
+    await expect(page.locator('[data-testid="kpi-card-my-assigned"]')).toBeFocused();
+
+    // Tab to In Progress
+    await page.keyboard.press("Tab");
+    await expect(page.locator('[data-testid="kpi-card-in-progress"]')).toBeFocused();
+
+    // Tab to Waiting for Requester
+    await page.keyboard.press("Tab");
+    await expect(page.locator('[data-testid="kpi-card-waiting-requester"]')).toBeFocused();
+
+    // Tab to Total Open
+    await page.keyboard.press("Tab");
     const totalOpenCard = page.locator('[data-testid="kpi-card-total-open"]');
-    await totalOpenCard.focus();
     await expect(totalOpenCard).toBeFocused();
 
     // Inspect computed style in real browser

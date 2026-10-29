@@ -3,9 +3,29 @@ import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 
 test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E Suite", () => {
   const prisma = getPrisma();
+  let consoleErrors: string[] = [];
+  let pageErrors: Error[] = [];
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ page }) => {
     await resetAuthUsers();
+    consoleErrors = [];
+    pageErrors = [];
+
+    page.on("pageerror", (err) => pageErrors.push(err));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        const text = msg.text();
+        // Allow expected 422 Resolution Gate error during negative boundary test
+        if (
+          !text.includes("422") &&
+          !text.includes("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION") &&
+          !text.includes("Failed to load resource")
+        ) {
+          consoleErrors.push(text);
+        }
+      }
+    });
+
     const ticket3 = await prisma.ticket.findUnique({
       where: { ticketNo: "TKT-2026-00003" },
     });
@@ -25,33 +45,52 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     }
   });
 
+  test.afterEach(async () => {
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  });
+
   test.afterAll(async () => {
     // Targeted cleanup: restore TKT-2026-00002 and TKT-2026-00003 to pristine seed state
-    try {
-      await prisma.ticket.updateMany({
-        where: { ticketNo: "TKT-2026-00002" },
-        data: { resolutionIndicated: false },
-      });
+    await prisma.ticket.updateMany({
+      where: { ticketNo: "TKT-2026-00002" },
+      data: { resolutionIndicated: false },
+    });
 
-      const ticket3 = await prisma.ticket.findUnique({
-        where: { ticketNo: "TKT-2026-00003" },
+    const ticket3 = await prisma.ticket.findUnique({
+      where: { ticketNo: "TKT-2026-00003" },
+    });
+    if (ticket3) {
+      await prisma.actionTaken.deleteMany({
+        where: { ticketId: ticket3.id },
       });
-      if (ticket3) {
-        await prisma.actionTaken.deleteMany({
-          where: { ticketId: ticket3.id },
-        });
-        await prisma.ticket.update({
-          where: { id: ticket3.id },
-          data: {
-            status: "NEW",
-            ownerId: null,
-            resolutionSummary: null,
-            resolutionIndicated: false,
-          },
-        });
-      }
-    } catch {
-      // Ignore cleanup error if DB is busy
+      await prisma.ticket.update({
+        where: { id: ticket3.id },
+        data: {
+          status: "NEW",
+          ownerId: null,
+          resolutionSummary: null,
+          resolutionIndicated: false,
+        },
+      });
+    }
+
+    // Postcondition assertion: verify restored database state
+    const t2 = await prisma.ticket.findUnique({
+      where: { ticketNo: "TKT-2026-00002" },
+      select: { resolutionIndicated: true },
+    });
+    expect(t2?.resolutionIndicated).toBe(false);
+
+    if (ticket3) {
+      const t3 = await prisma.ticket.findUnique({
+        where: { id: ticket3.id },
+        include: { actionsTaken: true },
+      });
+      expect(t3?.status).toBe("NEW");
+      expect(t3?.ownerId).toBeNull();
+      expect(t3?.resolutionIndicated).toBe(false);
+      expect(t3?.actionsTaken.length).toBe(0);
     }
   });
 
