@@ -3,8 +3,23 @@ import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 
 test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E Suite", () => {
   const prisma = getPrisma();
+  const createdActionIds: number[] = [];
+  let initialActionIds: number[] = [];
   let consoleErrors: string[] = [];
   let pageErrors: Error[] = [];
+
+  test.beforeAll(async () => {
+    const ticket3 = await prisma.ticket.findUnique({
+      where: { ticketNo: "TKT-2026-00003" },
+    });
+    if (ticket3) {
+      const existing = await prisma.actionTaken.findMany({
+        where: { ticketId: ticket3.id },
+        select: { id: true },
+      });
+      initialActionIds = existing.map((a: { id: number }) => a.id);
+    }
+  });
 
   test.beforeEach(async ({ page }) => {
     await resetAuthUsers();
@@ -15,24 +30,28 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     page.on("console", (msg) => {
       if (msg.type() === "error") {
         const text = msg.text();
-        // Allow expected 422 Resolution Gate error during negative boundary test
-        if (
-          !text.includes("422") &&
-          !text.includes("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION") &&
-          !text.includes("Failed to load resource")
-        ) {
+        // Allow ONLY the expected 422 Resolution Gate error during negative boundary test
+        const isExpected422 =
+          text.includes("422") ||
+          text.includes("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION") ||
+          (text.includes("Failed to load resource") && text.includes("422"));
+        if (!isExpected422) {
           consoleErrors.push(text);
         }
       }
     });
 
+    if (createdActionIds.length > 0) {
+      await prisma.actionTaken.deleteMany({
+        where: { id: { in: createdActionIds } },
+      });
+      createdActionIds.length = 0;
+    }
+
     const ticket3 = await prisma.ticket.findUnique({
       where: { ticketNo: "TKT-2026-00003" },
     });
     if (ticket3) {
-      await prisma.actionTaken.deleteMany({
-        where: { ticketId: ticket3.id },
-      });
       await prisma.ticket.update({
         where: { id: ticket3.id },
         data: {
@@ -57,13 +76,22 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
       data: { resolutionIndicated: false },
     });
 
+    // Delete ONLY test-created action IDs, preserving any seed actions
+    if (createdActionIds.length > 0) {
+      await prisma.actionTaken.deleteMany({
+        where: { id: { in: createdActionIds } },
+      });
+      // Postcondition assertion: verify test actions are deleted
+      const remainingCreated = await prisma.actionTaken.count({
+        where: { id: { in: createdActionIds } },
+      });
+      expect(remainingCreated).toBe(0);
+    }
+
     const ticket3 = await prisma.ticket.findUnique({
       where: { ticketNo: "TKT-2026-00003" },
     });
     if (ticket3) {
-      await prisma.actionTaken.deleteMany({
-        where: { ticketId: ticket3.id },
-      });
       await prisma.ticket.update({
         where: { id: ticket3.id },
         data: {
@@ -85,12 +113,18 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     if (ticket3) {
       const t3 = await prisma.ticket.findUnique({
         where: { id: ticket3.id },
-        include: { actionsTaken: true },
       });
       expect(t3?.status).toBe("NEW");
       expect(t3?.ownerId).toBeNull();
       expect(t3?.resolutionIndicated).toBe(false);
-      expect(t3?.actionsTaken.length).toBe(0);
+
+      // Verify that initial seed actions on ticket3 (if any) are 100% intact
+      if (initialActionIds.length > 0) {
+        const remainingSeed = await prisma.actionTaken.findMany({
+          where: { id: { in: initialActionIds } },
+        });
+        expect(remainingSeed.length).toBe(initialActionIds.length);
+      }
     }
   });
 
@@ -166,10 +200,13 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     });
     expect(ticket3).not.toBeNull();
 
-    // Clean any prior actions on ticket 3
-    await prisma.actionTaken.deleteMany({
-      where: { ticketId: ticket3!.id },
-    });
+    // Clean any prior test-created actions
+    if (createdActionIds.length > 0) {
+      await prisma.actionTaken.deleteMany({
+        where: { id: { in: createdActionIds } },
+      });
+      createdActionIds.length = 0;
+    }
 
     // 2. Log in as David Lee
     await page.goto("/login");
@@ -312,6 +349,15 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     await expect(page.locator('[data-testid="actions-timeline-list"]')).toContainText(
       "[E2E-GATE-PASS]"
     );
+
+    // Register test-created action ID for safe targeted teardown
+    const createdAction = await prisma.actionTaken.findFirst({
+      where: { description: { contains: "[E2E-GATE-PASS]" } },
+      select: { id: true },
+    });
+    if (createdAction) {
+      createdActionIds.push(createdAction.id);
+    }
 
     // 4. Now transition to RESOLVED with valid summary
     const openStatusBtn = page.locator('[data-testid="open-status-modal-button"]');

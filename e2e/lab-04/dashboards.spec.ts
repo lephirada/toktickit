@@ -14,10 +14,7 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
       if (msg.type() === "error") {
-        const text = msg.text();
-        if (!text.includes("Failed to load resource")) {
-          consoleErrors.push(text);
-        }
+        consoleErrors.push(msg.text());
       }
     });
   });
@@ -36,19 +33,26 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
     });
     expect(jennifer).not.toBeNull();
 
-    const jenniferTickets: Array<{ status: string }> = await prisma.ticket.findMany({
+    const jenniferTickets: Array<{ status: string; updatedAt: Date }> = await prisma.ticket.findMany({
       where: { requesterId: jennifer!.id },
-      select: { status: true },
+      select: { status: true, updatedAt: true },
     });
 
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+
     const expectedTotalOpen = jenniferTickets.filter(
-      (t: { status: string }) => t.status === "NEW" || t.status === "OPEN"
+      (t: { status: string; updatedAt: Date }) => t.status === "NEW" || t.status === "OPEN"
     ).length;
     const expectedWaiting = jenniferTickets.filter(
-      (t: { status: string }) => t.status === "WAITING_FOR_REQUESTER"
+      (t: { status: string; updatedAt: Date }) => t.status === "WAITING_FOR_REQUESTER"
+    ).length;
+    const expectedRecentlyResolved = jenniferTickets.filter(
+      (t: { status: string; updatedAt: Date }) =>
+        t.status === "RESOLVED" && new Date(t.updatedAt).getTime() >= sevenDaysAgo
     ).length;
     const expectedClosed = jenniferTickets.filter(
-      (t: { status: string }) => t.status === "CLOSED"
+      (t: { status: string; updatedAt: Date }) => t.status === "CLOSED"
     ).length;
 
     // 1. Log in as Requester Jennifer Anderson
@@ -87,8 +91,7 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
     await expect(resolvedCard).toBeVisible();
     const resolvedCount = page.locator('[data-testid="kpi-count-recently-resolved"]');
     await expect(resolvedCount).toBeVisible();
-    const resolvedText = await resolvedCount.innerText();
-    expect(Number(resolvedText)).toBeGreaterThanOrEqual(0);
+    await expect(resolvedCount).toHaveText(String(expectedRecentlyResolved));
 
     const closedCard = page.locator('[data-testid="kpi-card-total-closed"]');
     await expect(closedCard).toBeVisible();
@@ -153,9 +156,19 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
       String(metrics.unassignedCount)
     );
 
+    // Query DB for David Lee's actual assigned tickets count
+    const david = await prisma.user.findUnique({
+      where: { email: "david.lee@toktickit.com" },
+    });
+    expect(david).not.toBeNull();
+    const expectedMyAssigned = await prisma.ticket.count({
+      where: { ownerId: david!.id },
+    });
+
     await expect(page.locator('[data-testid="kpi-card-my-assigned"]')).toBeVisible();
-    const myAssignedText = await page.locator('[data-testid="kpi-count-my-assigned"]').innerText();
-    expect(Number(myAssignedText)).toBeGreaterThanOrEqual(0);
+    await expect(page.locator('[data-testid="kpi-count-my-assigned"]')).toHaveText(
+      String(expectedMyAssigned)
+    );
 
     await expect(page.locator('[data-testid="kpi-card-in-progress"]')).toBeVisible();
     await expect(page.locator('[data-testid="kpi-count-in-progress"]')).toHaveText(
@@ -177,8 +190,14 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
       String(metrics.recentlyResolved)
     );
 
+    const totalMinutes = metrics.totalTimeSpentMinutes;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const expectedLaborTime =
+      totalMinutes <= 0 ? "0h 00m" : `${hours}h ${String(minutes).padStart(2, "0")}m`;
+
     await expect(page.locator('[data-testid="kpi-card-total-time"]')).toBeVisible();
-    await expect(page.locator('[data-testid="kpi-count-total-time"]')).toBeVisible();
+    await expect(page.locator('[data-testid="kpi-count-total-time"]')).toHaveText(expectedLaborTime);
 
     // 4. Assert Admin-only User Accounts card is strictly ABSENT for IT Staff
     expect(await page.locator('[data-testid="admin-user-summary-card"]').count()).toBe(0);
@@ -188,12 +207,32 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
     await page.locator('[data-testid="kpi-card-unassigned"]').click();
     await expect(page).toHaveURL(/\/staff\/queue\?owner=UNASSIGNED/);
     await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
+    if (metrics.unassignedCount > 0) {
+      const ownerCells = page.locator(
+        'tbody tr[data-testid^="ticket-row-"] [data-testid="queue-owner"]'
+      );
+      const count = await ownerCells.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        expect(await ownerCells.nth(i).innerText()).toMatch(/Unassigned/i);
+      }
+    }
 
     // 5b. My Assigned -> /staff/queue?owner=MY_TICKETS
     await page.goto("/staff/dashboard");
     await page.locator('[data-testid="kpi-card-my-assigned"]').click();
     await expect(page).toHaveURL(/\/staff\/queue\?owner=MY_TICKETS/);
     await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
+    if (expectedMyAssigned > 0) {
+      const ownerCells = page.locator(
+        'tbody tr[data-testid^="ticket-row-"] [data-testid="queue-owner"]'
+      );
+      const count = await ownerCells.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        expect(await ownerCells.nth(i).innerText()).toMatch(/David Lee/i);
+      }
+    }
 
     // 5c. In Progress -> /staff/queue?status=IN_PROGRESS
     await page.goto("/staff/dashboard");
@@ -214,6 +253,14 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
     await page.locator('[data-testid="kpi-card-waiting-requester"]').click();
     await expect(page).toHaveURL(/\/staff\/queue\?status=WAITING_FOR_REQUESTER/);
     await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
+    if (metrics.waitingForRequester > 0) {
+      const rows = page.locator('tbody tr[data-testid^="ticket-row-"] .zg-status-badge');
+      const count = await rows.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        expect(await rows.nth(i).innerText()).toMatch(/WAITING/i);
+      }
+    }
 
     // 5e. Total Open -> /staff/queue?status=NEW,OPEN
     await page.goto("/staff/dashboard");
@@ -234,6 +281,15 @@ test.describe("Lab 04 Issue 25: Multi-Persona Dashboards, Drill-Downs & Accessib
     await page.locator('[data-testid="kpi-card-recently-resolved"]').click();
     await expect(page).toHaveURL(/status=RESOLVED/);
     await expect(page).toHaveURL(/resolvedWithinDays=7/);
+    await expect(page.locator('[data-testid="staff-ticket-table"]')).toBeVisible();
+    if (metrics.recentlyResolved > 0) {
+      const rows = page.locator('tbody tr[data-testid^="ticket-row-"] .zg-status-badge');
+      const count = await rows.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        expect(await rows.nth(i).innerText()).toMatch(/RESOLVED/i);
+      }
+    }
 
     // 6. Verify Category and Priority Breakdowns render
     await page.goto("/staff/dashboard");

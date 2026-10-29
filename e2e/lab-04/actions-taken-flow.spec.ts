@@ -16,12 +16,12 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     page.on("console", (msg) => {
       if (msg.type() === "error") {
         const text = msg.text();
-        // Allow expected 409 responses from API in concurrency test
-        if (
-          !text.includes("409") &&
-          !text.includes("STALE_ACTION_CONFLICT") &&
-          !text.includes("Failed to load resource")
-        ) {
+        // Allow ONLY the expected 409 conflict network response in concurrency test
+        const isExpected409 =
+          text.includes("409") ||
+          text.includes("STALE_ACTION_CONFLICT") ||
+          (text.includes("Failed to load resource") && text.includes("409"));
+        if (!isExpected409) {
           consoleErrors.push(text);
         }
       }
