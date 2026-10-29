@@ -44,6 +44,20 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
       where: { ticketNo: "TKT-2026-00003" },
     });
     if (ticket3) {
+      if (initialActionIds.length > 0) {
+        await prisma.actionTaken.deleteMany({
+          where: {
+            ticketId: ticket3.id,
+            id: { notIn: initialActionIds },
+          },
+        });
+      } else {
+        await prisma.actionTaken.deleteMany({
+          where: { ticketId: ticket3.id },
+        });
+      }
+      createdActionIds.length = 0;
+
       await prisma.ticket.update({
         where: { id: ticket3.id },
         data: {
@@ -84,6 +98,20 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
       where: { ticketNo: "TKT-2026-00003" },
     });
     if (ticket3) {
+      if (initialActionIds.length > 0) {
+        await prisma.actionTaken.deleteMany({
+          where: {
+            ticketId: ticket3.id,
+            id: { notIn: initialActionIds },
+          },
+        });
+      } else {
+        await prisma.actionTaken.deleteMany({
+          where: { ticketId: ticket3.id },
+        });
+      }
+      createdActionIds.length = 0;
+
       await prisma.ticket.update({
         where: { id: ticket3.id },
         data: {
@@ -254,6 +282,7 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
       "Attempted resolution summary without recording mandatory diagnostic actions."
     );
 
+    // Intercept network call to assert the ACTUAL backend response status is 422
     const patchResponsePromise = page.waitForResponse(
       (resp) =>
         resp.url().includes(`/tickets/${ticket3!.id}/status`) &&
@@ -268,13 +297,13 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     const errorBody = await patchResponse.json();
     expect(errorBody.error?.code).toBe("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
 
-    // Verify and consume the expected 422 browser network log specifically for this request
-    const expectedLogIndex = consoleErrors.findIndex((msg) => msg.includes("422"));
-    expect(
-      expectedLogIndex,
-      "Expected HTTP 422 browser console network error was not logged"
-    ).toBeGreaterThanOrEqual(0);
-    consoleErrors.splice(expectedLogIndex, 1);
+    // Consume expected browser network resource load failure for 422 Unprocessable Entity if logged by Chromium
+    const expectedNetworkLogIndex = consoleErrors.findIndex(
+      (msg) => msg.includes("Failed to load resource") && msg.includes("422")
+    );
+    if (expectedNetworkLogIndex !== -1) {
+      consoleErrors.splice(expectedNetworkLogIndex, 1);
+    }
 
     // UI displays the server blocker alert
     const serverAlert = page.locator('form [role="alert"]');

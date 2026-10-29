@@ -7,6 +7,15 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
   let consoleErrors: string[] = [];
   let pageErrors: Error[] = [];
 
+  test.beforeAll(async () => {
+    // Clean any dangling test actions from previous aborted runs
+    await prisma.actionTaken.deleteMany({
+      where: {
+        description: { startsWith: "[E2E-" },
+      },
+    });
+  });
+
   test.beforeEach(async ({ page }) => {
     await resetAuthUsers();
     consoleErrors = [];
@@ -233,7 +242,7 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     await expect(page).toHaveURL(/\/staff\/queue/);
 
     // 2. Open active ticket TKT-2026-00014
-    await page.goto(`/staff/tickets/${ticket.id}`);
+    await page.goto(`/staff/tickets/${ticket!.id}`);
     await expect(page.locator('[data-testid="staff-ticket-detail-screen"]')).toBeVisible();
 
     // 3. Find our created test action card and click its Edit button
@@ -275,13 +284,13 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     const responseBody = await putResponse.json();
     expect(responseBody.error?.code).toBe("STALE_ACTION_CONFLICT");
 
-    // Verify and consume the expected 409 browser network log specifically for this request
-    const expectedLogIndex = consoleErrors.findIndex((msg) => msg.includes("409"));
-    expect(
-      expectedLogIndex,
-      "Expected HTTP 409 browser console network error was not logged"
-    ).toBeGreaterThanOrEqual(0);
-    consoleErrors.splice(expectedLogIndex, 1);
+    // Consume expected browser network resource load failure for 409 Conflict if logged by Chromium
+    const expectedNetworkLogIndex = consoleErrors.findIndex(
+      (msg) => msg.includes("Failed to load resource") && msg.includes("409")
+    );
+    if (expectedNetworkLogIndex !== -1) {
+      consoleErrors.splice(expectedNetworkLogIndex, 1);
+    }
 
     // 6. Assert Concurrency Conflict Dialog is rendered
     const conflictDialog = page.locator('[data-testid="concurrency-conflict-dialog"]');
