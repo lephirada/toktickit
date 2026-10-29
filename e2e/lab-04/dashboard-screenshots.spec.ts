@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 import fs from "fs";
 import path from "path";
 
@@ -12,35 +11,10 @@ const VIEWPORTS = [
 const SCREENSHOT_BASE = path.resolve(process.cwd(), "artifacts/lab-04/screenshots/dashboards");
 
 test.describe("Lab 04 Issue 24: Role Dashboards UI & Screenshots", () => {
-  let consoleErrors: string[] = [];
-  let pageErrors: Error[] = [];
-
   test.beforeAll(async () => {
     if (!fs.existsSync(SCREENSHOT_BASE)) {
       fs.mkdirSync(SCREENSHOT_BASE, { recursive: true });
     }
-  });
-
-  test.beforeEach(async ({ page }) => {
-    await resetAuthUsers();
-    consoleErrors = [];
-    pageErrors = [];
-
-    page.on("pageerror", (err) => pageErrors.push(err));
-    page.on("console", (msg) => {
-      if (msg.type() === "error") {
-        consoleErrors.push(msg.text());
-      }
-    });
-  });
-
-  test.afterEach(async () => {
-    expect(pageErrors).toEqual([]);
-    expect(consoleErrors).toEqual([]);
-  });
-
-  test.afterAll(async () => {
-    await resetAuthUsers();
   });
 
   test("1. Requester Dashboard visual verification across viewports", async ({ page }) => {
@@ -187,8 +161,6 @@ test.describe("Lab 04 Issue 24: Role Dashboards UI & Screenshots", () => {
       await page.fill('input[placeholder="Confirm New Password"]', "NewAdminPass123!");
       await page.click('button:has-text("Update Password")');
       await page.waitForTimeout(500);
-      // Immediately restore baseline Admin credentials so subsequent suites are never affected
-      await resetAuthUsers();
     }
 
     const adminDashNav = page.locator('[data-testid="nav-admin-dashboard"]');

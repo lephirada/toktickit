@@ -59,10 +59,10 @@ Peer review logs and PR evaluation verdicts are tracked in [`docs/lab-04/reviewe
 
 - **Deliverable Path:** [`docs/lab-04/tests.md`](tests.md)
 - **Test Traceability & Execution Summary:**
-  - **Backend API & Unit Tests:** Verified across `server/tests/lab-04/` covering migration safety (8/8), Actions Taken endpoints (37/37), concurrency conflict detection, Resolution Gate boundary suites (24/24), and dashboard calculations (30/30). Full server regression suite: 351/351 passing.
-  - **Frontend Component Tests:** Verified across `client/tests/lab-04/` covering modal forms, concurrency conflict comparison dialogs, dashboard KPI cards, and routing (71/71). Full client regression suite: 182/182 passing.
-  - **Playwright Browser E2E Tests:** Verified across `e2e/lab-04/` covering multi-persona user journeys, Actions Taken timeline and editing, genuine backend HTTP 409 concurrency conflict handling, server resolution gate enforcement, role-based dashboards, and zero page-level horizontal overflow assertions at 375px viewport (16/16 passing). Lab 3 E2E regression suite: 64/64 passing.
-  - **Zero Regressions:** 100% passing automated test execution across all suites combined (613/613 passing tests) and 0 production build errors.
+  - **Backend API & Unit Tests:** Planned across `server/tests/lab-04/` covering migration safety, Actions Taken endpoints, concurrency conflict detection, Resolution Gate boundary suites (all 7 cases), and dashboard calculations.
+  - **Frontend Component Tests:** Planned across `client/tests/lab-04/` covering modal forms, concurrency conflict comparison dialogs, and dashboard KPI cards.
+  - **Playwright Browser E2E Tests:** Planned across `e2e/lab-04/` covering multi-persona user journeys and zero page-level horizontal overflow assertions across 3 viewports.
+  - **Zero Regressions:** 100% passing automated test execution across pre-existing Lab 1, Lab 2, and Lab 3 suites.
 
 ---
 

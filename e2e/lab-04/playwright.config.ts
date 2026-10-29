@@ -13,10 +13,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-        deviceScaleFactor: 2,
-      },
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
   webServer: [

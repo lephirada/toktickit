@@ -454,8 +454,7 @@ body {
 
 /* Accessibility Focus Ring Standard for Interactive Links & Standalone Buttons */
 a:focus-visible,
-button:focus-visible:not(.zg-password-toggle-btn),
-[role="button"]:focus-visible {
+button:focus-visible:not(.zg-password-toggle-btn) {
   outline: 2px solid var(--zg-secondary) !important;
   outline-offset: 2px;
 }
