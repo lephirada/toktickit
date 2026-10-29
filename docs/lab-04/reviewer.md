@@ -15,7 +15,7 @@
 | `[PR #53]`              | `feature/21-ticket-resolution-gate`     | `[Request Changes -> Approved]` |
 | `[PR #55]`              | `feature/22-dashboard-backend-apis`     | `[Approved]`                    |
 | `[PR #56]`              | `feature/23-actions-taken-ui`           | `[Approved]`                    |
-| `[PR #57]`              | `feature/24-role-dashboards-ui`         | `[Planned]`                     |
+| `[PR #57]`              | `feature/24-role-dashboards-ui`         | `[Approved]`                    |
 | `[PR #... Placeholder]` | `feature/25-e2e-regression-hardening`   | `[Planned]`                     |
 | `[PR #... Placeholder]` | `feature/26-final-submission-artifacts` | `[Planned]`                     |
 

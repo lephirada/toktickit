@@ -891,13 +891,16 @@ Running 16 tests using 1 worker
 
 #### 2. Key E2E Hardening Assertions
 
+- **Seed Data Protection & Targeted ID Cleanup (Blocker 1 Fix):** In `actions-taken-flow.spec.ts`, editing tests create an isolated, dedicated test action rather than mutating seed data. Teardown collects `createdActionIds` and deletes exclusively via `where: { id: { in: createdActionIds } }`, guaranteeing historical seed records are strictly preserved.
+- **Fail-Fast Cleanup & Postcondition Verification (Blocker 2 Fix):** Silent error catches were eliminated from both `actions-taken-flow.spec.ts` and `ticket-resolution.spec.ts`. Postconditions verify in DB that created test records are deleted (`remaining === 0`) and modified tickets are restored (`resolutionIndicated === false`, `actionsCount === 0`, `status === 'NEW'`).
 - **Real Backend HTTP 409 Concurrency:** In `actions-taken-flow.spec.ts`, an out-of-band direct database modification simulates concurrent edit by another staff member. The subsequent browser submit triggers genuine backend HTTP 409 `STALE_ACTION_CONFLICT`, verifying the `ConcurrencyConflictDialog` displays server vs local differences, copy action works, and clicking reload refreshes the modal with server values.
 - **Resolution Gate Server Enforcement:** In `ticket-resolution.spec.ts`, Staff attempting to transition an `IN_PROGRESS` ticket with 0 actions to `RESOLVED` receives HTTP 422 with `ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`, and the UI displays the error banner without closing the modal. Once an Action Taken is logged, the same transition succeeds with HTTP 200, advancing status to `RESOLVED`.
 - **Advisory Requester Confirmation:** In `ticket-resolution.spec.ts`, Requester clicking 'Mark Resolved' confirms that `resolutionIndicated = true` is strictly advisory and ticket status remains `WAITING_FOR_REQUESTER` or `IN_PROGRESS`.
-- **Multi-Persona Role Dashboards & Drill-Downs:** In `dashboards.spec.ts`, Requester, IT Staff, and Administrator access contracts and URL deep links are strictly verified against role permissions.
+- **Exact Dashboard Metrics & Drill-Down Queue Verification (Major 3 Fix):** In `dashboards.spec.ts`, Requester KPI counts are verified against authentic DB totals, and all 7 Staff KPI counts match `/api/staff/dashboard` response values. Drill-down navigation tests assert that queue table rows render with statuses matching filter parameters.
+- **Zero Console Errors & Page Errors Guardrails (Major 4 Fix):** Automated listeners for `pageerror` and `console.error` monitor every E2E workflow, asserting zero unexpected browser runtime exceptions or unhandled rejections.
 - **Measurable Accessibility & Responsive Checks:**
   - Zero page-level horizontal overflow confirmed at 375px mobile viewport across all dashboard views (`document.documentElement.scrollWidth <= window.innerWidth`).
-  - Visible keyboard focus rings verified via computed style evaluation (`outline: 2px solid rgb(11, 122, 70)`).
+  - Real sequential keyboard `Tab` navigation through interactive elements asserting focus sequence, computed focus rings (`outline: 2px solid rgb(11, 122, 70)`), and `Enter` activation.
   - Status indicators verified to contain explicit badge text, ensuring information is never conveyed by color alone.
 
 #### 3. Full Regression Suite Summary
