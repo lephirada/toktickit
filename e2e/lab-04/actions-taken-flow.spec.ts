@@ -6,6 +6,7 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
   const createdActionIds: number[] = [];
   let consoleErrors: string[] = [];
   let pageErrors: Error[] = [];
+  let allowedNetworkErrorStatuses: number[] = [];
 
   test.beforeAll(async () => {
     // Clean any dangling test actions from previous aborted runs
@@ -20,6 +21,7 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     await resetAuthUsers();
     consoleErrors = [];
     pageErrors = [];
+    allowedNetworkErrorStatuses = [];
 
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
@@ -31,7 +33,13 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
 
   test.afterEach(async () => {
     expect(pageErrors).toEqual([]);
-    expect(consoleErrors).toEqual([]);
+    const unexpectedErrors = consoleErrors.filter((msg) => {
+      const isAllowedNetworkLog = allowedNetworkErrorStatuses.some(
+        (status) => msg.includes("Failed to load resource") && msg.includes(String(status))
+      );
+      return !isAllowedNetworkLog;
+    });
+    expect(unexpectedErrors).toEqual([]);
   });
 
   test.afterAll(async () => {
@@ -284,13 +292,8 @@ test.describe("Lab 04 Issue 25: Actions Taken Flow & Concurrency E2E Suite", () 
     const responseBody = await putResponse.json();
     expect(responseBody.error?.code).toBe("STALE_ACTION_CONFLICT");
 
-    // Consume expected browser network resource load failure for 409 Conflict if logged by Chromium
-    const expectedNetworkLogIndex = consoleErrors.findIndex(
-      (msg) => msg.includes("Failed to load resource") && msg.includes("409")
-    );
-    if (expectedNetworkLogIndex !== -1) {
-      consoleErrors.splice(expectedNetworkLogIndex, 1);
-    }
+    // Verified authentic 409 conflict response; allow corresponding browser network failure log in afterEach
+    allowedNetworkErrorStatuses.push(409);
 
     // 6. Assert Concurrency Conflict Dialog is rendered
     const conflictDialog = page.locator('[data-testid="concurrency-conflict-dialog"]');

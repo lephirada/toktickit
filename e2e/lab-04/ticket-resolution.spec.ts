@@ -7,6 +7,7 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
   let initialActionIds: number[] = [];
   let consoleErrors: string[] = [];
   let pageErrors: Error[] = [];
+  let allowedNetworkErrorStatuses: number[] = [];
 
   test.beforeAll(async () => {
     const ticket3 = await prisma.ticket.findUnique({
@@ -25,6 +26,7 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     await resetAuthUsers();
     consoleErrors = [];
     pageErrors = [];
+    allowedNetworkErrorStatuses = [];
 
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
@@ -72,7 +74,13 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
 
   test.afterEach(async () => {
     expect(pageErrors).toEqual([]);
-    expect(consoleErrors).toEqual([]);
+    const unexpectedErrors = consoleErrors.filter((msg) => {
+      const isAllowedNetworkLog = allowedNetworkErrorStatuses.some(
+        (status) => msg.includes("Failed to load resource") && msg.includes(String(status))
+      );
+      return !isAllowedNetworkLog;
+    });
+    expect(unexpectedErrors).toEqual([]);
   });
 
   test.afterAll(async () => {
@@ -297,13 +305,8 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     const errorBody = await patchResponse.json();
     expect(errorBody.error?.code).toBe("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
 
-    // Consume expected browser network resource load failure for 422 Unprocessable Entity if logged by Chromium
-    const expectedNetworkLogIndex = consoleErrors.findIndex(
-      (msg) => msg.includes("Failed to load resource") && msg.includes("422")
-    );
-    if (expectedNetworkLogIndex !== -1) {
-      consoleErrors.splice(expectedNetworkLogIndex, 1);
-    }
+    // Verified authentic 422 resolution gate response; allow corresponding browser network failure log in afterEach
+    allowedNetworkErrorStatuses.push(422);
 
     // UI displays the server blocker alert
     const serverAlert = page.locator('form [role="alert"]');
