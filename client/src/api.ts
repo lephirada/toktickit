@@ -921,7 +921,7 @@ export async function updateTicketStatus(
   ticketId: number,
   payload: UpdateStatusPayload
 ): Promise<{ data: StaffTicketDetailData }> {
-  const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/status`, {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
