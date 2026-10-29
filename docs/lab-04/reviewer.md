@@ -16,7 +16,7 @@
 | `[PR #55]`              | `feature/22-dashboard-backend-apis`     | `[Approved]`                    |
 | `[PR #56]`              | `feature/23-actions-taken-ui`           | `[Approved]`                    |
 | `[PR #57]`              | `feature/24-role-dashboards-ui`         | `[Approved]`                    |
-| `[PR #... Placeholder]` | `feature/25-e2e-regression-hardening`   | `[Planned]`                     |
+| `[PR #58]`              | `feature/25-e2e-regression-hardening`   | `[Request Changes -> Approved]` |
 | `[PR #... Placeholder]` | `feature/26-final-submission-artifacts` | `[Planned]`                     |
 
 ---
@@ -272,10 +272,23 @@
 - **Branch:** `feature/25-e2e-regression-hardening`
 - **Reviewer comment I received:**
 
-  > <!-- Placeholder for partner review comments -->
+  > **Potential E2E Test Isolation Issue: Admin Password Mutation**
+
+  In dashboard-screenshots.spec.ts, the “Admin Dashboard with User Accounts Summary Card” test conditionally changes the Admin password from Admin123! to NewAdminPass123! when the change-password modal is visible. However, the test does not appear to restore the original password afterward, while dashboards.spec.ts subsequently relies on Admin123! to log in as Admin.
+
+  If the modal is displayed, this test may leave the shared test account in a modified state and cause subsequent tests to fail, particularly in a fresh or differently initialized test environment.
+
+  Please ensure the Admin account state is isolated and deterministic—for example, by resetting the password after the test or using a controlled test fixture—so the E2E suite does not depend on persistent account state from previous test runs.
+
+  > Thanks for addressing the Admin password state isolation issue.
+
+  I verified the updated dashboard-screenshots.spec.ts and the resetAuthUsers() helper. The Admin account is now reset before each test, immediately after the password-change flow when applicable, and again after the suite completes. The helper restores the expected Admin123! credentials and Admin account state, preventing password changes from leaking into subsequent E2E tests.
+
+  The latest CI run also completed successfully. This resolves my previous concern, and I have no further blocking comments on this issue.
 
 - **How I responded:**
-  > <!-- Placeholder for author response -->
+  > Thank you for the thorough verification and approval! I appreciate you taking the time to test the state isolation and confirm the fix.
+  > I have updated `docs/lab-04/reviewer.md` and `docs/lab-04/evidence.md` with this review record, and PR #58 is now ready to merge.
 
 ## Pull Requests I reviewed for my partner
 
@@ -322,3 +335,62 @@
 
 - **Partner's response:**
   > Thank you for the review and approval! All requirements—including IT Staff and Administrator creation/editing, Requester read-only presentation, follow-up validation, status transition matrix rules, and optimistic concurrency handling with form state preservation—are fully implemented and verified with automated tests and clean CI runs. PR #62 is ready to merge into lab4-staging.
+
+### PR - Issue 24 : Role-Appropriate Dashboard Metrics APIs (Backend)
+
+- **My comment:**
+
+  > The dashboard APIs look good to me. The endpoints enforce role-based access, keep requester ticket data isolated, and return the required metrics and recent tickets. The performance smoke tests cover all three dashboard endpoints and the Actions list endpoint. The CI checks also pass, including the server tests and build. I approved.
+
+- **Partner's response:**
+  > Thank you for the review and approval! All requirements for role-appropriate dashboard metrics APIs—including strict data isolation for Requesters, operational queue breakdowns for IT Staff, supervisory system metrics for Administrators, and performance smoke benchmarks—are verified and passing with clean CI checks. PR #63 is ready to merge into lab4-staging.
+
+### PR - Issue 25 : Role-Appropriate Dashboards UI & Drill-Down (Frontend)
+
+- **My comment:**
+
+  > The dashboard components, navigation, and existing test coverage look good. However, DesignSystemTokens.test.tsx currently checks CSS source text and DOM class presence rather than verifying computed CSS variables and actual component styling as required by AC-17 and UI-STYLE-01. The responsive audit is deferred to Issue 26, so the zero-clipping requirement across Desktop, Tablet, and Mobile is not yet verified. Please strengthen the design-token tests and clarify how the responsive acceptance criterion will be verified before approval.
+
+- **Partner's response:**
+
+  > Thank you for the detailed feedback! Here are the clarifications and updates for this PR:
+
+  Complete 8-Status Lifecycle Badge Assertions: Extended DesignSystemTokens.test.tsx to assert all 8 status badges, verifying computed styling on .zen-badge-reopened (color: rgb(29, 78, 216) and display: inline-flex). Also updated getStatusBadge across AdminDashboard.tsx, StaffDashboard.tsx, and RequesterDashboard.tsx to map REOPENED to .zen-badge-reopened.
+
+  Responsive Layout Verification: Responsive CSS layouts and media queries across Desktop (1280px), Tablet (768px), and Mobile (375px) have been verified with zero horizontal overflow (scrollWidth === clientWidth). Per issues-plan.md, component-level responsive styling is implemented in this PR (Issue 25), while automated Playwright browser test automation (E2E-04) and screenshot artifacts generation are formally allocated to Issue 26 (#57).
+
+  Vitest Suites Status: All four required Vitest test files (RequesterDashboard.test.tsx, StaffDashboard.test.tsx, AdminDashboard.test.tsx, and DesignSystemTokens.test.tsx) pass 100% (56/56 tests passing on the latest commit).
+
+- **My comment:**
+
+  > The updated design-token tests are a good improvement, and the latest CI checks are passing. One small gap remains: the computed-style test covers only 7 status badges and does not include zen-badge-reopened. Please extend the assertions to cover all 8 statuses and their relevant styling. Also, since zero clipping across Desktop, Tablet, and Mobile is still deferred to Issue 26, please confirm whether this acceptance criterion will be verified before approval or formally moved out of scope for this PR.
+
+- **Partner's response:**
+
+  > ### 1. Design System & Computed Style Assertions (`AC-17`, `UI-STYLE-01`)
+  - **Full 8-Status Badge Coverage**: Strengthened `DesignSystemTokens.test.tsx` using `window.getComputedStyle()` to verify actual computed properties—including `color`, `background-color`, `border`, `border-radius: 9999px`, and font sizing—across all 8 status badges (`NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`).
+  - **Private vs Shared Visual Cues (`ui-spec.md §7.4`)**: Added computed style assertions for operational accents and internal staff framing:
+    - Warning Accent (`.zg-metric-card.warning-accent`): Warm amber border-left `4px solid var(--zg-warning)` (`#D97706`).
+    - Active Accent (`.zg-metric-card.active-accent`): Primary green border-left `4px solid var(--zg-primary)` (`#006B3C`).
+    - Danger Accent (`.zg-metric-card.danger-accent`): Critical red border-left `4px solid var(--zg-danger)` (`#DC2626`).
+    - Staff Internal Note Callout (`.zen-callout-warning`): `4px solid var(--color-warning)`, light amber tint background (`#FFFBEB`), and high-contrast text (`#78350F`).
+
+  ### 2. Responsive Invariant Verification & Scope Separation (`AC-17`)
+  - **Automated Viewport Invariant Tests**: To verify zero-clipping invariants directly within this PR, added reproducible layout tests in `DesignSystemTokens.test.tsx` covering Desktop ($1280\text{px}$), Tablet ($768\text{px}$), and Mobile ($375\text{px}$ / $440\text{px}$):
+    - Verifies `.dashboard-container` enforces `overflow-x: hidden` and `max-width: 1560px`.
+    - Verifies `.table-responsive` enforces `overflow-x: auto` and `width: 100%`, isolating table horizontal scrolling and preventing page-level scroll blowout ($scrollWidth === clientWidth$).
+    - Verifies responsive media queries collapse multi-column grids cleanly into `1fr` stacks with zero fixed-pixel traps on mobile.
+    - Verifies interactive touch targets (quick action buttons, status pills) satisfy the minimum $\ge 44\text{px}$ height requirement (Apple HIG / WCAG 2.1 AAA).
+  - **Formal Scope Separation (Issue 25 vs Issue 26)**: Headless browser Playwright audits and screenshot artifact generation are formally scheduled under **Issue #57 (Issue 26: End-to-End Testing, Responsive Audit & Screenshot Artifacts)** per `docs/lab-04/issues-plan.md` and the AI Verification Note (_"Do not fail verification on pending PR merge or missing Playwright E2E files"_).
+
+  ### 3. Latest Test & Build Verification
+  - **Dashboard Vitest Suites**: 4/4 suites passed, 61/61 tests passed (`RequesterDashboard`, `StaffDashboard`, `AdminDashboard`, `DesignSystemTokens`).
+  - **Full Client Test Suite**: 20/20 files passed, 162/162 tests passed (100%).
+  - **TypeScript Production Build**: `npm run build` (`tsc && vite build`) passed with 0 errors.
+
+- **My comment:**
+
+  > Thanks for addressing the feedback and clarifying the scope between Issue #25 and Issue #26. The updated design-token tests, dashboard functionality, and CI results look good. I approve this PR, with the full browser-based responsive audit and screenshot evidence to be completed in Issue #57.
+
+- **Partner's response:**
+  > Thank you for the review and approval! I have updated docs/lab-04/reviewer.md with the peer review record. All CI checks are green, so I am proceeding to merge this PR into lab4-staging.
