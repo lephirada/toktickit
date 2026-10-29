@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { getPrisma } from "../lab-03/helpers/db-helper.js";
+import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 import fs from "fs";
 import path from "path";
 
@@ -35,6 +35,7 @@ test.describe("Lab 04 Issue 23: Responsive Layout Overflow & Screenshots", () =>
   });
 
   test.beforeEach(async ({ page }) => {
+    await resetAuthUsers();
     consoleErrors = [];
     pageErrors = [];
     allowedNetworkLogCount = 0;
@@ -59,6 +60,10 @@ test.describe("Lab 04 Issue 23: Responsive Layout Overflow & Screenshots", () =>
       msg.includes("Failed to load resource")
     );
     expect(networkLogs.length).toBeLessThanOrEqual(allowedNetworkLogCount);
+  });
+
+  test.afterAll(async () => {
+    await resetAuthUsers();
   });
 
   test("1. Staff Actions Timeline, Log Modal, and Concurrency Conflict across viewports", async ({

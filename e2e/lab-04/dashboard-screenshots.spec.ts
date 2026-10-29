@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 import fs from "fs";
 import path from "path";
 
@@ -21,6 +22,7 @@ test.describe("Lab 04 Issue 24: Role Dashboards UI & Screenshots", () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    await resetAuthUsers();
     consoleErrors = [];
     pageErrors = [];
 
@@ -35,6 +37,10 @@ test.describe("Lab 04 Issue 24: Role Dashboards UI & Screenshots", () => {
   test.afterEach(async () => {
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
+  });
+
+  test.afterAll(async () => {
+    await resetAuthUsers();
   });
 
   test("1. Requester Dashboard visual verification across viewports", async ({ page }) => {
@@ -181,6 +187,8 @@ test.describe("Lab 04 Issue 24: Role Dashboards UI & Screenshots", () => {
       await page.fill('input[placeholder="Confirm New Password"]', "NewAdminPass123!");
       await page.click('button:has-text("Update Password")');
       await page.waitForTimeout(500);
+      // Immediately restore baseline Admin credentials so subsequent suites are never affected
+      await resetAuthUsers();
     }
 
     const adminDashNav = page.locator('[data-testid="nav-admin-dashboard"]');
