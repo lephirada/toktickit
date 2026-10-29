@@ -11,10 +11,30 @@ const VIEWPORTS = [
 const SCREENSHOT_BASE = path.resolve(process.cwd(), "artifacts/lab-04/screenshots/dashboards");
 
 test.describe("Lab 04 Issue 24: Role Dashboards UI & Screenshots", () => {
+  let consoleErrors: string[] = [];
+  let pageErrors: Error[] = [];
+
   test.beforeAll(async () => {
     if (!fs.existsSync(SCREENSHOT_BASE)) {
       fs.mkdirSync(SCREENSHOT_BASE, { recursive: true });
     }
+  });
+
+  test.beforeEach(async ({ page }) => {
+    consoleErrors = [];
+    pageErrors = [];
+
+    page.on("pageerror", (err) => pageErrors.push(err));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        consoleErrors.push(msg.text());
+      }
+    });
+  });
+
+  test.afterEach(async () => {
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 
   test("1. Requester Dashboard visual verification across viewports", async ({ page }) => {

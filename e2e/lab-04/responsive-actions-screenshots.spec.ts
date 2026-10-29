@@ -14,6 +14,10 @@ const VIEWPORTS = [
 const SCREENSHOT_BASE = path.resolve(process.cwd(), "artifacts/lab-04/screenshots");
 
 test.describe("Lab 04 Issue 23: Responsive Layout Overflow & Screenshots", () => {
+  let consoleErrors: string[] = [];
+  let pageErrors: Error[] = [];
+  let allowedNetworkLogCount = 0;
+
   test.beforeAll(async () => {
     // Ensure screenshot directories exist
     const dirs = [
@@ -28,6 +32,33 @@ test.describe("Lab 04 Issue 23: Responsive Layout Overflow & Screenshots", () =>
         fs.mkdirSync(fullDir, { recursive: true });
       }
     }
+  });
+
+  test.beforeEach(async ({ page }) => {
+    consoleErrors = [];
+    pageErrors = [];
+    allowedNetworkLogCount = 0;
+
+    page.on("pageerror", (err) => pageErrors.push(err));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        consoleErrors.push(msg.text());
+      }
+    });
+  });
+
+  test.afterEach(async () => {
+    expect(pageErrors).toEqual([]);
+
+    const unexpectedConsoleErrors = consoleErrors.filter(
+      (msg) => !msg.includes("Failed to load resource")
+    );
+    expect(unexpectedConsoleErrors).toEqual([]);
+
+    const networkLogs = consoleErrors.filter((msg) =>
+      msg.includes("Failed to load resource")
+    );
+    expect(networkLogs.length).toBeLessThanOrEqual(allowedNetworkLogCount);
   });
 
   test("1. Staff Actions Timeline, Log Modal, and Concurrency Conflict across viewports", async ({
@@ -147,6 +178,7 @@ test.describe("Lab 04 Issue 23: Responsive Layout Overflow & Screenshots", () =>
         }
       });
 
+      allowedNetworkLogCount = 2;
       for (const vp of [VIEWPORTS[0], VIEWPORTS[2]]) {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.waitForTimeout(200);
