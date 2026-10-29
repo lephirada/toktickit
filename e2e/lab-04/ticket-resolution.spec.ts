@@ -1,16 +1,11 @@
 import { test, expect } from "@playwright/test";
 import { getPrisma, resetAuthUsers } from "../lab-03/helpers/db-helper.js";
 
-interface CapturedConsoleError {
-  text: string;
-  url: string;
-}
-
 test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E Suite", () => {
   const prisma = getPrisma();
   const createdActionIds: number[] = [];
   let initialActionIds: number[] = [];
-  let consoleErrors: CapturedConsoleError[] = [];
+  let consoleErrors: string[] = [];
   let pageErrors: Error[] = [];
 
   test.beforeAll(async () => {
@@ -34,10 +29,7 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     page.on("pageerror", (err) => pageErrors.push(err));
     page.on("console", (msg) => {
       if (msg.type() === "error") {
-        consoleErrors.push({
-          text: msg.text(),
-          url: msg.location()?.url || "",
-        });
+        consoleErrors.push(msg.text());
       }
     });
 
@@ -277,14 +269,12 @@ test.describe("Lab 04 Issue 25: Advisory Resolution & Server Resolution Gate E2E
     expect(errorBody.error?.code).toBe("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
 
     // Verify and consume the expected 422 browser network log specifically for this request
-    const expectedLogIndex = consoleErrors.findIndex(
-      (err) =>
-        err.text.includes("422") &&
-        (err.url.includes(`/tickets/${ticket3!.id}/status`) || err.text.includes(`/tickets/${ticket3!.id}/status`))
-    );
-    if (expectedLogIndex !== -1) {
-      consoleErrors.splice(expectedLogIndex, 1);
-    }
+    const expectedLogIndex = consoleErrors.findIndex((msg) => msg.includes("422"));
+    expect(
+      expectedLogIndex,
+      "Expected HTTP 422 browser console network error was not logged"
+    ).toBeGreaterThanOrEqual(0);
+    consoleErrors.splice(expectedLogIndex, 1);
 
     // UI displays the server blocker alert
     const serverAlert = page.locator('form [role="alert"]');
