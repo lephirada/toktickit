@@ -21,7 +21,7 @@
 | **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[https://github.com/lephirada/toktickit/pull/56]` | `[Approved]`  | `[Merged]`   |
 | **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[https://github.com/lephirada/toktickit/pull/57]` | `[Approved]`  | `[Merged]`   |
 | **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Hardening      | `[https://github.com/lephirada/toktickit/pull/58]` | `[Approved]`  | `[Merged]`   |
-| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[https://github.com/lephirada/toktickit/pull/59]` | `[In Review]` | `[Planned]`  |
+| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[https://github.com/lephirada/toktickit/pull/59]` | `[Approved]`  | `[Merged]`   |
 
 ---
 
