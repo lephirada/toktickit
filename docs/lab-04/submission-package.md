@@ -178,7 +178,7 @@ My main takeaway is that using AI does not mean I can simply give it a task and 
 - **Desktop (1280px):** [`staff-dashboard-1280.png`](../../artifacts/lab-04/screenshots/staff-dashboard/staff-dashboard-1280.png) ($2560 \times 2516$)
 - **Tablet (768px):** [`staff-dashboard-768.png`](../../artifacts/lab-04/screenshots/staff-dashboard/staff-dashboard-768.png) ($1536 \times 3960$)
 - **Mobile (375px):** [`staff-dashboard-375.png`](../../artifacts/lab-04/screenshots/staff-dashboard/staff-dashboard-375.png) ($750 \times 5260$)
-- **Metric Drill-Down Queue:** [`dashboard-drilldown-queue-1280.png`](../../artifacts/lab-04/screenshots/dashboards/dashboard-drilldown-queue-1280.png) ($2560 \times 1800$)
+- **Metric Drill-Down Queue:** [`dashboard-drilldown-queue-1280.png`](../../artifacts/lab-04/screenshots/staff-dashboard/dashboard-drilldown-queue-1280.png) ($2560 \times 1800$)
 - **Empty State Demonstration (1280px):** [`staff-dashboard-empty.png`](../../artifacts/lab-04/screenshots/staff-dashboard/staff-dashboard-empty.png) ($2560 \times 2038$) — Non-destructive browser capture demonstrating `staff-empty-urgent-tickets` ("No urgent P0 tickets currently requiring immediate attention.") and `staff-empty-recent-tickets` ("No recent ticket activity found.") with 0 values across all KPI cards, executed via client API route response interception to protect PostgreSQL seed data integrity.
 
 ---
