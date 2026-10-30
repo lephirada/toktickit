@@ -18,6 +18,7 @@ import {
 } from "../api";
 import { StatusTransitionModal, STATUS_LABELS } from "./StatusTransitionModal";
 import { AttachmentRemovalModal } from "./AttachmentRemovalModal";
+import { ActionsTakenSection } from "./ActionsTakenSection";
 import {
   HomeIcon,
   PaperclipIcon,
@@ -1046,6 +1047,15 @@ export const StaffTicketDetail: React.FC<StaffTicketDetailProps> = ({
           )}
         </div>
       </div>
+
+      {/* Actions Taken Timeline Section */}
+      <ActionsTakenSection
+        ticketId={ticketId}
+        ticketStatus={ticket.status}
+        isStaffOrAdmin={currentUser.role === "IT_STAFF" || currentUser.role === "ADMINISTRATOR"}
+        staffName={currentUser.fullName}
+      />
+
       {/* 4. Discussion & Notes Tabs Card (Full Width) */}
       <div
         className="card border shadow-sm rounded-4 mb-4 bg-white overflow-hidden"

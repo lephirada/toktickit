@@ -23,6 +23,7 @@ import {
   XCircleIcon,
 } from "./icons/index.js";
 import AttachmentRemovalModal from "./AttachmentRemovalModal.js";
+import { ActionsTakenSection } from "./ActionsTakenSection.js";
 
 // Custom SVG Icons designed specifically for Ticket Detail view
 const DetailCalendarIcon = ({ size = 15, className = "" }: { size?: number; className?: string }) => (
@@ -970,6 +971,14 @@ export const TicketDetailScreen: React.FC<TicketDetailScreenProps> = ({
       </div>
         );
       })()}
+
+      {/* Actions Taken Timeline Section */}
+      <ActionsTakenSection
+        ticketId={ticketId}
+        ticketStatus={ticket?.status}
+        isStaffOrAdmin={user?.role === "IT_STAFF" || user?.role === "ADMINISTRATOR"}
+        staffName={user?.fullName}
+      />
 
       {/* 3. Public Comments Thread Card */}
       <div

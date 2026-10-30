@@ -1,0 +1,424 @@
+# Lab 4 — Peer Review Record
+
+**Author:** Phirada Lekpaeng — 67070503491 — GitHub: @lephirada  
+**Peer reviewer:** Penwatsa Saengyenpan — 67070503431 — GitHub: @Phenwatsa
+
+---
+
+## Pull Requests I authored (reviewed by my partner)
+
+| PR         | Branch                                  | Reviewer verdict                |
+| :--------- | :-------------------------------------- | :------------------------------ |
+| `[PR #50]` | `feature/18-lab4-spec-docs`             | `[Request Changes -> Approved]` |
+| `[PR #51]` | `feature/19-database-migration-actions` | `[Approved]`                    |
+| `[PR #52]` | `feature/20-actions-taken-backend`      | `[Request Changes -> Approved]` |
+| `[PR #53]` | `feature/21-ticket-resolution-gate`     | `[Request Changes -> Approved]` |
+| `[PR #55]` | `feature/22-dashboard-backend-apis`     | `[Approved]`                    |
+| `[PR #56]` | `feature/23-actions-taken-ui`           | `[Approved]`                    |
+| `[PR #57]` | `feature/24-role-dashboards-ui`         | `[Approved]`                    |
+| `[PR #58]` | `feature/25-e2e-regression-hardening`   | `[Request Changes -> Approved]` |
+| `[PR #59]` | `feature/26-final-submission-artifacts` | `[Approved]`                    |
+
+---
+
+### PR — Issue 18 (Sprint 4 Documentation and Engineering Contract)
+
+- **Branch:** `feature/18-lab4-spec-docs`
+- **Reviewer comment I received:**
+
+  > I found a few specification issues that should be resolved before implementation:
+
+  resolutionIndicated conflicts with the Acceptance Criteria
+
+  The Acceptance Criteria states that resolutionIndicated = true is strictly advisory and must not alter the ticket status. However, the current specification says that POST /api/tickets/:id/confirm-resolved automatically transitions WAITING_FOR_REQUESTER -> IN_PROGRESS.
+
+  Please align this behavior with the Acceptance Criteria and update the affected references consistently across specification.md, api-spec.md, and tests.md.
+
+  performedAt validation is inconsistent
+
+  BR-06 states that performedAt cannot be future-dated, while the API/UI specifications allow timestamps up to 5 minutes in the future.
+
+  Please define one authoritative rule and apply it consistently across all three specifications before implementation.
+
+  Resolution Gate test coverage needs boundary cases
+
+  The specification requires resolutionSummary to be 10–1000 characters, but the test traceability does not explicitly cover all boundaries.
+
+  Please add planned tests for:
+
+  missing resolutionSummary
+  fewer than 10 characters
+  exactly 10 characters
+  exactly 1000 characters
+  more than 1000 characters
+  actionsCount = 0
+  valid resolution with at least one action
+  Overall, the Sprint 4 documentation is comprehensive and covers the required FR/BR, API contracts, UI behavior, authorization, concurrency, and traceability well. However, the inconsistencies above should be resolved before approval so the specification provides a single, deterministic contract for implementation.
+
+  Verdict: Request Changes
+
+- **How I responded:**
+
+  > Thank you so much for the thorough review! I have addressed all 3 points across the entire documentation suite:
+
+  resolutionIndicated is strictly advisory
+
+  Updated specification.md (FR-06, BR-05, Section 8.3), api-spec.md (Section 6.1), and tests.md (AC-21-09, Section 3, Section 4 BR-05) to strictly enforce that resolutionIndicated = true does NOT alter the ticket status under any circumstance (the current ticket status remains completely unchanged).
+
+  performedAt authoritative rule
+
+  Defined one single rule that performedAt cannot be in the future (performedAt <= now()), rejecting future timestamps with 422 VALIDATION_ERROR on the server and enforcing the max attribute on the UI date picker across specification.md, api-spec.md, ui-spec.md, and tests.md.
+
+  Comprehensive Resolution Gate boundary tests
+
+  Explicitly documented all 7 boundary cases in specification.md (AC-21), api-spec.md (Section 3.2), and tests.md (Section 3.1 & Matrix): missing summary, < 10 chars, = 10 chars, = 1000 chars, > 1000 chars, actionsCount = 0, and valid resolution with ≥ 1 action.
+
+  All 4 specification files now provide a single, deterministic engineering contract ready for implementation.
+
+- **Reviewer comment I received:**
+
+  > Request Changes — Clarify Dashboard Metric Definitions
+
+  The dashboard metric definitions would benefit from more explicit and consistent scope rules.
+
+  Currently, totalTimeSpentMinutes sums action durations associated with active or recently resolved tickets, while categoryBreakdown aggregates non-terminal tickets and their action durations. Although these definitions may be intentional, the specification should clarify the exact ticket-status scope used for each metric to ensure consistent implementation and testing.
+
+  Please explicitly define which ticket statuses and associated ActionTaken records are included in each metric, and ensure the definitions are consistent across api-spec.md and tests.md.
+
+  This will help prevent different implementations from producing different results while still appearing to follow the specification.
+
+- **How I responded:**
+
+  > Thank you for the excellent suggestion! I completely agree that clarifying the exact ticket-status scopes for dashboard metrics is essential for ensuring consistent implementation and testing. I have updated the documentation suite to incorporate explicit definitions and mathematical consistency guarantees.
+
+- **Reviewer comment I received:**
+
+  > The latest revision addresses the previously identified concerns:
+
+  resolutionIndicated is explicitly advisory and does not change the ticket status.
+  performedAt validation consistently rejects future timestamps.
+  Resolution Gate boundary cases are documented and mapped to the test plan.
+  Dashboard metric scopes are now clearly defined, including ticket-status eligibility, ActionTaken duration aggregation, SQL examples, and the invariant that the sum of category durations equals totalTimeSpentMinutes.
+  The updated documentation provides clearer and more consistent requirements for implementation and testing. I have no further blocking concerns regarding the previously identified issues.
+
+  Recommendation: Approve.
+
+- **How I responded:**
+
+  > Thanks for the review! The file has been updated based on your comments. Ready to merge.
+
+---
+
+### PR — Issue 19 (Database Schema, Migration, and Seed)
+
+- **Branch:** `feature/19-database-migration-actions`
+- **Reviewer comment I received:**
+
+  > The PR satisfies the core acceptance criteria for Issue 19:
+
+  The ActionTaken model includes the required fields and string-length constraints.
+  The migration adds the new table, indexes, and foreign keys without introducing destructive changes to existing tables.
+  The foreign-key deletion rules preserve the intended behavior: ON DELETE CASCADE for tickets and ON DELETE RESTRICT for users, consistent with BR-15.
+  The seed implementation uses existing-record checks and upserts to support repeatable execution and covers tickets with zero, one, and multiple actions.
+  The added verification tests cover schema constraints, referential integrity, migration data preservation, and seed behavior.
+  I found no blocking issues in the reviewed diff. The reported test results are documented in the PR, although I have not independently rerun the migration or test suite during this review.
+
+  Recommendation: Approve.
+
+- **How I responded:**
+  > Thanks for the review! The file has been updated based on your comments. Ready to merge.
+
+---
+
+### PR — Issue 20 (Actions Taken REST APIs & Concurrency Control)
+
+- **Branch:** `feature/20-actions-taken-backend`
+- **Reviewer comment I received:**
+
+  > The PR implements the core Actions Taken API endpoints and covers the main acceptance criteria, including session-derived performedById, Requester ownership restrictions, role authorization, terminal-ticket guards, validation, and atomic conditional updates for optimistic concurrency control.
+
+  Before approval, I recommend addressing the following issues:
+
+  Optimistic concurrency token reliability: The update handler explicitly sets updatedAt to new Date(). If the new timestamp equals the previous value at the database's timestamp precision, a stale expectedUpdatedAt token may still match, undermining the guarantee that concurrent edits result in exactly one success and one 409 STALE_ACTION_CONFLICT. Please guarantee that the concurrency token changes on every successful update and add a test for same-timestamp updates.
+
+  PUT follow-up note validation: The update handler does not consistently validate followUpNote length when followUpRequired is false. An oversized value may reach the database and result in a 500 instead of a validation response. Please validate the field whenever it is supplied and add a corresponding API test.
+
+  Future timestamp boundary: The current validation allows timestamps up to 60 seconds in the future, despite the PR description stating that future timestamps are rejected. Please align the implementation and tests with the authoritative specification.
+
+  Verification evidence consistency: docs/lab-04/evidence.md reports different full-suite totals (280/280 and 285/285). Please reconcile these values with the actual test output.
+
+  The existing API test suite provides broad coverage, but I have not independently rerun the tests or build during this review.
+
+  Recommendation: Request Changes until the concurrency-token guarantee and validation gaps are addressed.
+
+- **How I responded:**
+
+  > Thanks for the detailed review! I’ve updated the concurrency token handling to ensure updatedAt advances on successful updates, added validation for followUpNote when it is provided, tightened future timestamp validation, and reconciled the test counts in the evidence document.
+
+  I’ll verify the regression tests and the latest CI results before requesting another review. Thanks for helping me catch these issues!
+
+- **Reviewer comment I received:**
+
+  > Reviewed the implementation against the Lab 4 API specification.
+
+  > - **`actionType` validation:** The implementation uses a `String` field with a maximum length of 50 characters, consistent with the API specification. An enum whitelist is not explicitly required.
+  > - **`performedAt` updates:** The PUT endpoint supports updating `performedAt`, as documented in the API specification. Future timestamps must be rejected.
+  > - **IT Staff ticket access:** Access to tickets in the queue is consistent with the documented authorization scope; access is not limited to tickets personally assigned to the IT Staff member.
+  >
+  > I found no blocking issues in these three areas. **Recommend approval**, provided the latest CI checks pass and the remaining acceptance criteria are satisfied.
+
+- **How I responded:**
+
+  > Thanks for approving the PR! I have already updated docs/lab-04/reviewer.md with the latest comment. You can merge this PR.
+
+---
+
+### PR — Issue 21 (Server-Enforced Resolution Gate & State Machine)
+
+- **Branch:** `feature/21-ticket-resolution-gate`
+- **Reviewer comment I received:**
+
+  > Request Changes — Resolution Gate error contract
+
+  The Resolution Gate correctly checks the ActionTaken count and returns HTTP 422 when no action has been recorded. However, the error code does not match the Acceptance Criteria in Issue #44.
+
+  Expected: ACTION_TAKEN_REQUIRED_FOR_RESOLUTION
+  Current: RESOLUTION_ACTION_REQUIRED
+  Please align the error code across the server response, automated tests, and docs/lab-04/evidence.md, including the example JSON response. This is an API contract mismatch that should be fixed before approval.
+
+  Also, Issue #44 specifies server/tests/lab-04/ticket-workflow.api.test.ts, while this PR adds server/tests/lab-04/resolution-gate.api.test.ts. Please align the filename with the specified deliverable, or update the issue if the alternative filename is intentional.
+
+  The core resolution-gate logic and requester advisory behavior otherwise appear consistent with the stated requirements based on the reviewed PR details. Please rerun the relevant tests after making these changes.
+
+- **How I responded:**
+
+  > Thanks for the feedback! I have aligned the Resolution Gate error code to `ACTION_TAKEN_REQUIRED_FOR_RESOLUTION` across `server/src/app.ts`, `docs/lab-04/evidence.md`, and the automated tests. I also renamed the test file to `server/tests/lab-04/ticket-workflow.api.test.ts` as specified in Issue #44, and verified all 24/24 targeted tests and 319/319 full server regression tests pass. Ready for re-review!
+
+- **Reviewer comment I received:**
+
+  > Review Summary — Resolution Gate
+
+  The updated implementation addresses the issues identified in the previous review.
+
+  The Resolution Gate now uses the required error code, ACTION_TAKEN_REQUIRED_FOR_RESOLUTION, with HTTP 422 when no ActionTaken records exist.
+  The test file now matches the specified deliverable path: server/tests/lab-04/ticket-workflow.api.test.ts.
+  The server-side resolution validation, transition enforcement, and Requester advisory behavior appear consistent with the stated requirements based on the reviewed diff.
+  The reported targeted tests and full server test suite pass, and the latest CI status checked was successful.
+  No additional blocking issues were identified in this review. Approved based on the reviewed changes and available test evidence.
+
+- **How I responded:**
+  > Thanks for the review! The file has been updated based on your comments. Ready to merge.
+
+---
+
+### PR — Issue 22 (Operational Dashboard & Analytics API)
+
+- **Branch:** `feature/22-dashboard-backend-apis`
+- **Reviewer comment I received:**
+
+  > Approved. The implementation aligns with the Lab 4 dashboard API requirements.
+
+  Implements GET /api/staff/dashboard with the required response structure: metrics, categoryBreakdown, priorityBreakdown, and meta.
+  Enforces role-based access control for IT_STAFF and ADMINISTRATOR, with appropriate handling for unauthorized and unauthenticated requests.
+  Applies the rolling seven-day window for recently resolved tickets and excludes ineligible ticket states from time-spent calculations.
+  Uses effective priority (itPriority ?? requestedPriority) for priority breakdowns.
+  Maintains the invariant that the sum of category time-spent values equals metrics.totalTimeSpentMinutes.
+  Includes tests covering the acceptance criteria, authorization, time-window boundaries, excluded states, empty datasets, and the time-spent invariant.
+  The reported test suites pass, and CI has passed.
+
+  No blocking issues found. Thank you for the implementation.
+
+- **How I responded:**
+  > Thanks for approving the PR! I have already updated docs/lab-04/reviewer.md with the latest comment. You can merge this PR.
+
+---
+
+### PR — Issue 23 (Actions Taken Client UI & Concurrency Handling)
+
+- **Branch:** `feature/23-actions-taken-ui`
+- **Reviewer comment I received:**
+
+  > Approved. The implementation aligns with the Actions Taken UI integration requirements.
+
+  Integrates ActionsTakenSection into both TicketDetailScreen.tsx and StaffTicketDetail.tsx.
+  Displays action history with date/time, description, result, performer, follow-up information, and attachment notes.
+  Enforces role-based UI rendering so Requesters do not have Create/Edit buttons or mutation forms in the DOM, while IT Staff and Administrators can manage actions.
+  Implements create/edit forms with required-field validation and conditional validation for Follow-up Notes.
+  Handles stale updates using the expected update timestamp and a conflict dialog that allows users to reload the latest data.
+  Includes responsive layout checks and component tests covering the main UI, authorization, and conflict-handling scenarios.
+  The CI workflow has passed.
+
+  No blocking issues found. Thank you for the implementation.
+
+- **How I responded:**
+  > Thanks for approving the PR! I have already updated docs/lab-04/reviewer.md with the latest comment and docs/lab-04/evidence.md with the latest review status . You can merge this PR.
+
+---
+
+### PR — Issue 24 (Operational Dashboard UI & Visualizations)
+
+- **Branch:** `feature/24-role-dashboards-ui`
+- **Reviewer comment I received:**
+
+  > The dashboard implementation looks good overall and appears to meet the main requirements. One minor issue remains with clearing the priority filter: selectedReqPriority is not reset, so the queue may remain filtered. Please consider resetting it to "ALL" and adding a regression test. This is a non-blocking issue and does not prevent approval.
+
+- **How I responded:**
+  > Thanks for the review and approval. I have updated docs/lab-04/evidence.md and docs/lab-04/reviewer.md in the PR, so it should be good to merge now.
+
+---
+
+### PR — Issue 25 (Integration, Playwright E2E Testing & Sprint Release)
+
+- **Branch:** `feature/25-e2e-regression-hardening`
+- **Reviewer comment I received:**
+
+  > **Potential E2E Test Isolation Issue: Admin Password Mutation**
+
+  In dashboard-screenshots.spec.ts, the “Admin Dashboard with User Accounts Summary Card” test conditionally changes the Admin password from Admin123! to NewAdminPass123! when the change-password modal is visible. However, the test does not appear to restore the original password afterward, while dashboards.spec.ts subsequently relies on Admin123! to log in as Admin.
+
+  If the modal is displayed, this test may leave the shared test account in a modified state and cause subsequent tests to fail, particularly in a fresh or differently initialized test environment.
+
+  Please ensure the Admin account state is isolated and deterministic—for example, by resetting the password after the test or using a controlled test fixture—so the E2E suite does not depend on persistent account state from previous test runs.
+
+  > Thanks for addressing the Admin password state isolation issue.
+
+  I verified the updated dashboard-screenshots.spec.ts and the resetAuthUsers() helper. The Admin account is now reset before each test, immediately after the password-change flow when applicable, and again after the suite completes. The helper restores the expected Admin123! credentials and Admin account state, preventing password changes from leaking into subsequent E2E tests.
+
+  The latest CI run also completed successfully. This resolves my previous concern, and I have no further blocking comments on this issue.
+
+- **How I responded:**
+  > Thank you for the thorough verification and approval! I appreciate you taking the time to test the state isolation and confirm the fix.
+  > I have updated `docs/lab-04/reviewer.md` and `docs/lab-04/evidence.md` with this review record, and PR #58 is now ready to merge.
+
+### PR — Issue 26 (Final Submission Package and Submission Artifacts)
+
+- **Branch:** `feature/26-final-submission-artifacts`
+- **Reviewer comment I received:**
+
+  > The submission package, documentation, AI usage reflection, and screenshot evidence satisfy the requirements of Issue #26. CI checks are successful, and no blocking issues were identified within the PR's scope.Final release verification and peer review records should be completed before merging lab4-staging into main. Verdict: Approve.
+
+- **How I responded:**
+  > Thanks for the approval. I have updated the documentation with the latest review record and evidence, and I have also merged this PR into lab4-staging.
+
+## Pull Requests I reviewed for my partner
+
+### PR - Issue 20 : Sprint 4 Engineering Contracts, Specification & Test Plan (Spec DD)
+
+- **My comment:**
+
+> The documentation is well structured and covers the main Lab 4 requirements, including Actions Taken, the resolution gate, concurrency handling, role-based dashboards, and responsive UI specifications. Before approval, I think a few points need clarification to ensure the specifications are consistent and safe to use for implementation. Authentication contract: api-spec.md specifies JWT Bearer authentication. Please reconcile this with the existing Lab 3 authentication mechanism and explicitly document the approved approach so the new APIs remain compatible with the existing application. Acceptance criteria and test traceability: Please review the AC-to-test mappings in tests.md, especially the shared AC-15 and AC-19 entries. Separate criteria where they represent distinct behaviors, and ensure each criterion has clear, testable coverage. Follow-up validation consistency: BR-04 requires at least three non-whitespace characters in the follow-up note, but the UI validation description does not explicitly reflect the same minimum length. Please align the API, UI, and planned tests. Concurrency scope: Please clarify whether optimistic concurrency protection applies only to ticket status transitions or also to edits of other records, including Actions Taken. Migration recovery and seed coverage: Please document the migration rollback or recovery strategy and its planned verification. Also, explicitly map the required seed scenarios ticket statuses, priorities, assigned and unassigned ownership, zero/one/multiple Actions Taken, and zero/non-zero dashboard metrics to the planned tests. These changes would make the engineering contract more consistent and reduce ambiguity for the subsequent implementation issues. I recommend revising these points before approval.
+
+---
+
+> Thanks for addressing the previous review feedback. The authentication contract, separated dashboard acceptance criteria, UI follow-up validation, concurrency scope, and seed scenario mapping are much clearer now. I still recommend a few final clarifications before approval: Follow-up validation consistency: BR-04 requires at least 3 non-whitespace characters, but FR-04, AC-02, and the planned tests still primarily describe blank or whitespace-only values. Please align the FR, AC, API error messages, and Unit/API/UI test cases to cover notes shorter than 3 characters as well. Migration rollback and recovery: In specification.md 7.3, prisma migrate resolve --rolled-back changes Prisma's migration history state; it does not itself reverse the schema changes. Please document a valid rollback/recovery sequence and ensure MIG-01 verifies both schema recovery and preservation of legacy data. Seed test assertions: Please make SEED-01 explicitly verify the required scenarios and idempotency after repeated seed runs, including all statuses and priorities, assigned/unassigned tickets, 0/1/multiple Actions Taken, and zero/non-zero dashboard metrics. Once these details are aligned across the specifications and planned tests, I think the documentation will be in a much stronger position for approval.
+
+---
+
+> Thanks for addressing the previous review feedback. The updated specifications are much more consistent now, especially the follow-up note validation, migration recovery plan, seed scenario coverage, authentication contract, and AC-to-test traceability. I reviewed the documentation against the acceptance criteria. The required specification files are present, the planned tests cover the defined acceptance criteria, and the PR remains within the documentation-only scope. I approved. One minor documentation improvement would be to replace the phrase 1:1 for AC-to-test mapping with complete traceability, since some acceptance criteria are covered by multiple test suites. Overall, the documentation is ready to serve as the engineering contract for the subsequent implementation issues.
+
+- **Partner's response:**
+  > Thank you for the review and approval! I have updated the documentation in specification.md §9 to replace the phrase '1:1' with 'complete traceability' to accurately reflect our multi-tier test coverage across the acceptance criteria. With all feedback addressed and specifications finalized, PR #59 is ready to merge into lab4-staging.
+
+### PR - Issue 21 : Database Migration, Seed Data & Actions Taken Backend Foundation
+
+- **My comment:**
+
+  > The Prisma migration, seed data, and Actions Taken APIs look good to me. The required role restrictions and follow-up validation are implemented, and the backend tests and CI checks pass. I approved.
+
+- **Partner's response:**
+  > Thank you for the review and approval! All review comments, type safety enhancements, and negative test suites covering boolean types, note boundaries, and ISO-8601 UTC date formats are in place. All 35 Actions Taken API tests, 43 total Lab 4 tests, and 152 regression tests pass cleanly. PR #60 is ready to merge into lab4-staging.
+
+### PR - Issue 22 : Ticket Workflow Hardening & Resolution Gate (Backend & State Enforcement)
+
+- **My comment:**
+
+  > The backend workflow enforcement looks good to me. The resolution gate, status transition matrix, reassignment validation, and optimistic concurrency checks are implemented and covered by tests. The CI checks also pass, including the server tests, client build, and Playwright E2E tests. I approved Ka.
+
+- **Partner's response:**
+  > Thank you for the review and approval! All workflow enforcement rules—including the authoritative resolution gate, strict status transition matrix, ticket reassignment validation, atomic optimistic concurrency control with monotonic timestamp advancement, and strict calendar validation—are fully implemented and verified across unit, API, client, and Playwright E2E test suites with zero regressions. PR #61 is ready to merge into lab4-staging.
+
+### PR - Issue 23 : Actions Taken UI & Ticket Detail Integration (Frontend)
+
+- **My comment:**
+
+  > The Actions Taken UI looks good to me. IT Staff and Administrators can create and edit actions, while Requesters have a read-only view. The follow-up validation, status transition rules, and 409 conflict handling with form state preservation are also covered by tests. The CI checks pass, including the client tests and build. I approved Ka.
+
+- **Partner's response:**
+  > Thank you for the review and approval! All requirements—including IT Staff and Administrator creation/editing, Requester read-only presentation, follow-up validation, status transition matrix rules, and optimistic concurrency handling with form state preservation—are fully implemented and verified with automated tests and clean CI runs. PR #62 is ready to merge into lab4-staging.
+
+### PR - Issue 24 : Role-Appropriate Dashboard Metrics APIs (Backend)
+
+- **My comment:**
+
+  > The dashboard APIs look good to me. The endpoints enforce role-based access, keep requester ticket data isolated, and return the required metrics and recent tickets. The performance smoke tests cover all three dashboard endpoints and the Actions list endpoint. The CI checks also pass, including the server tests and build. I approved.
+
+- **Partner's response:**
+  > Thank you for the review and approval! All requirements for role-appropriate dashboard metrics APIs—including strict data isolation for Requesters, operational queue breakdowns for IT Staff, supervisory system metrics for Administrators, and performance smoke benchmarks—are verified and passing with clean CI checks. PR #63 is ready to merge into lab4-staging.
+
+### PR - Issue 25 : Role-Appropriate Dashboards UI & Drill-Down (Frontend)
+
+- **My comment:**
+
+  > The dashboard components, navigation, and existing test coverage look good. However, DesignSystemTokens.test.tsx currently checks CSS source text and DOM class presence rather than verifying computed CSS variables and actual component styling as required by AC-17 and UI-STYLE-01. The responsive audit is deferred to Issue 26, so the zero-clipping requirement across Desktop, Tablet, and Mobile is not yet verified. Please strengthen the design-token tests and clarify how the responsive acceptance criterion will be verified before approval.
+
+- **Partner's response:**
+
+  > Thank you for the detailed feedback! Here are the clarifications and updates for this PR:
+
+  Complete 8-Status Lifecycle Badge Assertions: Extended DesignSystemTokens.test.tsx to assert all 8 status badges, verifying computed styling on .zen-badge-reopened (color: rgb(29, 78, 216) and display: inline-flex). Also updated getStatusBadge across AdminDashboard.tsx, StaffDashboard.tsx, and RequesterDashboard.tsx to map REOPENED to .zen-badge-reopened.
+
+  Responsive Layout Verification: Responsive CSS layouts and media queries across Desktop (1280px), Tablet (768px), and Mobile (375px) have been verified with zero horizontal overflow (scrollWidth === clientWidth). Per issues-plan.md, component-level responsive styling is implemented in this PR (Issue 25), while automated Playwright browser test automation (E2E-04) and screenshot artifacts generation are formally allocated to Issue 26 (#57).
+
+  Vitest Suites Status: All four required Vitest test files (RequesterDashboard.test.tsx, StaffDashboard.test.tsx, AdminDashboard.test.tsx, and DesignSystemTokens.test.tsx) pass 100% (56/56 tests passing on the latest commit).
+
+- **My comment:**
+
+  > The updated design-token tests are a good improvement, and the latest CI checks are passing. One small gap remains: the computed-style test covers only 7 status badges and does not include zen-badge-reopened. Please extend the assertions to cover all 8 statuses and their relevant styling. Also, since zero clipping across Desktop, Tablet, and Mobile is still deferred to Issue 26, please confirm whether this acceptance criterion will be verified before approval or formally moved out of scope for this PR.
+
+- **Partner's response:**
+
+  > ### 1. Design System & Computed Style Assertions (`AC-17`, `UI-STYLE-01`)
+  - **Full 8-Status Badge Coverage**: Strengthened `DesignSystemTokens.test.tsx` using `window.getComputedStyle()` to verify actual computed properties—including `color`, `background-color`, `border`, `border-radius: 9999px`, and font sizing—across all 8 status badges (`NEW`, `OPEN`, `IN_PROGRESS`, `WAITING_FOR_REQUESTER`, `RESOLVED`, `CLOSED`, `REOPENED`, `CANCELLED`).
+  - **Private vs Shared Visual Cues (`ui-spec.md §7.4`)**: Added computed style assertions for operational accents and internal staff framing:
+    - Warning Accent (`.zg-metric-card.warning-accent`): Warm amber border-left `4px solid var(--zg-warning)` (`#D97706`).
+    - Active Accent (`.zg-metric-card.active-accent`): Primary green border-left `4px solid var(--zg-primary)` (`#006B3C`).
+    - Danger Accent (`.zg-metric-card.danger-accent`): Critical red border-left `4px solid var(--zg-danger)` (`#DC2626`).
+    - Staff Internal Note Callout (`.zen-callout-warning`): `4px solid var(--color-warning)`, light amber tint background (`#FFFBEB`), and high-contrast text (`#78350F`).
+
+  ### 2. Responsive Invariant Verification & Scope Separation (`AC-17`)
+  - **Automated Viewport Invariant Tests**: To verify zero-clipping invariants directly within this PR, added reproducible layout tests in `DesignSystemTokens.test.tsx` covering Desktop ($1280\text{px}$), Tablet ($768\text{px}$), and Mobile ($375\text{px}$ / $440\text{px}$):
+    - Verifies `.dashboard-container` enforces `overflow-x: hidden` and `max-width: 1560px`.
+    - Verifies `.table-responsive` enforces `overflow-x: auto` and `width: 100%`, isolating table horizontal scrolling and preventing page-level scroll blowout ($scrollWidth === clientWidth$).
+    - Verifies responsive media queries collapse multi-column grids cleanly into `1fr` stacks with zero fixed-pixel traps on mobile.
+    - Verifies interactive touch targets (quick action buttons, status pills) satisfy the minimum $\ge 44\text{px}$ height requirement (Apple HIG / WCAG 2.1 AAA).
+  - **Formal Scope Separation (Issue 25 vs Issue 26)**: Headless browser Playwright audits and screenshot artifact generation are formally scheduled under **Issue #57 (Issue 26: End-to-End Testing, Responsive Audit & Screenshot Artifacts)** per `docs/lab-04/issues-plan.md` and the AI Verification Note (_"Do not fail verification on pending PR merge or missing Playwright E2E files"_).
+
+  ### 3. Latest Test & Build Verification
+  - **Dashboard Vitest Suites**: 4/4 suites passed, 61/61 tests passed (`RequesterDashboard`, `StaffDashboard`, `AdminDashboard`, `DesignSystemTokens`).
+  - **Full Client Test Suite**: 20/20 files passed, 162/162 tests passed (100%).
+  - **TypeScript Production Build**: `npm run build` (`tsc && vite build`) passed with 0 errors.
+
+- **My comment:**
+
+  > Thanks for addressing the feedback and clarifying the scope between Issue #25 and Issue #26. The updated design-token tests, dashboard functionality, and CI results look good. I approve this PR, with the full browser-based responsive audit and screenshot evidence to be completed in Issue #57.
+
+- **Partner's response:**
+  > Thank you for the review and approval! I have updated docs/lab-04/reviewer.md with the peer review record. All CI checks are green, so I am proceeding to merge this PR into lab4-staging.
+
+### PR - Issue 26 : End-to-End Testing, Responsive Audit & Screenshot Artifacts
+
+- **My comment:**
+
+  > The regression setup now runs both Lab 2 and Lab 3 E2E suites, and CI passes on the reviewed commit. The Lab 4 E2E coverage, responsive audit, accessibility checks, and screenshot artifacts are present. Please align the regression test count in the PR description with docs/lab-04/tests.md. Overall, the acceptance criteria are met.
+
+- **Partner's response:**
+  > Thank you for the review and approval @lephirada! Everything is verified and tested. Ready to merge into lab4-staging now.
+
+### PR - Issue 27 : Release Integration, Peer Review, AI Reflection & Final Handover
+
+- **My comment:**
+
+  > The documentation and release preparation look complete. The reviewer records, AI usage documentation, test traceability, final report, and README have been updated as required. The CI checks also passed successfully. I reviewed the changes and found no blocking issues. Approved for merging into lab4-staging. The release PR to main and final verification can proceed as the next steps.
+
+- **Partner's response:**
+  > Thanks for the approval. I have updated reviewer.md and evidence, and you can merged this PR into lab4-staging.

@@ -76,13 +76,21 @@ export class ApiError extends Error {
   code?: string;
   fieldErrors?: FieldError[];
   status?: number;
+  details?: any;
 
-  constructor(message: string, code?: string, fieldErrors?: FieldError[], status?: number) {
+  constructor(
+    message: string,
+    code?: string,
+    fieldErrors?: FieldError[],
+    status?: number,
+    details?: any
+  ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.fieldErrors = fieldErrors;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -325,12 +333,17 @@ export interface StaffTicketQueryParams {
   categoryId?: number;
   requestedPriority?: string;
   itPriority?: string;
+  priority?: string;
+  effectivePriority?: string;
   status?: string;
+  excludeStatus?: string;
   owner?: "ALL" | "UNASSIGNED" | "MY_TICKETS" | string;
   sortBy?: "createdAt" | "itPriority" | "status" | "updatedAt" | string;
   sortOrder?: "asc" | "desc";
   page?: number;
   pageSize?: number;
+  resolvedWithinDays?: number;
+  days?: number;
 }
 
 export interface FetchStaffTicketsResponse {
@@ -347,6 +360,12 @@ export async function fetchStaffTickets(
     if (params.categoryId !== undefined && params.categoryId !== null && !isNaN(params.categoryId)) {
       query.set("categoryId", String(params.categoryId));
     }
+    if (params.priority && params.priority !== "ALL") {
+      query.set("priority", params.priority);
+    }
+    if (params.effectivePriority && params.effectivePriority !== "ALL") {
+      query.set("effectivePriority", params.effectivePriority);
+    }
     if (params.requestedPriority && params.requestedPriority !== "ALL") {
       query.set("requestedPriority", params.requestedPriority);
     }
@@ -356,6 +375,9 @@ export async function fetchStaffTickets(
     if (params.status && params.status !== "ALL") {
       query.set("status", params.status);
     }
+    if (params.excludeStatus && params.excludeStatus !== "ALL") {
+      query.set("excludeStatus", params.excludeStatus);
+    }
     if (params.owner && params.owner !== "ALL") {
       query.set("owner", params.owner);
     }
@@ -363,6 +385,8 @@ export async function fetchStaffTickets(
     if (params.sortOrder) query.set("sortOrder", params.sortOrder);
     if (params.page !== undefined) query.set("page", String(params.page));
     if (params.pageSize !== undefined) query.set("pageSize", String(params.pageSize));
+    if (params.resolvedWithinDays !== undefined) query.set("resolvedWithinDays", String(params.resolvedWithinDays));
+    if (params.days !== undefined) query.set("days", String(params.days));
   }
 
   const queryString = query.toString() ? `?${query.toString()}` : "";
@@ -897,7 +921,7 @@ export async function updateTicketStatus(
   ticketId: number,
   payload: UpdateStatusPayload
 ): Promise<{ data: StaffTicketDetailData }> {
-  const res = await fetch(`${API_URL}/api/staff/tickets/${ticketId}/status`, {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1096,6 +1120,204 @@ export async function resetAdminUserInitialPassword(
       errorObj?.code,
       errorObj?.details?.fieldErrors,
       res.status
+    );
+  }
+
+  return body;
+}
+
+// ---------------------------------------------------------------------------
+// Issue 20 / Issue 23: Actions Taken Client APIs
+// ---------------------------------------------------------------------------
+
+export type ActionType =
+  | "INVESTIGATION"
+  | "CONFIGURATION"
+  | "REPAIR"
+  | "COMMUNICATION"
+  | "OTHER";
+
+export interface ActionTakenItem {
+  id: number;
+  ticketId: number;
+  performedById: number;
+  actionDateTime?: string;
+  description: string;
+  result: string;
+  actionType: ActionType | string;
+  timeSpentMinutes: number;
+  followUpRequired: boolean;
+  followUpNote: string | null;
+  attachmentNotes: string | null;
+  performedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  performedBy: {
+    id: number;
+    fullName: string;
+    email: string;
+    role: string;
+  };
+}
+
+export interface CreateActionPayload {
+  description: string;
+  result: string;
+  actionType?: ActionType | string;
+  timeSpentMinutes: number;
+  performedAt?: string;
+  followUpRequired?: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+}
+
+export interface UpdateActionPayload {
+  expectedUpdatedAt: string;
+  description?: string;
+  result?: string;
+  actionType?: ActionType | string;
+  timeSpentMinutes?: number;
+  performedAt?: string;
+  followUpRequired?: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+}
+
+export async function fetchTicketActions(
+  ticketId: number
+): Promise<{ data: ActionTakenItem[]; totalDurationMinutes?: number }> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch actions with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status,
+      errorObj?.details
+    );
+  }
+
+  return body;
+}
+
+export async function createTicketAction(
+  ticketId: number,
+  payload: CreateActionPayload
+): Promise<{ data: ActionTakenItem }> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to create action with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status,
+      errorObj?.details
+    );
+  }
+
+  return body;
+}
+
+export async function updateTicketAction(
+  ticketId: number,
+  actionId: number,
+  payload: UpdateActionPayload
+): Promise<{ data: ActionTakenItem }> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions/${actionId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to update action with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status,
+      errorObj?.details
+    );
+  }
+
+  return body;
+}
+
+// ---------------------------------------------------------------------------
+// Issue 24 — Operational Dashboard API Types & Fetcher (FR-07, FR-08, AC-24-01..04)
+// ---------------------------------------------------------------------------
+
+export interface DashboardMetrics {
+  totalOpen: number;
+  inProgress: number;
+  waitingForRequester: number;
+  recentlyResolved: number;
+  unassignedCount: number;
+  totalTimeSpentMinutes: number;
+}
+
+export interface CategoryBreakdownItem {
+  categoryId: number;
+  categoryName: string;
+  ticketCount: number;
+  totalTimeSpentMinutes: number;
+}
+
+export interface PriorityBreakdown {
+  P0_URGENT: number;
+  P1_HIGH: number;
+  P2_MEDIUM: number;
+  P3_LOW: number;
+}
+
+export interface DashboardMeta {
+  calculationTimestamp: string;
+  recentlyResolvedWindowDays: number;
+  recentlyResolvedWindowStart: string;
+}
+
+export interface DashboardResponse {
+  data: {
+    metrics: DashboardMetrics;
+    categoryBreakdown: CategoryBreakdownItem[];
+    priorityBreakdown: PriorityBreakdown;
+    meta: DashboardMeta;
+  };
+}
+
+export async function fetchStaffDashboard(): Promise<DashboardResponse> {
+  const res = await fetch(`${API_URL}/api/staff/dashboard`, {
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const errorObj = body?.error;
+    throw new ApiError(
+      errorObj?.message || `Failed to fetch staff dashboard with status ${res.status}`,
+      errorObj?.code,
+      errorObj?.details?.fieldErrors,
+      res.status,
+      errorObj?.details
     );
   }
 

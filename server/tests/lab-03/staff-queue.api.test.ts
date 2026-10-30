@@ -628,4 +628,57 @@ describe("Issue 14 — IT Staff Ticket Queue API Suite (staff-queue.api.test.ts)
     expect(res.body.data).toEqual([]);
     expect(res.body.pagination.totalItems).toBe(0);
   });
+
+  // 24. multi-status filter (status=NEW,OPEN) matching Total Open dashboard metric
+  it("Scenario 24: filters by comma-separated statuses status=NEW,OPEN matching Total Open metric", async () => {
+    const res = await request(app)
+      .get("/api/staff/tickets?status=NEW,OPEN")
+      .set("Cookie", cookieStaff);
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+    for (const t of res.body.data) {
+      expect(["NEW", "OPEN"]).toContain(t.status);
+    }
+    const hasNew = res.body.data.some((t: any) => t.status === "NEW");
+    const hasOpen = res.body.data.some((t: any) => t.status === "OPEN");
+    expect(hasNew).toBe(true);
+    expect(hasOpen).toBe(true);
+  });
+
+  // 25. rolling window resolution filter (status=RESOLVED&resolvedWithinDays=7) matching Recently Resolved metric
+  it("Scenario 25: filters by status=RESOLVED and resolvedWithinDays=7 rolling window", async () => {
+    const recentResolved = await prisma.ticket.create({
+      data: {
+        ticketNo: `TKT-RESOLVED-RECENT-${Date.now()}`,
+        summary: "Recent resolved ticket within 7 days - Test rolling window",
+        description: "Test rolling window recent",
+        requestedPriority: Priority.P2_MEDIUM,
+        status: TicketStatus.RESOLVED,
+        categoryId: testCategoryA.id,
+        requesterId: requesterUser.id,
+        updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+      },
+    });
+    const oldResolved = await prisma.ticket.create({
+      data: {
+        ticketNo: `TKT-RESOLVED-OLD-${Date.now()}`,
+        summary: "Old resolved ticket outside 7 days - Test rolling window",
+        description: "Test rolling window old",
+        requestedPriority: Priority.P2_MEDIUM,
+        status: TicketStatus.RESOLVED,
+        categoryId: testCategoryA.id,
+        requesterId: requesterUser.id,
+        updatedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), // 15 days ago
+      },
+    });
+    createdTicketIds.push(recentResolved.id, oldResolved.id);
+
+    const res = await request(app)
+      .get(`/api/staff/tickets?status=RESOLVED&resolvedWithinDays=7&search=${encodeURIComponent("Test rolling window")}`)
+      .set("Cookie", cookieStaff);
+    expect(res.status).toBe(200);
+    const ids = res.body.data.map((t: any) => t.id);
+    expect(ids).toContain(recentResolved.id);
+    expect(ids).not.toContain(oldResolved.id);
+  });
 });

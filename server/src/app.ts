@@ -473,12 +473,19 @@ app.get(
         categoryId,
         requestedPriority,
         itPriority,
+        priority,
+        effectivePriority,
         status,
+        excludeStatus,
         owner,
         sortBy,
         sortOrder,
         page,
         pageSize,
+        resolvedWithinDays,
+        days,
+        updatedAfter,
+        updatedSince,
       } = req.query;
 
       // 1. Pagination parameters
@@ -559,7 +566,40 @@ app.get(
         where.itPriority = itPrioStr as Priority;
       }
 
-      // Status validation
+      // Effective priority filter (e.g. priority=P0_URGENT or effectivePriority=P0_URGENT)
+      const rawEffPriority = priority !== undefined && priority !== "" ? priority : effectivePriority;
+      if (rawEffPriority !== undefined && rawEffPriority !== "") {
+        const effPrioStr = String(rawEffPriority).toUpperCase();
+        if (!validPriorities.includes(effPrioStr)) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid priority parameter.",
+                [{ field: "priority", message: `priority must be one of: ${validPriorities.join(", ")}` }]
+              )
+            );
+          return;
+        }
+        const effectiveCondition: Prisma.TicketWhereInput = {
+          OR: [
+            { itPriority: effPrioStr as Priority },
+            { itPriority: null, requestedPriority: effPrioStr as Priority },
+          ],
+        };
+        if (where.AND) {
+          if (Array.isArray(where.AND)) {
+            where.AND.push(effectiveCondition);
+          } else {
+            where.AND = [where.AND, effectiveCondition];
+          }
+        } else {
+          where.AND = [effectiveCondition];
+        }
+      }
+
+      // Status validation (supports single status or comma-separated list e.g. "NEW,OPEN")
       const validStatuses = [
         "NEW",
         "OPEN",
@@ -571,8 +611,15 @@ app.get(
         "CANCELLED",
       ];
       if (status !== undefined && status !== "") {
-        const statusStr = String(status).toUpperCase();
-        if (!validStatuses.includes(statusStr)) {
+        const rawStatus = Array.isArray(status) ? status.join(",") : String(status);
+        const statusParts = rawStatus
+          .toUpperCase()
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const invalidStatuses = statusParts.filter((s) => !validStatuses.includes(s));
+        if (invalidStatuses.length > 0 || statusParts.length === 0) {
           res
             .status(400)
             .json(
@@ -584,7 +631,91 @@ app.get(
             );
           return;
         }
-        where.status = statusStr as TicketStatus;
+
+        if (statusParts.length === 1) {
+          where.status = statusParts[0] as TicketStatus;
+        } else {
+          where.status = { in: statusParts as TicketStatus[] };
+        }
+      }
+
+      // Exclude status validation (e.g. excludeStatus=CLOSED,CANCELLED for non-terminal queries)
+      if (excludeStatus !== undefined && excludeStatus !== "") {
+        const rawExclude = Array.isArray(excludeStatus) ? excludeStatus.join(",") : String(excludeStatus);
+        const excludeParts = rawExclude
+          .toUpperCase()
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const invalidExclude = excludeParts.filter((s) => !validStatuses.includes(s));
+        if (invalidExclude.length > 0 || excludeParts.length === 0) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid excludeStatus parameter.",
+                [{ field: "excludeStatus", message: `excludeStatus must be one of: ${validStatuses.join(", ")}` }]
+              )
+            );
+          return;
+        }
+
+        const excludeCondition: Prisma.TicketWhereInput = {
+          status: { notIn: excludeParts as TicketStatus[] },
+        };
+        if (where.AND) {
+          if (Array.isArray(where.AND)) {
+            where.AND.push(excludeCondition);
+          } else {
+            where.AND = [where.AND, excludeCondition];
+          }
+        } else {
+          where.AND = [excludeCondition];
+        }
+      }
+
+      // Rolling window date filter (e.g. resolvedWithinDays=7 or days=7 for Recently Resolved drill-down)
+      const targetDaysParam = resolvedWithinDays !== undefined ? resolvedWithinDays : days;
+      if (targetDaysParam !== undefined && targetDaysParam !== "") {
+        const parsedDays = parseInt(String(targetDaysParam), 10);
+        if (isNaN(parsedDays) || parsedDays <= 0) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid resolvedWithinDays parameter.",
+                [{ field: "resolvedWithinDays", message: "resolvedWithinDays must be a positive integer" }]
+              )
+            );
+          return;
+        }
+        const windowStart = new Date(Date.now() - parsedDays * 24 * 60 * 60 * 1000);
+        where.updatedAt = { gte: windowStart };
+      }
+
+      // Optional explicit updatedAfter/updatedSince date filter
+      const afterParam = updatedAfter || updatedSince;
+      if (afterParam !== undefined && afterParam !== "") {
+        const parsedDate = new Date(String(afterParam));
+        if (isNaN(parsedDate.getTime())) {
+          res
+            .status(400)
+            .json(
+              createErrorEnvelope(
+                "INVALID_QUERY_PARAMETER",
+                "Invalid updatedAfter parameter.",
+                [{ field: "updatedAfter", message: "updatedAfter must be a valid ISO date" }]
+              )
+            );
+          return;
+        }
+        where.updatedAt = {
+          ...((where.updatedAt as Prisma.DateTimeFilter) || {}),
+          gte: parsedDate,
+        };
       }
 
       // Owner filter: ALL, UNASSIGNED, MY_TICKETS
@@ -2376,10 +2507,8 @@ app.post(
         return;
       }
 
-      // If WAITING_FOR_REQUESTER, transition to IN_PROGRESS. Otherwise remain IN_PROGRESS.
-      // NOTE: NEVER set status to RESOLVED! (BR-05)
-      const nextStatus = "IN_PROGRESS";
-
+      // BR-05 / FR-06 / AC-21-09: Requester indication is strictly advisory.
+      // Ticket status strictly unaltered (remains unchanged, whether IN_PROGRESS or WAITING_FOR_REQUESTER).
       const feedbackCommentText = req.body?.feedbackComment
         ? `[Resolution Feedback] The requester indicated that the reported issue appears resolved. Feedback: ${String(req.body.feedbackComment).trim()}`
         : "[Resolution Feedback] The requester indicated that the reported issue appears resolved.";
@@ -2389,7 +2518,7 @@ app.post(
           where: { id: ticket.id },
           data: {
             resolutionIndicated: true,
-            status: nextStatus,
+            status: ticket.status,
           },
         });
 
@@ -2435,6 +2564,180 @@ app.post(
             "INTERNAL_SERVER_ERROR",
             "Failed to confirm ticket resolution."
           )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Issue 21 / Section 3.1 — Status Transition & Resolution Gate
+// PATCH /api/tickets/:id/status (also handles :ticketId)
+// ---------------------------------------------------------------------------
+app.patch(
+  ["/api/tickets/:id/status", "/api/tickets/:ticketId/status"],
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (req: AuthenticatedRequest, res: Response) => {
+    let targetTicketId: number | undefined;
+    try {
+      const rawId = req.params.id || req.params.ticketId;
+      const ticketId = parseInt(rawId, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+      targetTicketId = ticketId;
+
+      const ticket = await getPrisma().ticket.findUnique({ where: { id: ticketId } });
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const requestedStatus = req.body?.status as TicketStatus;
+      if (!requestedStatus) {
+        res
+          .status(422)
+          .json(createErrorEnvelope("VALIDATION_ERROR", "Status is required."));
+        return;
+      }
+
+      // State machine validation
+      const validation = validateStatusTransition(
+        ticket.status,
+        requestedStatus,
+        ticket.ownerId,
+        req.body
+      );
+
+      if (!validation.isValid) {
+        res.status(validation.statusCode).json(validation.errorEnvelope);
+        return;
+      }
+
+      const cleaned = validation.cleanedPayload;
+
+      const result = await getPrisma().$transaction(async (tx) => {
+        // Enforce Resolution Gate when transitioning to RESOLVED
+        if (cleaned.status === "RESOLVED") {
+          const actionsCount = await tx.actionTaken.count({
+            where: { ticketId: ticket.id },
+          });
+
+          if (actionsCount < 1) {
+            const gateError: any = new Error("ACTION_TAKEN_REQUIRED_FOR_RESOLUTION");
+            gateError.code = "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION";
+            gateError.details = {
+              ticketId: ticket.id,
+              currentStatus: ticket.status,
+              requestedStatus: cleaned.status,
+              actionsCount: 0,
+            };
+            throw gateError;
+          }
+        }
+
+        const updateData: Prisma.TicketUpdateInput = {
+          status: cleaned.status,
+        };
+
+        if (cleaned.status === "RESOLVED") {
+          updateData.resolutionSummary = cleaned.resolutionSummary;
+        } else if (cleaned.status === "CANCELLED") {
+          updateData.cancellationReason = cleaned.cancellationReason;
+        } else if (cleaned.status === "REOPENED") {
+          updateData.reopenReason = cleaned.reopenReason;
+        }
+
+        // Conditional atomic CAS update ensuring status hasn't concurrently changed
+        const updateResult = await tx.ticket.updateMany({
+          where: {
+            id: ticket.id,
+            status: ticket.status,
+          },
+          data: updateData,
+        });
+
+        if (updateResult.count === 0) {
+          throw new Error("STATUS_RACE_LOST");
+        }
+
+        await tx.ticketActivity.create({
+          data: {
+            ticketId: ticket.id,
+            type: "STATUS_CHANGED",
+            action: "Status updated",
+            message: `Status changed from ${ticket.status} to ${cleaned.status} by ${req.user!.fullName}.`,
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
+            metadata: {
+              fromStatus: ticket.status,
+              toStatus: cleaned.status,
+              resolutionSummary: cleaned.resolutionSummary || null,
+              cancellationReason: cleaned.cancellationReason || null,
+              reopenReason: cleaned.reopenReason || null,
+            },
+          },
+        });
+
+        return await tx.ticket.findUnique({
+          where: { id: ticket.id },
+        });
+      });
+
+      res.status(200).json({ data: result });
+    } catch (error: any) {
+      if (
+        error?.message === "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION" ||
+        error?.code === "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION"
+      ) {
+        res.status(422).json({
+          error: {
+            code: "ACTION_TAKEN_REQUIRED_FOR_RESOLUTION",
+            message:
+              "At least one action taken must be recorded before resolving this ticket.",
+            details: error.details || {
+              ticketId: targetTicketId,
+              currentStatus: "IN_PROGRESS",
+              requestedStatus: "RESOLVED",
+              actionsCount: 0,
+            },
+          },
+        });
+        return;
+      }
+
+      if (error?.message === "STATUS_RACE_LOST") {
+        res
+          .status(409)
+          .json(
+            createErrorEnvelope(
+              "TICKET_MODIFIED_CONCURRENTLY",
+              "Ticket status was modified concurrently by another request. Please reload the latest ticket state."
+            )
+          );
+        return;
+      }
+
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope("INTERNAL_SERVER_ERROR", "Failed to update ticket status.")
         );
     }
   }
@@ -2940,6 +3243,1106 @@ app.post(
           createErrorEnvelope(
             "INTERNAL_SERVER_ERROR",
             "Failed to add attachment to ticket."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Issue 20 — Actions Taken REST API Endpoints (FR-01..04, BR-02..03, BR-06..08)
+// ---------------------------------------------------------------------------
+
+// GET /api/tickets/:id/actions (also handles :ticketId)
+app.get(
+  ["/api/tickets/:id/actions", "/api/tickets/:ticketId/actions"],
+  requireAuth,
+  requirePasswordChanged,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const rawId = req.params.ticketId || req.params.id;
+      const ticketId = parseInt(rawId, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Requester Isolation: Requesters can only view actions on their own tickets (403 Forbidden)
+      if (req.user!.role === "REQUESTER") {
+        if (ticket.requesterId !== req.user!.id) {
+          res
+            .status(403)
+            .json(
+              createErrorEnvelope(
+                "FORBIDDEN_TICKET_ACCESS",
+                "Forbidden: You do not have permission to access actions for this ticket."
+              )
+            );
+          return;
+        }
+      } else if (
+        req.user!.role !== "IT_STAFF" &&
+        req.user!.role !== "ADMINISTRATOR"
+      ) {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN_ROLE",
+              "Forbidden: You do not have permission to access actions for this ticket."
+            )
+          );
+        return;
+      }
+
+      const actions = await getPrisma().actionTaken.findMany({
+        where: { ticketId },
+        orderBy: [{ actionDateTime: "asc" }, { id: "asc" }],
+        include: {
+          performedBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      res.status(200).json({ data: actions });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to fetch actions taken for ticket."
+          )
+        );
+    }
+  }
+);
+
+// POST /api/tickets/:id/actions (also handles :ticketId)
+app.post(
+  ["/api/tickets/:id/actions", "/api/tickets/:ticketId/actions"],
+  requireAuth,
+  requirePasswordChanged,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      // Role scoping: only IT_STAFF and ADMINISTRATOR can create actions taken
+      if (
+        req.user!.role !== "IT_STAFF" &&
+        req.user!.role !== "ADMINISTRATOR"
+      ) {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN_ROLE",
+              "Forbidden: Only IT Staff and Administrators have permission to record actions taken."
+            )
+          );
+        return;
+      }
+
+      const rawId = req.params.ticketId || req.params.id;
+      const ticketId = parseInt(rawId, 10);
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      const ticket = await getPrisma().ticket.findUnique({
+        where: { id: ticketId },
+      });
+
+      if (!ticket) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      // Terminal status guard (BR-02): CLOSED or CANCELLED tickets reject action creation
+      if (ticket.status === "CLOSED" || ticket.status === "CANCELLED") {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_IN_WORKABLE_STATE",
+              `Cannot record actions taken on tickets in terminal status (${ticket.status}).`
+            )
+          );
+        return;
+      }
+
+      const {
+        description,
+        result,
+        actionType,
+        timeSpentMinutes,
+        performedAt,
+        actionDateTime,
+        followUpRequired,
+        followUpNote,
+        attachmentNotes,
+      } = req.body || {};
+
+      // 1. Description validation: required, 1-2000 chars trimmed
+      if (
+        !description ||
+        typeof description !== "string" ||
+        description.trim().length < 1 ||
+        description.trim().length > 2000
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action description is required and must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      // 2. Result validation: required, 1-2000 chars trimmed
+      if (
+        !result ||
+        typeof result !== "string" ||
+        result.trim().length < 1 ||
+        result.trim().length > 2000
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action result is required and must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      // 3. Follow-up validation: followUpRequired must be boolean if provided; followUpNote required if followUpRequired is true
+      if (
+        followUpRequired !== undefined &&
+        typeof followUpRequired !== "boolean"
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "followUpRequired must be a boolean."
+            )
+          );
+        return;
+      }
+
+      const isFollowUp = followUpRequired === true;
+      if (isFollowUp) {
+        if (
+          !followUpNote ||
+          typeof followUpNote !== "string" ||
+          followUpNote.trim().length < 1
+        ) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Follow-up note is required when follow-up is requested."
+              )
+            );
+          return;
+        }
+        if (followUpNote.trim().length > 1000) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Follow-up note cannot exceed 1000 characters."
+              )
+            );
+          return;
+        }
+      } else if (
+        followUpNote !== undefined &&
+        followUpNote !== null &&
+        (typeof followUpNote !== "string" ||
+          followUpNote.trim().length > 1000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Follow-up note cannot exceed 1000 characters."
+            )
+          );
+        return;
+      }
+
+      // 4. Attachment notes validation: max 1000 chars
+      if (
+        attachmentNotes !== undefined &&
+        attachmentNotes !== null &&
+        (typeof attachmentNotes !== "string" ||
+          attachmentNotes.trim().length > 1000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Attachment notes cannot exceed 1000 characters."
+            )
+          );
+        return;
+      }
+
+      // 5. Action type validation: max 50 chars
+      if (
+        actionType !== undefined &&
+        actionType !== null &&
+        (typeof actionType !== "string" || actionType.trim().length > 50)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action type cannot exceed 50 characters."
+            )
+          );
+        return;
+      }
+
+      // 6. Time spent validation: required integer between 1 and 1440
+      if (
+        timeSpentMinutes === undefined ||
+        timeSpentMinutes === null ||
+        typeof timeSpentMinutes !== "number" ||
+        !Number.isInteger(timeSpentMinutes) ||
+        timeSpentMinutes < 1 ||
+        timeSpentMinutes > 1440
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Time spent is required and must be an integer between 1 and 1440 minutes."
+            )
+          );
+        return;
+      }
+
+      // 7. Timestamp validation: cannot be in the future
+      const rawTimestamp = performedAt || actionDateTime;
+      let actionDate = new Date();
+      if (rawTimestamp) {
+        const parsed = new Date(rawTimestamp);
+        if (isNaN(parsed.getTime())) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Invalid timestamp format."
+              )
+            );
+          return;
+        }
+        if (parsed.getTime() > Date.now()) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Action timestamp cannot be in the future."
+              )
+            );
+          return;
+        }
+        actionDate = parsed;
+      }
+
+      // Server authority: performedById is strictly derived from req.user!.id
+      const newAction = await getPrisma().actionTaken.create({
+        data: {
+          ticketId,
+          performedById: req.user!.id,
+          description: description.trim(),
+          result: result.trim(),
+          actionType:
+            actionType !== undefined && actionType !== null
+              ? actionType.trim()
+              : "INVESTIGATION",
+          timeSpentMinutes,
+          followUpRequired: isFollowUp,
+          followUpNote: isFollowUp
+            ? followUpNote.trim()
+            : followUpNote
+            ? followUpNote.trim()
+            : null,
+          attachmentNotes: attachmentNotes ? attachmentNotes.trim() : null,
+          performedAt: actionDate,
+          actionDateTime: actionDate,
+        },
+        include: {
+          performedBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      // Audit log in TicketActivity table (FR-12, AC-20-05)
+      await getPrisma()
+        .ticketActivity.create({
+          data: {
+            ticketId,
+            type: "ACTION_TAKEN_ADDED",
+            action: "Action Taken Added",
+            message: `${req.user!.fullName} recorded an action: ${newAction.description.slice(0, 80)}`,
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
+            metadata: {
+              actionId: newAction.id,
+              actionType: newAction.actionType,
+              timeSpentMinutes: newAction.timeSpentMinutes,
+            },
+          },
+        })
+        .catch(() => {});
+
+      res.status(201).json({ data: newAction });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to record action taken."
+          )
+        );
+    }
+  }
+);
+
+// PUT /api/tickets/:id/actions/:actionId (also handles :ticketId)
+app.put(
+  [
+    "/api/tickets/:id/actions/:actionId",
+    "/api/tickets/:ticketId/actions/:actionId",
+  ],
+  requireAuth,
+  requirePasswordChanged,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      // Role scoping: only IT_STAFF and ADMINISTRATOR can modify actions taken
+      if (
+        req.user!.role !== "IT_STAFF" &&
+        req.user!.role !== "ADMINISTRATOR"
+      ) {
+        res
+          .status(403)
+          .json(
+            createErrorEnvelope(
+              "FORBIDDEN_ROLE",
+              "Forbidden: Only IT Staff and Administrators have permission to modify actions taken."
+            )
+          );
+        return;
+      }
+
+      const rawTicketId = req.params.ticketId || req.params.id;
+      const ticketId = parseInt(rawTicketId, 10);
+      const actionId = parseInt(req.params.actionId, 10);
+
+      if (isNaN(ticketId) || ticketId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "TICKET_NOT_FOUND",
+              "Ticket with the specified ID does not exist."
+            )
+          );
+        return;
+      }
+
+      if (isNaN(actionId) || actionId <= 0) {
+        res
+          .status(404)
+          .json(
+            createErrorEnvelope(
+              "ACTION_NOT_FOUND",
+              "Action record not found for this ticket."
+            )
+          );
+        return;
+      }
+
+      const {
+        expectedUpdatedAt,
+        description,
+        result,
+        actionType,
+        timeSpentMinutes,
+        performedAt,
+        actionDateTime,
+        followUpRequired,
+        followUpNote,
+        attachmentNotes,
+      } = req.body || {};
+
+      // Optimistic Concurrency Control Contract: missing token -> 400
+      if (!expectedUpdatedAt) {
+        res
+          .status(400)
+          .json(
+            createErrorEnvelope(
+              "MISSING_CONCURRENCY_TOKEN",
+              "The 'expectedUpdatedAt' concurrency token is required to update an action record.",
+              undefined,
+              { actionId, requiredField: "expectedUpdatedAt" }
+            )
+          );
+        return;
+      }
+
+      const expectedDate = new Date(expectedUpdatedAt);
+      if (isNaN(expectedDate.getTime())) {
+        res
+          .status(400)
+          .json(
+            createErrorEnvelope(
+              "INVALID_CONCURRENCY_TOKEN",
+              "The 'expectedUpdatedAt' concurrency token must be a valid ISO timestamp.",
+              undefined,
+              { actionId, requiredField: "expectedUpdatedAt" }
+            )
+          );
+        return;
+      }
+
+      // Validation for update fields
+      if (
+        description !== undefined &&
+        (typeof description !== "string" ||
+          description.trim().length < 1 ||
+          description.trim().length > 2000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action description must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      if (
+        result !== undefined &&
+        (typeof result !== "string" ||
+          result.trim().length < 1 ||
+          result.trim().length > 2000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action result must be between 1 and 2000 characters."
+            )
+          );
+        return;
+      }
+
+      if (
+        followUpRequired !== undefined &&
+        typeof followUpRequired !== "boolean"
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "followUpRequired must be a boolean."
+            )
+          );
+        return;
+      }
+
+      if (
+        followUpNote !== undefined &&
+        followUpNote !== null &&
+        (typeof followUpNote !== "string" ||
+          followUpNote.trim().length > 1000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Follow-up note cannot exceed 1000 characters."
+            )
+          );
+        return;
+      }
+
+      if (
+        attachmentNotes !== undefined &&
+        attachmentNotes !== null &&
+        (typeof attachmentNotes !== "string" ||
+          attachmentNotes.trim().length > 1000)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Attachment notes cannot exceed 1000 characters."
+            )
+          );
+        return;
+      }
+
+      if (
+        actionType !== undefined &&
+        actionType !== null &&
+        (typeof actionType !== "string" || actionType.trim().length > 50)
+      ) {
+        res
+          .status(422)
+          .json(
+            createErrorEnvelope(
+              "VALIDATION_ERROR",
+              "Action type cannot exceed 50 characters."
+            )
+          );
+        return;
+      }
+
+      if (timeSpentMinutes !== undefined) {
+        if (
+          timeSpentMinutes === null ||
+          typeof timeSpentMinutes !== "number" ||
+          !Number.isInteger(timeSpentMinutes) ||
+          timeSpentMinutes < 1 ||
+          timeSpentMinutes > 1440
+        ) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Time spent must be an integer between 1 and 1440 minutes."
+              )
+            );
+          return;
+        }
+      }
+
+      const rawUpdateTimestamp = performedAt || actionDateTime;
+      let updatedActionDate: Date | undefined;
+      if (rawUpdateTimestamp) {
+        const parsed = new Date(rawUpdateTimestamp);
+        if (isNaN(parsed.getTime())) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Invalid timestamp format."
+              )
+            );
+          return;
+        }
+        if (parsed.getTime() > Date.now()) {
+          res
+            .status(422)
+            .json(
+              createErrorEnvelope(
+                "VALIDATION_ERROR",
+                "Action timestamp cannot be in the future."
+              )
+            );
+          return;
+        }
+        updatedActionDate = parsed;
+      }
+
+      // Execute ATOMIC conditional update within transaction
+      const transactionResult = await getPrisma().$transaction(async (tx) => {
+        const ticket = await tx.ticket.findUnique({
+          where: { id: ticketId },
+        });
+
+        if (!ticket) {
+          return {
+            status: 404,
+            code: "TICKET_NOT_FOUND",
+            message: "Ticket with the specified ID does not exist.",
+          };
+        }
+
+        // Terminal status guard (BR-02): cannot modify actions on closed/cancelled tickets
+        if (ticket.status === "CLOSED" || ticket.status === "CANCELLED") {
+          return {
+            status: 422,
+            code: "TICKET_NOT_IN_WORKABLE_STATE",
+            message: `Cannot modify actions taken on tickets in terminal status (${ticket.status}).`,
+          };
+        }
+
+        const existingAction = await tx.actionTaken.findFirst({
+          where: { id: actionId, ticketId },
+          include: {
+            performedBy: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        });
+
+        if (!existingAction) {
+          return {
+            status: 404,
+            code: "ACTION_NOT_FOUND",
+            message: "Action record not found for this ticket.",
+          };
+        }
+
+        const targetFollowUp =
+          followUpRequired !== undefined
+            ? followUpRequired === true
+            : existingAction.followUpRequired;
+
+        const targetNote =
+          followUpNote !== undefined ? followUpNote : existingAction.followUpNote;
+
+        if (targetNote !== undefined && targetNote !== null) {
+          if (typeof targetNote !== "string" || targetNote.trim().length > 1000) {
+            return {
+              status: 422,
+              code: "VALIDATION_ERROR",
+              message: "Follow-up note cannot exceed 1000 characters.",
+            };
+          }
+        }
+
+        if (targetFollowUp) {
+          if (
+            !targetNote ||
+            typeof targetNote !== "string" ||
+            targetNote.trim().length < 1
+          ) {
+            return {
+              status: 422,
+              code: "VALIDATION_ERROR",
+              message: "Follow-up note is required when follow-up is requested.",
+            };
+          }
+        }
+
+        // Guarantee concurrency token strictly changes even if update occurs in the same millisecond
+        const nowMs = Date.now();
+        const nextMs = nowMs > expectedDate.getTime() ? nowMs : expectedDate.getTime() + 1;
+        const nextUpdatedAt = new Date(nextMs);
+
+        // Atomic conditional update in database: locks row and checks id, ticketId, AND updatedAt together
+        const updateRes = await tx.actionTaken.updateMany({
+          where: {
+            id: actionId,
+            ticketId,
+            updatedAt: expectedDate,
+          },
+          data: {
+            ...(description !== undefined
+              ? { description: description.trim() }
+              : {}),
+            ...(result !== undefined ? { result: result.trim() } : {}),
+            ...(actionType !== undefined ? { actionType: actionType.trim() } : {}),
+            ...(timeSpentMinutes !== undefined ? { timeSpentMinutes } : {}),
+            ...(followUpRequired !== undefined
+              ? { followUpRequired: targetFollowUp }
+              : {}),
+            ...(followUpNote !== undefined
+              ? {
+                  followUpNote:
+                    targetNote && typeof targetNote === "string"
+                      ? targetNote.trim()
+                      : null,
+                }
+              : {}),
+            ...(attachmentNotes !== undefined
+              ? {
+                  attachmentNotes:
+                    attachmentNotes && typeof attachmentNotes === "string"
+                      ? attachmentNotes.trim()
+                      : null,
+                }
+              : {}),
+            ...(updatedActionDate
+              ? {
+                  performedAt: updatedActionDate,
+                  actionDateTime: updatedActionDate,
+                }
+              : {}),
+            updatedAt: nextUpdatedAt,
+          },
+        });
+
+        if (updateRes.count === 0) {
+          const latestAction = await tx.actionTaken.findFirst({
+            where: { id: actionId, ticketId },
+            include: {
+              performedBy: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                  role: true,
+                },
+              },
+            },
+          });
+
+          if (!latestAction) {
+            return {
+              status: 404,
+              code: "ACTION_NOT_FOUND",
+              message: "Action record not found for this ticket.",
+            };
+          }
+
+          // Concurrency mismatch caught atomically
+          return {
+            status: 409,
+            code: "STALE_ACTION_CONFLICT",
+            message:
+              "The action record has been modified by another user since you loaded it. Please reload the latest version before applying changes.",
+            details: {
+              actionId,
+              providedUpdatedAt: expectedUpdatedAt,
+              currentUpdatedAt: latestAction.updatedAt.toISOString(),
+              currentRecord: {
+                id: latestAction.id,
+                description: latestAction.description,
+                actionType: latestAction.actionType,
+                result: latestAction.result,
+                timeSpentMinutes: latestAction.timeSpentMinutes,
+                performedAt: latestAction.performedAt,
+                updatedAt: latestAction.updatedAt,
+                performedBy: latestAction.performedBy,
+              },
+            },
+          };
+        }
+
+        const freshRecord = await tx.actionTaken.findUnique({
+          where: { id: actionId },
+          include: {
+            performedBy: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        });
+
+        return { status: 200, data: freshRecord };
+      });
+
+      if (transactionResult.status !== 200) {
+        res
+          .status(transactionResult.status)
+          .json(
+            createErrorEnvelope(
+              transactionResult.code!,
+              transactionResult.message!,
+              undefined,
+              transactionResult.details
+            )
+          );
+        return;
+      }
+
+      const updatedAction = transactionResult.data!;
+
+      // Audit log in TicketActivity table (FR-12, AC-20-05)
+      await getPrisma()
+        .ticketActivity.create({
+          data: {
+            ticketId,
+            type: "ACTION_TAKEN_UPDATED",
+            action: "Action Taken Updated",
+            message: `${req.user!.fullName} updated action #${updatedAction.id}`,
+            actorId: req.user!.id,
+            actorName: req.user!.fullName,
+            metadata: {
+              actionId: updatedAction.id,
+              actionType: updatedAction.actionType,
+            },
+          },
+        })
+        .catch(() => {});
+
+      res.status(200).json({ data: updatedAction });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to update action taken."
+          )
+        );
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Issue 22 — Operational Dashboard API (FR-07, FR-08, AC-22-01..06)
+// GET /api/staff/dashboard
+// ---------------------------------------------------------------------------
+app.get(
+  "/api/staff/dashboard",
+  requireAuth,
+  requirePasswordChanged,
+  requireRole("IT_STAFF", "ADMINISTRATOR"),
+  async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+      const prisma = getPrisma();
+      const calculationTimestamp = new Date();
+      const recentlyResolvedWindowDays = 7;
+      const recentlyResolvedWindowStart = new Date(
+        calculationTimestamp.getTime() - recentlyResolvedWindowDays * 24 * 60 * 60 * 1000
+      );
+
+      // Concurrent queries for core queue counts (AC-22-01, AC-22-02)
+      const [
+        totalOpen,
+        inProgress,
+        waitingForRequester,
+        recentlyResolved,
+        unassignedCount,
+        categories,
+        nonTerminalTickets,
+        actions,
+      ] = await Promise.all([
+        // totalOpen: NEW, OPEN
+        prisma.ticket.count({
+          where: {
+            status: { in: [TicketStatus.NEW, TicketStatus.OPEN] },
+          },
+        }),
+        // inProgress: IN_PROGRESS
+        prisma.ticket.count({
+          where: {
+            status: TicketStatus.IN_PROGRESS,
+          },
+        }),
+        // waitingForRequester: WAITING_FOR_REQUESTER
+        prisma.ticket.count({
+          where: {
+            status: TicketStatus.WAITING_FOR_REQUESTER,
+          },
+        }),
+        // recentlyResolved: RESOLVED within rolling 7-day window
+        prisma.ticket.count({
+          where: {
+            status: TicketStatus.RESOLVED,
+            updatedAt: { gte: recentlyResolvedWindowStart },
+          },
+        }),
+        // unassignedCount: ownerId IS NULL in active workable states
+        prisma.ticket.count({
+          where: {
+            ownerId: null,
+            status: {
+              in: [
+                TicketStatus.NEW,
+                TicketStatus.OPEN,
+                TicketStatus.IN_PROGRESS,
+                TicketStatus.WAITING_FOR_REQUESTER,
+                TicketStatus.REOPENED,
+              ],
+            },
+          },
+        }),
+        // All categories sorted by id ASC
+        prisma.category.findMany({
+          orderBy: { id: "asc" },
+          select: { id: true, name: true },
+        }),
+        // All non-terminal tickets (status NOT IN ('CLOSED', 'CANCELLED'))
+        prisma.ticket.findMany({
+          where: {
+            status: {
+              notIn: [TicketStatus.CLOSED, TicketStatus.CANCELLED],
+            },
+          },
+          select: {
+            id: true,
+            categoryId: true,
+            requestedPriority: true,
+            itPriority: true,
+          },
+        }),
+        // Actions on active workable or recently resolved tickets (AC-22-03)
+        prisma.actionTaken.findMany({
+          where: {
+            ticket: {
+              OR: [
+                {
+                  status: {
+                    in: [
+                      TicketStatus.OPEN,
+                      TicketStatus.IN_PROGRESS,
+                      TicketStatus.WAITING_FOR_REQUESTER,
+                      TicketStatus.REOPENED,
+                    ],
+                  },
+                },
+                {
+                  status: TicketStatus.RESOLVED,
+                  updatedAt: { gte: recentlyResolvedWindowStart },
+                },
+              ],
+            },
+          },
+          select: {
+            timeSpentMinutes: true,
+            ticket: {
+              select: {
+                categoryId: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      // Category breakdown aggregation & mathematical invariant enforcement (AC-22-03, AC-22-04, AC-22-05)
+      const categoryTimeMap = new Map<number, number>();
+      let totalTimeSpentMinutes = 0;
+      for (const action of actions) {
+        const catId = action.ticket.categoryId;
+        const minutes = action.timeSpentMinutes ?? 0;
+        totalTimeSpentMinutes += minutes;
+        categoryTimeMap.set(catId, (categoryTimeMap.get(catId) || 0) + minutes);
+      }
+
+      const categoryTicketCountMap = new Map<number, number>();
+      for (const ticket of nonTerminalTickets) {
+        categoryTicketCountMap.set(
+          ticket.categoryId,
+          (categoryTicketCountMap.get(ticket.categoryId) || 0) + 1
+        );
+      }
+
+      const categoryBreakdown = categories.map((cat) => ({
+        categoryId: cat.id,
+        categoryName: cat.name,
+        ticketCount: categoryTicketCountMap.get(cat.id) || 0,
+        totalTimeSpentMinutes: categoryTimeMap.get(cat.id) || 0,
+      }));
+
+      // Priority breakdown aggregation (AC-22-04)
+      const priorityBreakdown: Record<Priority, number> = {
+        P0_URGENT: 0,
+        P1_HIGH: 0,
+        P2_MEDIUM: 0,
+        P3_LOW: 0,
+      };
+      for (const ticket of nonTerminalTickets) {
+        const effectivePriority = ticket.itPriority ?? ticket.requestedPriority;
+        if (effectivePriority && priorityBreakdown[effectivePriority] !== undefined) {
+          priorityBreakdown[effectivePriority]++;
+        }
+      }
+
+      res.status(200).json({
+        data: {
+          metrics: {
+            totalOpen,
+            inProgress,
+            waitingForRequester,
+            recentlyResolved,
+            unassignedCount,
+            totalTimeSpentMinutes,
+          },
+          categoryBreakdown,
+          priorityBreakdown,
+          meta: {
+            calculationTimestamp: calculationTimestamp.toISOString(),
+            recentlyResolvedWindowDays,
+            recentlyResolvedWindowStart: recentlyResolvedWindowStart.toISOString(),
+          },
+        },
+      });
+    } catch {
+      res
+        .status(500)
+        .json(
+          createErrorEnvelope(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to retrieve operational dashboard metrics."
           )
         );
     }

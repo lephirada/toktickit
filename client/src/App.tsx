@@ -11,10 +11,14 @@ import ChangePasswordScreen from "./components/ChangePasswordScreen.js";
 import StaffTicketQueue from "./components/StaffTicketQueue.js";
 import { StaffTicketDetail } from "./components/StaffTicketDetail.js";
 import UserManagement from "./components/UserManagement.js";
+import RequesterDashboard from "./components/RequesterDashboard.js";
+import StaffDashboard from "./components/StaffDashboard.js";
 import { CheckCircleIcon, TicketIcon, UserIcon } from "./components/icons/index.js";
 
 type UiState = "idle" | "loading" | "success" | "error";
 export type ActiveView =
+  | "requester-dashboard"
+  | "staff-dashboard"
   | "my-tickets"
   | "create-ticket"
   | "ticket-detail"
@@ -52,18 +56,29 @@ export function resolveAllowedView(
 
   // 5. Role-based restrictions:
   if (user.role === "REQUESTER") {
+    if (path === "/dashboard" || path === "/requester/dashboard") {
+      return { view: "requester-dashboard", path: "/dashboard" };
+    }
     if (path.startsWith("/tickets/")) return { view: "ticket-detail", path };
     if (path === "/create-ticket") return { view: "create-ticket", path: "/create-ticket" };
+    if (path === "/my-tickets") return { view: "my-tickets", path: "/my-tickets" };
+    // Requesters attempting to access staff or admin routes get safely bounced to /my-tickets
     return { view: "my-tickets", path: "/my-tickets" };
   }
 
   if (user.role === "IT_STAFF") {
+    if (path === "/staff/dashboard" || path === "/dashboard") {
+      return { view: "staff-dashboard", path: "/staff/dashboard" };
+    }
     if (path.startsWith("/staff/tickets/")) return { view: "staff-ticket-detail", path };
     if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
     return { view: "staff-queue", path: "/staff/queue" };
   }
 
   if (user.role === "ADMINISTRATOR") {
+    if (path === "/staff/dashboard" || path === "/dashboard") {
+      return { view: "staff-dashboard", path: "/staff/dashboard" };
+    }
     if (path.startsWith("/staff/tickets/")) return { view: "staff-ticket-detail", path };
     if (path === "/admin/users") return { view: "admin-users", path: "/admin/users" };
     if (path === "/staff/queue") return { view: "staff-queue", path: "/staff/queue" };
@@ -212,7 +227,11 @@ export function AppContent() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [user, isAuthenticated, mustChangePassword]);
 
-  const handleNavigate = (targetScreen: string, ticketId?: number) => {
+  const handleNavigate = (
+    targetScreen: string,
+    ticketId?: number,
+    queryParams?: string | Record<string, string>
+  ) => {
     if (targetScreen !== "my-tickets") {
       setSuccessBanner(null);
     }
@@ -253,9 +272,19 @@ export function AppContent() {
     else if (targetScreen === "login") targetPath = "/login";
     else if (targetScreen === "staff-queue") targetPath = "/staff/queue";
     else if (targetScreen === "admin-users") targetPath = "/admin/users";
+    else if (targetScreen === "requester-dashboard") targetPath = "/dashboard";
+    else if (targetScreen === "staff-dashboard") targetPath = "/staff/dashboard";
 
     const resolved = resolveAllowedView(targetPath, user, mustChangePassword);
-    window.history.pushState({}, "", resolved.path);
+    let queryString = "";
+    if (typeof queryParams === "string") {
+      queryString = queryParams.startsWith("?") ? queryParams : `?${queryParams}`;
+    } else if (queryParams && typeof queryParams === "object") {
+      const sp = new URLSearchParams(queryParams);
+      queryString = sp.toString() ? `?${sp.toString()}` : "";
+    }
+
+    window.history.pushState({}, "", `${resolved.path}${queryString}`);
     setActiveView(resolved.view);
   };
 
@@ -360,12 +389,12 @@ export function AppContent() {
       />
 
       <main
-        className={`container-fluid py-4 flex-grow-1 ${effectiveView === "staff-queue" || effectiveView === "admin-users" ? "px-2 px-sm-3 px-xl-4" : "px-3 px-sm-4 px-lg-4"}`}
+        className={`container-fluid py-4 flex-grow-1 ${effectiveView === "staff-queue" || effectiveView === "admin-users" || effectiveView === "staff-dashboard" ? "px-2 px-sm-3 px-xl-4" : "px-3 px-sm-4 px-lg-4"}`}
         style={{
           maxWidth:
-            effectiveView === "staff-queue" || effectiveView === "admin-users"
+            effectiveView === "staff-queue" || effectiveView === "admin-users" || effectiveView === "staff-dashboard"
               ? "1600px"
-              : effectiveView === "my-tickets" || effectiveView === "ticket-detail" || effectiveView === "staff-ticket-detail"
+              : effectiveView === "my-tickets" || effectiveView === "ticket-detail" || effectiveView === "staff-ticket-detail" || effectiveView === "requester-dashboard"
               ? 1440
               : 800,
           margin: "0 auto",
@@ -390,6 +419,29 @@ export function AppContent() {
               onClick={handleClearBanner}
             ></button>
           </div>
+        )}
+
+        {/* Requester Dashboard View (Issue 24) */}
+        {effectiveView === "requester-dashboard" && (
+          <section data-testid="requester-dashboard-section">
+            <RequesterDashboard
+              onCreateTicket={() => handleNavigate("create-ticket")}
+              onViewMyTickets={() => handleNavigate("my-tickets")}
+              onViewTicket={(ticketId) => handleNavigate("ticket-detail", ticketId)}
+            />
+          </section>
+        )}
+
+        {/* Staff & Administrator Operational Dashboard View (Issue 24) */}
+        {effectiveView === "staff-dashboard" && user && (
+          <section data-testid="staff-dashboard-section" className="w-full">
+            <StaffDashboard
+              currentUser={user}
+              onNavigateQueue={(params) => handleNavigate("staff-queue", undefined, params)}
+              onViewTicket={(ticketId) => handleNavigate("staff-ticket-detail", ticketId)}
+              onNavigateUsers={() => handleNavigate("admin-users")}
+            />
+          </section>
         )}
 
         {/* Change Password View (voluntary change from header menu) */}
