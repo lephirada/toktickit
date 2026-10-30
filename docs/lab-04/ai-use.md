@@ -77,11 +77,9 @@ AI helped me in several parts of Sprint 4, including planning tasks, writing cod
 
 ### Where Human Judgment Mattered
 
-I learned that AI does not always understand the bigger picture of a task. Sometimes, Gemini completed the requested requirements but only at a surface level. It often followed the instructions exactly without exploring other related areas or checking whether the implementation was fully complete. When I asked GPT to review the work, it sometimes found deeper issues that were not included in the original instructions.
+I learned that AI does not always understand the bigger picture of a task. During Sprint 4, Gemini sometimes completed requested requirements only at a surface level, following instructions verbatim without exploring related areas or checking full contextual completeness. When I asked GPT to review the work, it identified deeper edge cases and architectural concerns that were not covered in the original instructions. This meant I had to spend additional time evaluating feedback, writing follow-up instructions, and correcting incomplete implementations.
 
-During Sprint 4, I noticed that AI sometimes completed exactly what I requested but did not investigate the broader context or related requirements. I had to ask another AI to review the work and identify issues that were not included in the original instructions. This meant I sometimes had to spend additional time reviewing the results, writing follow-up instructions, and correcting incomplete work.
-
-This made me realize that writing clear and detailed instructions is very important. I also had to compare the results, decide which feedback was relevant, and make sure the final work actually met the requirements. Human judgment was still necessary throughout the process.
+This experience reinforced that writing precise, detailed instructions is very important, but human judgment and engineering oversight remain essential throughout the process to evaluate feedback, decide which suggestions are relevant, and ensure that the final product truly meets all project requirements.
 
 ### Key Takeaways
 

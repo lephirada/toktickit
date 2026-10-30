@@ -21,7 +21,7 @@
 | **Issue 23** | `feature/23-actions-taken-ui`           | Actions Taken UI & Concurrency Conflict Dialog  | `[https://github.com/lephirada/toktickit/pull/56]` | `[Approved]`  | `[Merged]`   |
 | **Issue 24** | `feature/24-role-dashboards-ui`         | Operational Dashboard UI & Visualizations       | `[https://github.com/lephirada/toktickit/pull/57]` | `[Approved]`  | `[Merged]`   |
 | **Issue 25** | `feature/25-e2e-regression-hardening`   | Multi-Persona E2E Verification & Hardening      | `[https://github.com/lephirada/toktickit/pull/58]` | `[Approved]`  | `[Merged]`   |
-| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[PR Placeholder]`                                 | `[In Review]` | `[Planned]`  |
+| **Issue 26** | `feature/26-final-submission-artifacts` | Final Release Hardening & Submission Artifacts  | `[https://github.com/lephirada/toktickit/pull/59]` | `[In Review]` | `[Planned]`  |
 
 ---
 
@@ -907,18 +907,19 @@ Running 16 tests using 1 worker
 
 The project test pyramid comprises **613 automated tests across 4 non-overlapping layers**. The table below explicitly distinguishes test suites executed and verified during this verification session (`feature/26-final-submission-artifacts`) from historical regression runs verified and merged in PR #58 (`6c8345f` / `9c1a0c7`):
 
-| Test Layer & Suite | Execution Command | Test Count & Files | Execution Session | Verification Status |
-| :--- | :--- | :---: | :---: | :---: |
-| **Server Unit/Integration Tests** | `npm --prefix server test` | **351 / 351** (20 files) | **Current Session** (2026-10-30 19:57:14) | **PASS (100%)** — 22.46s |
-| **Client Component/Integration** | `npm --prefix client test` | **182 / 182** (19 files) | **Current Session** (2026-10-30 18:14:15) | **PASS (100%)** — 11.03s |
-| **Client Production Build** | `npm --prefix client run build` | Bundled in 1.06s | **Current Session** (2026-10-30 18:15:10) | **PASS (0 errors)** |
-| **Server Production Build** | `npm --prefix server run build` | Compiled cleanly | **Current Session** (2026-10-30 18:15:20) | **PASS (0 errors)** |
-| **TypeScript Static Check** | `npx --prefix {client,server} tsc --noEmit` | 0 errors | **Current Session** (2026-10-30 18:13:42) | **PASS (0 errors)** |
-| **Lab 4 Playwright E2E Suite** | `npx playwright test --config e2e/lab-04/playwright.config.ts` | **16 / 16** (5 spec files) | Historical Run (PR #58 / `6c8345f`) | **PASS (100%)** |
-| **Lab 3 Playwright Regression** | `npx playwright test e2e/lab-03/` | **64 / 64** (7 spec files) | Historical Run (PR #58 / `6c8345f`) | **PASS (100%)** |
-| **Total Test Pyramid (Non-Overlapping)** | **All 4 Layers Combined** | **613 / 613** | **Current Session + PR #58** | **PASS (100%)** |
+| Test Layer & Suite                       | Execution Command                                              |     Test Count & Files     |             Execution Session             |   Verification Status    |
+| :--------------------------------------- | :------------------------------------------------------------- | :------------------------: | :---------------------------------------: | :----------------------: |
+| **Server Unit/Integration Tests**        | `npm --prefix server test`                                     |  **351 / 351** (20 files)  | **Current Session** (2026-10-30 19:57:14) | **PASS (100%)** — 22.46s |
+| **Client Component/Integration**         | `npm --prefix client test`                                     |  **182 / 182** (19 files)  | **Current Session** (2026-10-30 18:14:15) | **PASS (100%)** — 11.03s |
+| **Client Production Build**              | `npm --prefix client run build`                                |      Bundled in 1.06s      | **Current Session** (2026-10-30 18:15:10) |   **PASS (0 errors)**    |
+| **Server Production Build**              | `npm --prefix server run build`                                |      Compiled cleanly      | **Current Session** (2026-10-30 18:15:20) |   **PASS (0 errors)**    |
+| **TypeScript Static Check**              | `npx --prefix {client,server} tsc --noEmit`                    |          0 errors          | **Current Session** (2026-10-30 18:13:42) |   **PASS (0 errors)**    |
+| **Lab 4 Playwright E2E Suite**           | `npx playwright test --config e2e/lab-04/playwright.config.ts` | **16 / 16** (5 spec files) |    Historical Run (PR #58 / `6c8345f`)    |     **PASS (100%)**      |
+| **Lab 3 Playwright Regression**          | `npx playwright test e2e/lab-03/`                              | **64 / 64** (7 spec files) |    Historical Run (PR #58 / `6c8345f`)    |     **PASS (100%)**      |
+| **Total Test Pyramid (Non-Overlapping)** | **All 4 Layers Combined**                                      |       **613 / 613**        |       **Current Session + PR #58**        |     **PASS (100%)**      |
 
 > **Non-Overlapping Layer Verification:**
+>
 > 1. `server/tests/` (351 tests in 20 files): Express routes, Prisma data aggregations, role access controllers, and schema migration logic. Zero overlap with frontend DOM.
 > 2. `client/tests/` (182 tests in 19 files): React components, Vitest + Testing Library, DOM events, optimistic state, and form validation. Zero overlap with backend Express routes.
 > 3. `e2e/lab-04/` (16 tests in 5 spec files): Multi-persona browser flows for Lab 4 (Actions Taken lifecycle, HTTP 409 concurrency conflict modal, resolution gate enforcement, role dashboards).

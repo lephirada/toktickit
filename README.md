@@ -264,7 +264,6 @@ toktickit/
 │       ├── reviewer.md                  # Peer review record and PR evaluation notes
 │       ├── ai-use.md                    # AI pair programming logs & student reflections
 │       └── submission-package.md        # Official 9-part final submission package
-│       └── evidence.md                  # Comprehensive verification & test evidence
 │
 ├── playwright.config.ts                 # Playwright E2E configuration
 ├── .gitignore
@@ -421,6 +420,14 @@ npm run dev
 ## Running Automated Tests
 
 Testing covers unit, integration, and end-to-end verification across the entire test pyramid (613 tests total):
+
+| Layer & Suite | Command | Test Count | Execution Evidence | Status |
+| :--- | :--- | :---: | :---: | :---: |
+| **Server Unit & Integration** | `npm run test:server` | **351 / 351** (20 files) | Current branch (`feature/26-final-submission-artifacts`) | **100% PASS** |
+| **Client Component Tests** | `npm run test:client` | **182 / 182** (19 files) | Current branch (`feature/26-final-submission-artifacts`) | **100% PASS** |
+| **Lab 4 Playwright E2E** | `npx playwright test --config e2e/lab-04/playwright.config.ts` | **16 / 16** (5 spec files) | Historical evidence from PR #58 (`6c8345f`) | **100% PASS** |
+| **Lab 3 Playwright Regression** | `npx playwright test e2e/lab-03/` | **64 / 64** (7 spec files) | Historical evidence from PR #58 (`6c8345f`) | **100% PASS** |
+| **Total Test Pyramid** | **All Layers Combined** | **613 / 613** | **Zero Overlap / Zero Regressions** | **100% PASS** |
 
 ### 1. Server Tests (Vitest + Supertest)
 
