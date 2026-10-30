@@ -21,6 +21,8 @@
 >
 > - **Lab 1 Goal:** Build a complete vertical slice proving integration across **React + Bootstrap UI -> Express REST API -> Prisma ORM -> PostgreSQL Database**.
 > - **Lab 2 Sprint Goal:** **Requester Ticketing Experience with Zen Green UI** — Deliver an accessible (WCAG 2.1 AA compliant), intuitive requester ticketing flow encompassing requester identity selection, pre-upload attachment ticket creation with dirty form guards, searchable/filterable ticket dashboard, attachment lifecycle with soft-removal and audit logging, and end-to-end Playwright verification.
+> - **Lab 3 Sprint Goal:** **Users, Roles, IT Staff Ticketing, and Admin Screens** — Deliver cookie-based JWT authentication, RBAC authorization, IT Staff ticket queue, operational status transitions, confidential internal notes, and administrative user management with safety guardrails.
+> - **Lab 4 Sprint Goal:** **Actions Taken, Resolution Gates, Operational Dashboards, and Final Regression Hardening** — Establish parent-child `1:N` work structures (`Ticket 1:N ActionTaken`), optimistic concurrency control (`409 STALE_ACTION_CONFLICT`), server-enforced Resolution Gate (`actionsCount >= 1`), role-appropriate operational dashboards with metric drill-downs, responsive Zen Green UI across viewports (1280px, 768px, 375px), and 100% full regression pass rate across 613 automated tests.
 
 ---
 
@@ -126,6 +128,60 @@
 
 ---
 
+## Lab 4: Actions Taken, Resolution Gates, Dashboards, and Final Regression
+
+### 1. Database Schema Evolution & ActionTaken Model (Issue 19)
+
+- **Parent-Child Work Tracking:** Evolved PostgreSQL schema with `ActionTaken` model establishing a 1:N relationship with tickets.
+- **Referential Integrity & User Protection:** Enforces `ON DELETE RESTRICT` on performer user (preserving BR-15) and `ON DELETE CASCADE` on tickets.
+- **Idempotent Database Seed:** Populates 19 realistic actions across assigned and unassigned tickets covering 0, 1, and multiple action scenarios with zero duplication on repeated execution.
+
+### 2. Actions Taken REST APIs & Optimistic Concurrency Control (Issue 20)
+
+- **Zero-Trust Performer Derivation:** Server derives `performedById` exclusively from session auth token (`req.user.id`), ignoring client-supplied IDs (BR-03).
+- **Optimistic Concurrency Control:** Enforces `expectedUpdatedAt` concurrency revision tokens on action updates, returning HTTP 409 `STALE_ACTION_CONFLICT` on stale submissions and HTTP 400 when omitted.
+- **Atomic Database Updates:** Executes atomic conditional queries preventing TOCTOU lost updates.
+- **Strict Business Validation:** Validates duration (`1..1440` minutes), mandatory follow-up notes when required, and past-or-present timestamps (`performedAt <= now()`).
+
+### 3. Server-Enforced Resolution Gate (Issue 21)
+
+- **Authoritative Resolution Gate:** Blocks transition from `IN_PROGRESS` to `RESOLVED` unless at least one Action Taken exists (`actionsCount >= 1`) and a valid resolution summary (10–1,000 characters) is provided, returning HTTP 422 `ACTION_TAKEN_REQUIRED_FOR_RESOLUTION`.
+- **Advisory Requester Confirmation:** `POST /api/tickets/:id/confirm-resolved` marks `resolutionIndicated = true` as strictly advisory; ticket status remains non-resolved until IT Staff formally reviews and resolves it (BR-05).
+- **Concurrency Protection on Tickets:** Atomic Compare-And-Swap (CAS) update on ticket status transitions returning HTTP 409 on concurrent edits.
+
+### 4. Operational Dashboard Analytics API (Issue 22)
+
+- **Real-Time Staff Metrics:** `GET /api/staff/dashboard` returns 7 core operational KPI metrics, category breakdowns, and priority breakdowns using effective priority `COALESCE(itPriority, requestedPriority)`.
+- **Rolling 7-Day Resolution Window:** Accurately isolates tickets resolved within the rolling 7-day window.
+- **Mathematical Duration Invariant:** Strictly maintains $\sum \text{categoryBreakdown.totalTimeSpentMinutes} \equiv \text{metrics.totalTimeSpentMinutes}$.
+
+### 5. Actions Taken UI & Concurrency Conflict Dialog (Issue 23)
+
+- **Work History Timeline:** Renders interactive timeline with badges, duration chips, follow-up flags, and attachment notes.
+- **Role-Based DOM Authorization:** Requesters receive an informational read-only timeline; Create and Edit buttons are completely omitted from the DOM.
+- **Interactive 409 Conflict Dialog:** Side-by-side comparison modal displaying server state vs. unsaved user draft with safe clipboard copy and server data reload.
+
+### 6. Role-Based Dashboards & Metric Drill-Downs (Issue 24)
+
+- **Requester Dashboard:** Summarizes authenticated requester's tickets with 4 KPI cards, recent activity table, and quick actions.
+- **Staff Operational Dashboard:** 7 KPI cards with Zen Green styling, P0 Urgent Tickets callout section, recent queue activity table, and metric drill-down links pre-filtering `/staff/queue`.
+- **Admin Accounts Summary:** High-level user accounts summary card strictly rendered for administrators only.
+- **URL Query Synchronization:** Synchronizes queue filters with URL query parameters and supports browser forward/back popstate navigation without duplicate history entries.
+
+### 7. Multi-Persona E2E Hardening & Full Regression (Issue 25)
+
+- **All 5 Lab 4 E2E Suites Hardened:** Full browser automation verifying actions lifecycle, 409 concurrency, resolution gates, role dashboards, and responsive layout across 1280px, 768px, and 375px viewports.
+- **Zero-Tolerance Error Guardrails:** Enforces zero unhandled `pageerror`, zero unexpected console errors, and Request-Bound 1-to-1 HTTP Failure Tracking via `ExpectedHttpFailure`.
+- **Test Isolation & Determinism:** Preserves historical seed actions on `TKT-2026-00014` and `TKT-2026-00003` with postcondition assertions, and executes `resetAuthUsers()` to eliminate Admin password mutation drift across suites.
+- **Zero Regressions:** 100% pass rate achieved across all 613 tests in the TokTickIT test pyramid.
+
+### 8. Final Release & Submission Artifacts (Issue 26)
+
+- **9-Part Submission Package:** Complete `docs/lab-04/submission-package.md` structured strictly per the official Lab Sheet.
+- **Consolidated Screenshot Catalog:** High-resolution screenshots organized in `artifacts/lab-04/screenshots/` across `staff-dashboard/`, `requester-dashboard/`, and `actions-taken/`.
+
+---
+
 ## Repository Structure
 
 ```text
@@ -145,7 +201,8 @@ toktickit/
 │   ├── tests/
 │   │   ├── lab-01/           # Lab 1 foundation tests
 │   │   ├── lab-02/           # Lab 2 UI & component tests
-│   │   └── lab-03/           # Lab 3 auth, queue, detail, and admin tests
+│   │   ├── lab-03/           # Lab 3 auth, queue, detail, and admin tests
+│   │   └── lab-04/           # Lab 4 Actions Taken, Dashboards, and Concurrency tests
 │   ├── index.html
 │   ├── package.json
 │   ├── tsconfig.json
@@ -153,17 +210,18 @@ toktickit/
 │
 ├── server/
 │   ├── prisma/
-│   │   ├── migrations/       # Database migration history
-│   │   ├── schema.prisma     # Prisma data models (User, Ticket, Comment, Activity)
-│   │   └── seed.ts           # Idempotent seed script (10 Users, Master Data, Tickets)
+│   │   ├── migrations/       # Database migration history (including ActionTaken)
+│   │   ├── schema.prisma     # Prisma data models (User, Ticket, Comment, Activity, ActionTaken)
+│   │   └── seed.ts           # Idempotent seed script (10 Users, Master Data, Tickets, 19 Actions)
 │   ├── src/
-│   │   ├── app.ts            # Express REST API routes, RBAC, and business logic
+│   │   ├── app.ts            # Express REST API routes, RBAC, Resolution Gate, Dashboards
 │   │   ├── index.ts          # Server entry point
 │   │   └── prisma.ts         # Prisma client singleton
 │   ├── tests/
 │   │   ├── lab-01/           # Lab 1 API tests
 │   │   ├── lab-02/           # Lab 2 API integration tests
-│   │   └── lab-03/           # Lab 3 auth, RBAC, queue, notes, and admin API tests
+│   │   ├── lab-03/           # Lab 3 auth, RBAC, queue, notes, and admin API tests
+│   │   └── lab-04/           # Lab 4 migration, actions-taken, gate, and dashboard API tests
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── vitest.config.ts
@@ -171,37 +229,41 @@ toktickit/
 ├── e2e/
 │   ├── lab-02/
 │   │   └── requester-ticketing.spec.ts  # Lab 2 Requester journey
-│   └── lab-03/
-│       ├── authentication.spec.ts       # Auth, route guard & session lifecycle
-│       ├── staff-ticket-flow.spec.ts    # Queue, claim, status, and internal notes
-│       ├── user-administration.spec.ts  # Directory, user create/edit, and safety alerts
-│       ├── responsive-overflow.spec.ts  # Zero-overflow assertions across 3 viewports
-│       ├── capture-screenshots.spec.ts  # Automated responsive screenshot generator
-│       └── full-journey.spec.ts         # Complete 20-step multi-persona integration flow
+│   ├── lab-03/
+│   │   ├── authentication.spec.ts       # Auth, route guard & session lifecycle
+│   │   ├── staff-ticket-flow.spec.ts    # Queue, claim, status, and internal notes
+│   │   ├── user-administration.spec.ts  # Directory, user create/edit, and safety alerts
+│   │   ├── responsive-overflow.spec.ts  # Zero-overflow assertions across 3 viewports
+│   │   ├── capture-screenshots.spec.ts  # Automated responsive screenshot generator
+│   │   └── full-journey.spec.ts         # Complete 20-step multi-persona integration flow
+│   └── lab-04/
+│       ├── actions-taken-flow.spec.ts   # Actions Taken lifecycle & real 409 concurrency
+│       ├── ticket-resolution.spec.ts    # Resolution gate enforcement & advisory semantics
+│       ├── dashboards.spec.ts           # Role dashboards, drill-downs, and a11y focus rings
+│       ├── dashboard-screenshots.spec.ts# Role dashboard screenshots across viewports
+│       └── responsive-actions-screenshots.spec.ts # Actions timeline, modal, and conflict screenshots
 │
 ├── artifacts/
 │   ├── lab-02/screenshots/             # Lab 2 screenshot evidence
-│   └── lab-03/screenshots/             # Lab 3 screenshot evidence (32 images across 8 view folders)
-│       ├── login/
-│       ├── change-password/
-│       ├── requester-create-ticket/
-│       ├── requester-my-tickets/
-│       ├── requester-ticket-detail/
-│       ├── staff-queue/
-│       ├── staff-ticket-detail/
-│       └── user-management/
+│   ├── lab-03/screenshots/             # Lab 3 screenshot evidence (32 images across 8 view folders)
+│   └── lab-04/screenshots/             # Lab 4 screenshot evidence
+│       ├── staff-dashboard/            # Staff dashboard (desktop, tablet, mobile)
+│       ├── requester-dashboard/        # Requester dashboard (desktop, tablet, mobile)
+│       └── actions-taken/              # Timeline, create modal, 409 conflict, requester view
 │
 ├── docs/
 │   ├── lab-01/                          # Lab 1 documentation
 │   ├── lab-02/                          # Lab 2 documentation
-│   └── lab-03/                          # Lab 3 documentation & contracts
-│       ├── specification.md             # Sprint 3 engineering specifications (FR & BR)
-│       ├── ui-spec.md                   # Zen Green UI specification & design tokens
-│       ├── api-spec.md                  # RESTful API contracts & error definitions
-│       ├── tests.md                     # Test traceability matrix & test plan
-│       ├── migration-plan.md            # Zero-data-loss database evolution plan
-│       ├── reviewer.md                  # Peer review record and PR registry
-│       ├── ai-use.md                    # AI pair programming logs & reflections
+│   ├── lab-03/                          # Lab 3 documentation & contracts
+│   └── lab-04/                          # Lab 4 documentation & contracts
+│       ├── specification.md             # Sprint 4 engineering specifications (FR & BR)
+│       ├── ui-spec.md                   # Zen Green UI specification & responsive rules
+│       ├── api-spec.md                  # RESTful API contracts & 409/422 error definitions
+│       ├── tests.md                     # Test traceability matrix & pyramid plan
+│       ├── evidence.md                  # Traceable verification evidence, logs, and PR registry
+│       ├── reviewer.md                  # Peer review record and PR evaluation notes
+│       ├── ai-use.md                    # AI pair programming logs & student reflections
+│       └── submission-package.md        # Official 9-part final submission package
 │       └── evidence.md                  # Comprehensive verification & test evidence
 │
 ├── playwright.config.ts                 # Playwright E2E configuration
@@ -236,36 +298,47 @@ toktickit/
 
 ### Lab 3 Authentication & Discussion API
 
-| Method   | Endpoint                            | Description                                                                              | Access / Role               |
-| :------- | :---------------------------------- | :--------------------------------------------------------------------------------------- | :-------------------------- |
-| `POST`   | `/api/auth/login`                   | Authenticate user with email and password, issue `toktickit_session` cookie              | Public                      |
-| `GET`    | `/api/auth/me`                      | Get current authenticated user profile and role                                          | Authenticated               |
-| `POST`   | `/api/auth/change-password`         | Change password, update bcrypt hash, and clear `mustChangePassword` flag                 | Authenticated               |
-| `POST`   | `/api/auth/logout`                  | Clear session cookie and invalidate local session (idempotent)                           | Public / Authenticated      |
-| `GET`    | `/api/tickets/:id/comments`         | Fetch public comments for a ticket (internal notes filtered out for requesters)          | Authenticated (Owner/Staff) |
-| `POST`   | `/api/tickets/:id/comments`         | Append a new public comment to the discussion thread (1–2000 chars)                      | Authenticated (Owner/Staff) |
-| `POST`   | `/api/tickets/:id/confirm-resolved` | Requester confirms issue appears resolved (sets flag, transitions status, logs activity) | Requester (Owner only)      |
+| Method | Endpoint                            | Description                                                                              | Access / Role               |
+| :----- | :---------------------------------- | :--------------------------------------------------------------------------------------- | :-------------------------- |
+| `POST` | `/api/auth/login`                   | Authenticate user with email and password, issue `toktickit_session` cookie              | Public                      |
+| `GET`  | `/api/auth/me`                      | Get current authenticated user profile and role                                          | Authenticated               |
+| `POST` | `/api/auth/change-password`         | Change password, update bcrypt hash, and clear `mustChangePassword` flag                 | Authenticated               |
+| `POST` | `/api/auth/logout`                  | Clear session cookie and invalidate local session (idempotent)                           | Public / Authenticated      |
+| `GET`  | `/api/tickets/:id/comments`         | Fetch public comments for a ticket (internal notes filtered out for requesters)          | Authenticated (Owner/Staff) |
+| `POST` | `/api/tickets/:id/comments`         | Append a new public comment to the discussion thread (1–2000 chars)                      | Authenticated (Owner/Staff) |
+| `POST` | `/api/tickets/:id/confirm-resolved` | Requester confirms issue appears resolved (sets flag, transitions status, logs activity) | Requester (Owner only)      |
 
 ### Lab 3 IT Staff Operations API
 
-| Method   | Endpoint                          | Description                                                                     | Access / Role         |
-| :------- | :-------------------------------- | :------------------------------------------------------------------------------ | :-------------------- |
-| `GET`    | `/api/staff/queue`                | Query ticket queue with search, status/priority/category/owner filters, sorting | IT Staff / Admin      |
-| `POST`   | `/api/tickets/:id/claim`          | Claim ownership of an unassigned ticket                                         | IT Staff / Admin      |
-| `POST`   | `/api/tickets/:id/assign`         | Reassign ticket ownership to another active IT Staff member                     | IT Staff / Admin      |
-| `PATCH`  | `/api/tickets/:id/status`         | Transition ticket status with mandatory reason/summary                          | IT Staff / Admin      |
-| `PATCH`  | `/api/tickets/:id/priority`       | Update IT operational priority                                                  | IT Staff / Admin      |
-| `GET`    | `/api/tickets/:id/notes`          | Fetch confidential internal notes for a ticket                                  | IT Staff / Admin only |
-| `POST`   | `/api/tickets/:id/notes`          | Record a confidential internal note                                             | IT Staff / Admin only |
+| Method  | Endpoint                    | Description                                                                     | Access / Role         |
+| :------ | :-------------------------- | :------------------------------------------------------------------------------ | :-------------------- |
+| `GET`   | `/api/staff/queue`          | Query ticket queue with search, status/priority/category/owner filters, sorting | IT Staff / Admin      |
+| `POST`  | `/api/tickets/:id/claim`    | Claim ownership of an unassigned ticket                                         | IT Staff / Admin      |
+| `POST`  | `/api/tickets/:id/assign`   | Reassign ticket ownership to another active IT Staff member                     | IT Staff / Admin      |
+| `PATCH` | `/api/tickets/:id/status`   | Transition ticket status with mandatory reason/summary                          | IT Staff / Admin      |
+| `PATCH` | `/api/tickets/:id/priority` | Update IT operational priority                                                  | IT Staff / Admin      |
+| `GET`   | `/api/tickets/:id/notes`    | Fetch confidential internal notes for a ticket                                  | IT Staff / Admin only |
+| `POST`  | `/api/tickets/:id/notes`    | Record a confidential internal note                                             | IT Staff / Admin only |
 
 ### Lab 3 Administrator User Management API
 
-| Method   | Endpoint                               | Description                                                                     | Access / Role  |
-| :------- | :------------------------------------- | :------------------------------------------------------------------------------ | :------------- |
-| `GET`    | `/api/admin/users`                     | List user accounts with search and role filter                                  | Admin only     |
-| `POST`   | `/api/admin/users`                     | Create new user account with temporary initial password                         | Admin only     |
-| `PATCH`  | `/api/admin/users/:id`                 | Edit user profile (name, email, role, active status) with safety protections    | Admin only     |
-| `POST`   | `/api/admin/users/:id/reset-password`  | Administratively reset initial password and set `mustChangePassword: true`      | Admin only     |
+| Method  | Endpoint                              | Description                                                                  | Access / Role |
+| :------ | :------------------------------------ | :--------------------------------------------------------------------------- | :------------ |
+| `GET`   | `/api/admin/users`                    | List user accounts with search and role filter                               | Admin only    |
+| `POST`  | `/api/admin/users`                    | Create new user account with temporary initial password                      | Admin only    |
+| `PATCH` | `/api/admin/users/:id`                | Edit user profile (name, email, role, active status) with safety protections | Admin only    |
+| `POST`  | `/api/admin/users/:id/reset-password` | Administratively reset initial password and set `mustChangePassword: true`   | Admin only    |
+
+### Lab 4 Actions Taken, Resolution Gate & Dashboard APIs
+
+| Method  | Endpoint                            | Description                                                                                          | Access / Role             |
+| :------ | :---------------------------------- | :--------------------------------------------------------------------------------------------------- | :------------------------ |
+| `GET`   | `/api/tickets/:id/actions`          | Retrieve chronological Actions Taken list for a ticket (read-only for requesters)                    | Authenticated (Permitted) |
+| `POST`  | `/api/tickets/:id/actions`          | Log a new Action Taken with server-derived performer identity and validation                         | IT Staff / Admin          |
+| `PUT`   | `/api/actions/:id`                  | Update an Action Taken with optimistic concurrency check (`409 STALE_ACTION_CONFLICT` on mismatch)   | IT Staff / Admin          |
+| `PATCH` | `/api/tickets/:id/status`           | Server-enforced Resolution Gate (`actionsCount >= 1` required for `RESOLVED`, HTTP 422 if 0 actions) | IT Staff / Admin          |
+| `POST`  | `/api/tickets/:id/confirm-resolved` | Requester advisory confirmation (`resolutionIndicated = true` without altering ticket status)        | Requester (Owner only)    |
+| `GET`   | `/api/staff/dashboard`              | Operational dashboard metrics, rolling 7-day resolution window, and category/priority breakdown      | IT Staff / Admin          |
 
 ---
 
@@ -312,6 +385,11 @@ npm run prisma:seed
 >
 > - 10 Users across 3 Roles: 5 Requesters (Sarah Connor, John Doe, Jennifer Anderson, Michael Brown, Kyle Reese), 4 IT Staff (David Lee, Alex Morgan, Chris Taylor, Kevin Patel), 1 Administrator (`admin@toktickit.com`)
 > - Bcrypt hashed credentials: Default password `Password123!` (Admin: `Admin123!`)
+>
+> **Lab 4 Seed Increment:**
+>
+> - 19 realistic Actions Taken records pre-seeded across assigned and unassigned tickets covering 0, 1, and multiple action scenarios.
+> - Preserves historical tickets, users, comments, and attachments idempotently with zero duplication on repeated execution.
 
 ---
 
@@ -342,30 +420,36 @@ npm run dev
 
 ## Running Automated Tests
 
-Testing covers unit, integration, and end-to-end verification across the stack:
+Testing covers unit, integration, and end-to-end verification across the entire test pyramid (613 tests total):
 
 ### 1. Server Tests (Vitest + Supertest)
 
-Runs API endpoint tests, transactional integrity checks, quota enforcement, and soft-delete tests:
+Runs unit, database migration, Resolution Gate, Actions Taken API, and dashboard analytics tests:
 
 ```bash
-npm --prefix server test
+npm run test:server
+# or: npm --prefix server test
 ```
 
 ### 2. Client Tests (Vitest + React Testing Library)
 
-Runs UI component tests, dirty guard checks, dashboard filters, and attachment interactions:
+Runs UI component tests, dirty guard checks, dashboard filters, and Actions Taken interactions:
 
 ```bash
-npm --prefix client test
+npm run test:client
+# or: npm --prefix client test
 ```
 
 ### 3. End-to-End Tests (Playwright)
 
-Executes full browser automation testing the entire requester ticketing lifecycle:
+Executes full browser automation testing the entire ticketing and operational lifecycle:
 
 ```bash
-npm run test:e2e
+# Lab 4 E2E Suite (Actions Taken, Concurrency 409, Resolution Gate, Dashboards)
+npx playwright test --config e2e/lab-04/playwright.config.ts
+
+# Lab 3 E2E Regression Suite
+npx playwright test e2e/lab-03/
 ```
 
 > **Convenience Root Command:**
@@ -404,18 +488,25 @@ npm run test:e2e
 - [**Peer Review Records** (`docs/lab-03/reviewer.md`)](docs/lab-03/reviewer.md) — Peer review logs, PR evaluation notes, reviewer critiques, and author responses for Issues 10–17.
 - [**AI Use Disclosure** (`docs/lab-03/ai-use.md`)](docs/lab-03/ai-use.md) — Log of AI pair-programming usage, prompt engineering, verification protocols, and student reflection.
 
+### Lab 4 Documentation
+
+- [**Specification Document** (`docs/lab-04/specification.md`)](docs/lab-04/specification.md) — Sprint 4 requirements, parent-child model, business rules, Resolution Gate, and dashboard analytics.
+- [**API Specification** (`docs/lab-04/api-spec.md`)](docs/lab-04/api-spec.md) — REST API contracts for Actions Taken, 409 concurrency tokens, 422 Resolution Gate, and dashboard calculations.
+- [**UI Specification** (`docs/lab-04/ui-spec.md`)](docs/lab-04/ui-spec.md) — Zen Green UI guidelines for operational dashboards, Actions Taken timeline, and 409 conflict dialog.
+- [**Test Plan & Results** (`docs/lab-04/tests.md`)](docs/lab-04/tests.md) — Multi-tiered test pyramid plan, AC traceability, and regression test suites.
+- [**Evidence & Verification Artifacts** (`docs/lab-04/evidence.md`)](docs/lab-04/evidence.md) — Authentic test execution logs, PR registry (Issues 18–26), and screenshot catalog.
+- [**Peer Review Records** (`docs/lab-04/reviewer.md`)](docs/lab-04/reviewer.md) — Peer review records, PR evaluation notes, and author responses for Issues 18–26.
+- [**AI Use Disclosure** (`docs/lab-04/ai-use.md`)](docs/lab-04/ai-use.md) — Log of AI pair-programming usage, prompts, and authentic student reflections.
+- [**Final Submission Package** (`docs/lab-04/submission-package.md`)](docs/lab-04/submission-package.md) — Comprehensive 9-part submission deliverable strictly conforming to the Lab Sheet.
+
 ### Verification Artifacts & Screenshots
 
 - [`artifacts/lab-02/screenshots/`](artifacts/lab-02/screenshots/) — Lab 2 visual verification evidence across responsive viewports (`create-ticket/`, `my-tickets/`, `ticket-detail/`).
-- [`artifacts/lab-03/screenshots/`](artifacts/lab-03/screenshots/) — Lab 3 visual verification evidence across Desktop, Tablet, and Mobile viewports organized in 8 prescribed view folders:
-  - [`login/`](artifacts/lab-03/screenshots/login/) — Login screen with validation, busy states, and safe error alerts.
-  - [`change-password/`](artifacts/lab-03/screenshots/change-password/) — First-login mandatory password change gate.
-  - [`requester-create-ticket/`](artifacts/lab-03/screenshots/requester-create-ticket/) — Requester ticket submission with authenticated session.
-  - [`requester-my-tickets/`](artifacts/lab-03/screenshots/requester-my-tickets/) — Requester ticket dashboard with real user data.
-  - [`requester-ticket-detail/`](artifacts/lab-03/screenshots/requester-ticket-detail/) — Requester ticket detail with public comments and resolution indication.
-  - [`staff-queue/`](artifacts/lab-03/screenshots/staff-queue/) — IT Staff ticket queue with responsive table/card views and filter drawers.
-  - [`staff-ticket-detail/`](artifacts/lab-03/screenshots/staff-ticket-detail/) — IT Staff detail with ticket claims, reassignments, status transitions, and confidential internal notes.
-  - [`user-management/`](artifacts/lab-03/screenshots/user-management/) — Minimalist Admin user directory with modal actions and safety guardrails.
+- [`artifacts/lab-03/screenshots/`](artifacts/lab-03/screenshots/) — Lab 3 visual verification evidence across Desktop, Tablet, and Mobile viewports organized in 8 prescribed view folders.
+- [`artifacts/lab-04/screenshots/`](artifacts/lab-04/screenshots/) — Lab 4 visual verification evidence organized in the 3 prescribed view folders:
+  - [`staff-dashboard/`](artifacts/lab-04/screenshots/staff-dashboard/) — IT Staff operational dashboard across Desktop (1280px), Tablet (768px), and Mobile (375px) viewports with KPI cards, urgent tickets, and workload bars.
+  - [`requester-dashboard/`](artifacts/lab-04/screenshots/requester-dashboard/) — Requester dashboard across Desktop (1280px), Tablet (768px), and Mobile (375px) viewports with personal metrics and quick actions.
+  - [`actions-taken/`](artifacts/lab-04/screenshots/actions-taken/) — Actions Taken work history timeline, log action modal, 409 concurrency conflict dialog, and requester read-only view.
 
 ---
 
@@ -426,6 +517,18 @@ This project enforces a structured **Git Flow** strategy to maintain code qualit
 ```text
 main (Production / Stable Releases)
  ^
+ |-- lab4-staging (Lab 4 Integration Branch)
+ |    ^
+ |    |-- feature/18-lab4-spec-docs          (Issue 18: Sprint 4 Specifications & Test Plan)
+ |    |-- feature/19-database-migration-actions (Issue 19: ActionTaken Schema & Seed Migration)
+ |    |-- feature/20-actions-taken-backend   (Issue 20: Actions Taken REST API & Concurrency)
+ |    |-- feature/21-ticket-resolution-gate  (Issue 21: Server-Enforced Resolution Gate)
+ |    |-- feature/22-dashboard-backend-apis  (Issue 22: Operational Dashboard Metrics API)
+ |    |-- feature/23-actions-taken-ui        (Issue 23: Actions Taken UI & Concurrency Modal)
+ |    |-- feature/24-role-dashboards-ui      (Issue 24: Operational Dashboard UI & Layouts)
+ |    |-- feature/25-e2e-regression-hardening (Issue 25: Full Multi-Persona E2E & Hardening)
+ |    `-- feature/26-final-submission-artifacts (Issue 26: Final Release & Submission Artifacts)
+ |
  |-- lab3-staging (Lab 3 Integration Branch)
  |    ^
  |    |-- feature/10-lab3-documentation       (Issue 10: Sprint 3 Specifications & Test Plan)
@@ -456,7 +559,8 @@ main (Production / Stable Releases)
 ### Branching Strategy Guidelines
 
 - `main`: Protected release branch containing production-ready code.
-- `lab3-staging`: Integration branch where Lab 3 features are combined and verified.
+- lab4-staging` : Integration branch where Lab 4 features are combined and verified.
+- `lab3-staging`: Integration branch where Lab 3 features were combined and verified.
 - `lab2-staging`: Integration branch where Lab 2 features were combined and verified.
 - `feature/*`: Short-lived isolation branches created per GitHub Issue.
 - **Pull Request (PR) Policy:** Direct pushes to `main` and staging branches are forbidden. All code must pass automated GitHub Actions CI and receive peer reviewer approval before merging.
